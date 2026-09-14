@@ -62,7 +62,7 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
         {[0, 0.5, 1].map((f) => <text key={f} className="axis-label" x={xOf(f * maxShares)} y={height - 8} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"}>{shares(f * maxShares)} sh</text>)}
       </svg>
       {hp && (
-        <div className="tooltip" style={{ left: xOf(hp.shares), top: 0, transform: hp.shares > maxShares * 0.6 ? "translateX(-100%)" : "none" }}>
+        <div className="tooltip" style={hp.shares > maxShares * 0.6 ? { right: width - xOf(hp.shares) + 14, top: m.top } : { left: xOf(hp.shares) + 14, top: m.top }}>
           <div className="row"><strong>{shares(hp.shares)} shares</strong></div>
           <div className="row"><span>AMT this year</span><span>{usd(hp.amt)}</span></div>
           <div className="row"><span>Tax this year</span><span>{usd(hp.totalTax)}</span></div>

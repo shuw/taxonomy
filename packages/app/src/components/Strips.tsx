@@ -88,7 +88,9 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
       </svg>
       {hover !== null && (
-        <div className="tooltip" style={{ left: m.left + band * hover + band / 2, top: 0, transform: hover >= years.length - 2 ? "translateX(-100%)" : "none" }}>
+        <div className="tooltip" style={hover >= years.length - 2
+          ? { right: width - (m.left + band * hover) + 6, top: m.top }
+          : { left: m.left + band * (hover + 1) - 6, top: m.top }}>
           <div className="row"><strong>{years[hover]!.year}</strong></div>
           {series.map((sr) => (
             <div className="row" key={sr.id}><span><span className="sw" style={{ background: sr.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{sr.label}</span><span>{usd(sr.value(years[hover]!))}</span></div>
