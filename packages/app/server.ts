@@ -67,6 +67,20 @@ function readProfile(id: string) {
 
 const bad = (message: string, status = 400) => Response.json({ error: message }, { status });
 
+/**
+ * Only the app's own page may change things. A browser sends Origin on cross-site requests;
+ * requiring JSON also forces a CORS preflight, which this server never approves.
+ */
+function sameOrigin(req: Request): Response | null {
+  const origin = req.headers.get("origin");
+  const host = req.headers.get("host") ?? "";
+  if (origin !== null && new URL(origin).host !== host) return bad("cross-origin request refused", 403);
+  const site = req.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return bad("cross-site request refused", 403);
+  if (req.method !== "DELETE" && !(req.headers.get("content-type") ?? "").startsWith("application/json")) return bad("expected application/json", 415);
+  return null;
+}
+
 function validate(text: unknown): string | null {
   if (typeof text !== "string") return "text is required";
   try { parseProfile(text); return null; } catch (e) { return String((e as Error).message ?? e); }
@@ -83,6 +97,8 @@ Bun.serve({
     "/api/profiles": {
       GET: () => Response.json(listProfiles()),
       POST: async (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
         const body = (await req.json()) as { name?: string; text?: string };
         const name = (body.name ?? "").trim();
         if (!name) return bad("name is required");
@@ -101,6 +117,8 @@ Bun.serve({
         return Response.json(readProfile(id));
       },
       PUT: async (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
         const { id } = req.params;
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         const body = (await req.json()) as { text?: string };
@@ -111,6 +129,8 @@ Bun.serve({
         return Response.json({ id, path, mtime });
       },
       DELETE: (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
         const { id } = req.params;
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         unlinkSync(fileFor(id));
@@ -119,6 +139,8 @@ Bun.serve({
     },
     "/api/assistant": {
       POST: async (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
         const body = (await req.json()) as { profileText?: string; messages?: unknown };
         if (typeof body.profileText !== "string") return bad("profileText is required");
         try {
