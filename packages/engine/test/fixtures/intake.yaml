@@ -1,0 +1,91 @@
+```yaml
+taxonomy_intake: 1
+as_of: 2026-09-14
+basics:
+  filingStatus: Married filing jointly
+  state: wa
+  dependents: 1
+people:
+  self:
+    name: Shu
+    baseSalary: "620,000"
+    pretaxContributions: 23500
+    withholdingToDate: 141000
+  spouse:
+    name: Sam
+    baseSalary: 150000
+prior_return:
+  year: 2025
+  agi: 402113
+  taxableIncome: 369913
+  regularTax: 84754
+  totalTax: 87201
+  amt: { amti: 471300, exemption: 126500, tentativeMinimumTax: 89648, amt: 2447 }
+  amtCreditCarryforward: 18960
+  capitalLossCarryforward: { shortTerm: 0, longTerm: 3200 }
+  itemized: { salt: 10000, mortgageInterest: 24100, charitable: 5000 }
+  inputs:
+    wages: 380000
+    interest: 6100
+    ordinaryDividends: 4200
+    qualifiedDividends: 3900
+    longTermGains: 12000
+    isoBargainElement: 60000
+    amtCreditCarriedIn: 16513
+income:
+  interest: 6100
+  dividends: { ordinary: 4200, qualified: 3900 }
+  realizedGains: { shortTerm: 0, longTerm: 0 }
+equity:
+  company: Example Inc.
+  sharePrice: { value: 21.00, asOf: 2026-06-30, basis: 409A }
+  grants:
+    - name: 2023 ISO grant
+      type: ISO
+      grantDate: 2023-02-01
+      granted: 60000
+      strike: 2.00
+      vesting: { start: 2023-02-01, years: 4, cliffMonths: 12, cadence: monthly }
+      vested: 52500
+      exercised: 12500
+      unexercised: 47500
+      expires: 2033-02-01
+    - name: 2024 NQSO
+      type: nqso
+      granted: 12000
+      strike: 4.50
+      vesting:
+        - { date: 2026-06-01, shares: 3000 }
+        - { date: 2027-06-01, shares: 3000 }
+      vested: 3000
+    - name: 2025 RSU refresh
+      type: rsu
+      granted: 8000
+      vesting: { start: 2025-03-15, years: 4, cliffMonths: 12, cadence: quarterly }
+      vested: 3500
+  holdings:
+    - lot: ISO exercise 2025-04-10
+      quantity: 12500
+      acquired: 2025-04-10
+      via: iso_exercise
+      costBasis: 2.00
+      amtBasis: 16.50
+home:
+  mortgage: { balance: 812000, rate: 5.75, originated: 2022-08-01, originalAmount: 900000 }
+  propertyTax: 11800
+deductions:
+  charitable: { cash: 5000 }
+assumptions:
+  fmvGrowth: 0.15
+sources:
+  prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"
+  prior_return.amtCreditCarryforward: "2025 Form 8801 line 26"
+  people.self.baseSalary: "pay stub 2026-08-31, annualized base"
+  equity.grants[0]: "Shareworks grant detail, 2026-09-10"
+  equity.sharePrice: "409A notice 2026-06-30"
+unknown:
+  - people.self.expectedBonus
+  - people.spouse.pretaxContributions
+questions:
+  - "Shareworks shows 12,500 ISO shares exercised in 2025 but no Form 3921 was found. Was the FMV at exercise $16.50?"
+```

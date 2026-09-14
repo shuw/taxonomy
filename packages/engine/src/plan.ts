@@ -1,6 +1,7 @@
 import { computeFederal } from "./federal.ts";
 import { exerciseSpread, rsuVesting, sharesExercisable } from "./equity.ts";
 import { Ledger, pct, usd } from "./ledger.ts";
+import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
@@ -19,34 +20,64 @@ export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Le
   };
 }
 
-export function yearInputs(profile: Profile, levers: Levers, year: number, carryIn: number): YearInputs {
+/** Balances that flow from one plan year into the next. */
+export interface Carries {
+  amtCredit: number;
+  capitalLoss: { shortTerm: number; longTerm: number };
+  charitable: number;
+}
+
+export function openingCarries(profile: Profile): Carries {
+  const c = profile.carryforwards ?? {};
+  return {
+    amtCredit: c.amtCredit ?? 0,
+    capitalLoss: { shortTerm: c.capitalLoss?.shortTerm ?? 0, longTerm: c.capitalLoss?.longTerm ?? 0 },
+    charitable: c.charitable ?? 0,
+  };
+}
+
+export function yearInputs(profile: Profile, levers: Levers, year: number, carries: Carries, mortgage?: MortgageYear): YearInputs {
   const t = year - profile.plan.startYear;
+  const grow = (x: number) => x * (1 + profile.assumptions.wageGrowth) ** t;
+  const self = profile.people.self;
+  const spouse = profile.people.spouse;
   const inc = profile.income;
-  const ded = profile.deductions;
+  const ded = profile.deductions ?? {};
+  const ch = ded.charitable ?? {};
   const iso = Math.min(levers.exercises.iso[year] ?? 0, sharesExercisable(profile, levers, "iso", year));
   const nso = Math.min(levers.exercises.nso[year] ?? 0, sharesExercisable(profile, levers, "nso", year));
   const rsu = rsuVesting(profile, year);
+  const ordinaryDividends = inc.ordinaryDividends ?? inc.qualifiedDividends ?? 0;
+  const qualified = inc.qualifiedDividends ?? 0;
   return {
     year,
     filingStatus: profile.filer.filingStatus,
     state: profile.filer.state,
-    wages: inc.wages * (1 + profile.assumptions.wageGrowth) ** t,
+    salarySelf: grow(self.salary + (self.bonus ?? 0)),
+    salarySpouse: spouse ? grow(spouse.salary + (spouse.bonus ?? 0)) : 0,
+    pretaxContributions: (self.pretaxContributions ?? 0) + (spouse?.pretaxContributions ?? 0),
     otherOrdinary: inc.otherOrdinary ?? 0,
     interest: inc.interest ?? 0,
-    qualifiedDividends: inc.qualifiedDividends ?? 0,
+    nonqualifiedDividends: Math.max(0, ordinaryDividends - qualified),
+    qualifiedDividends: qualified,
     longTermGains: inc.longTermGains ?? 0,
     shortTermGains: inc.shortTermGains ?? 0,
-    mortgageInterest: ded.mortgageInterest ?? 0,
-    propertyTax: ded.propertyTax ?? 0,
+    capitalLossCarryIn: carries.capitalLoss,
+    mortgageInterestPaid: mortgage ? mortgage.interestPaid : ded.mortgageInterest ?? 0,
+    mortgageCapFraction: mortgage ? mortgage.capFraction : 1,
+    propertyTax: profile.home?.propertyTax ?? 0,
     stateIncomeTax: ded.stateIncomeTax ?? 0,
-    charitable: ded.charitable ?? 0,
+    charitableCash: (ch.cash ?? 0) + (ch.daf ?? 0),
+    charitableStock: ch.appreciatedStock ?? 0,
+    charitableCarryIn: carries.charitable,
+    medical: ded.medical ?? 0,
     isoSharesExercised: iso,
     isoBargainElement: exerciseSpread(profile, levers, "iso", year, iso),
     nsoSharesExercised: nso,
     nsoIncome: exerciseSpread(profile, levers, "nso", year, nso),
     rsuSharesVested: rsu.shares,
     rsuIncome: rsu.income,
-    amtCreditCarryforwardIn: carryIn,
+    amtCreditCarryforwardIn: carries.amtCredit,
   };
 }
 
@@ -61,20 +92,30 @@ export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   return { year: inputs.year, inputs, lines: ledger.lines, order: ledger.order };
 }
 
-/** Run every plan year in sequence, threading the AMT credit carryforward through. */
+function carriesOut(result: YearResult): Carries {
+  const v = (id: string) => result.lines[id]?.value ?? 0;
+  return {
+    amtCredit: v("amtCreditCarryforwardOut"),
+    capitalLoss: { shortTerm: v("capitalLossCarryOutShortTerm"), longTerm: v("capitalLossCarryOutLongTerm") },
+    charitable: v("charitableCarryOut"),
+  };
+}
+
+/** Run every plan year in sequence, threading the carryforwards through. */
 export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): PlanResult {
   const levers = resolveLevers(profile, leverOverrides);
-  let carry = profile.equity.amtCreditCarryforward ?? 0;
+  const mortgage = profile.home?.mortgage ? amortize(profile.home.mortgage, profile.plan.startYear, profile.plan.years) : null;
+  let carries = openingCarries(profile);
   const years: YearResult[] = [];
-  for (const year of planYears(profile)) {
-    const result = computeYear(profile, yearInputs(profile, levers, year, carry));
-    carry = result.lines.amtCreditCarryforwardOut!.value;
+  for (const [i, year] of planYears(profile).entries()) {
+    const result = computeYear(profile, yearInputs(profile, levers, year, carries, mortgage?.[i]));
+    carries = carriesOut(result);
     years.push(result);
   }
   const sum = (id: string) => years.reduce((s, y) => s + y.lines[id]!.value, 0);
   return {
     years,
-    totals: { totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carry },
+    totals: { totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carries.amtCredit },
   };
 }
 

@@ -4,6 +4,7 @@ import { parseProfile } from "../src/profile.ts";
 import { runPlan, resolveLevers } from "../src/plan.ts";
 import { exerciseSpread, sharesExercisable, rsuVesting, vestingOf } from "../src/equity.ts";
 import { amtCrossover, sweepIsoExercise } from "../src/thresholds.ts";
+import { calibrate } from "../src/calibration.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
 
@@ -42,7 +43,7 @@ describe("multi-year plan", () => {
     expect(y26.income).toBeCloseTo(3_500 * 18);
     const plan = runPlan(profile);
     expect(plan.years[0]!.lines.rsuIncome!.value).toBeCloseTo(3_500 * 18);
-    expect(plan.years[0]!.lines.agi!.value).toBeCloseTo(330_000 + 3_500 * 18);
+    expect(plan.years[0]!.lines.agi!.value).toBeCloseTo(320_000 - 23_500 + 6_000 + 4_500 + 3_500 * 18);
   });
   test("NSO exercises are ordinary income, not an AMT preference", () => {
     const withNso = { ...profile, equity: { ...profile.equity, grants: [...profile.equity.grants, { name: "NSO", type: "nso" as const, shares: 5_000, strike: 1, vested: 5_000 }] } };
@@ -54,7 +55,37 @@ describe("multi-year plan", () => {
   });
   test("wages grow each year", () => {
     const plan = runPlan(profile);
-    expect(plan.years[1]!.inputs.wages).toBeCloseTo(profile.income.wages * 1.03);
+    expect(plan.years[1]!.inputs.salarySelf).toBeCloseTo(profile.people.self.salary * 1.03);
+  });
+});
+
+describe("mortgage, carryforwards and calibration", () => {
+  test("a mortgage over the cap produces partly deductible interest that declines each year", () => {
+    const withMortgage = { ...profile, home: { mortgage: { balance: 900_000, rate: 0.06, originated: "2024-01-01", originalAmount: 950_000 } } };
+    const plan = runPlan(withMortgage);
+    const y0 = plan.years[0]!, y1 = plan.years[1]!;
+    expect(y0.inputs.mortgageInterestPaid).toBeGreaterThan(50_000);
+    expect(y0.inputs.mortgageCapFraction).toBeLessThan(1);
+    expect(y1.inputs.mortgageInterestPaid).toBeLessThan(y0.inputs.mortgageInterestPaid);
+    expect(y0.lines.usesItemized!.value).toBe(1);
+  });
+  test("capital loss and charitable balances thread through the years", () => {
+    const p = { ...profile, carryforwards: { capitalLoss: { shortTerm: 0, longTerm: 7_000 } }, deductions: { charitable: { cash: 500_000 } } };
+    const plan = runPlan(p);
+    expect(plan.years[0]!.inputs.capitalLossCarryIn.longTerm).toBe(7_000);
+    expect(plan.years[1]!.inputs.capitalLossCarryIn.longTerm).toBe(4_000);
+    expect(plan.years[1]!.inputs.charitableCarryIn).toBeGreaterThan(0);
+  });
+  test("calibration recomputes the prior return line by line", () => {
+    const p = { ...profile, priorReturn: { year: 2025, inputs: { wages: 300_000, interest: 5_000, qualifiedDividends: 4_000, ordinaryDividends: 4_000 }, reported: { agi: 309_000, taxableIncome: 293_250, totalTax: 72_000 } } };
+    const cal = calibrate(p)!;
+    expect(cal.year).toBe(2025);
+    const agi = cal.rows.find((r) => r.id === "agi")!;
+    expect(agi.computed).toBe(309_000);
+    expect(agi.delta).toBe(0);
+    const ti = cal.rows.find((r) => r.id === "taxableIncome")!;
+    expect(ti.computed).toBe(309_000 - 15_750);
+    expect(cal.missing).toContain("amt");
   });
 });
 

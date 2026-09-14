@@ -3,7 +3,8 @@ import { fmtDelta, fmtLine } from "../format.ts";
 import type { Selection } from "../App.tsx";
 
 const GROUPS: { title: string; ids: string[] }[] = [
-  { title: "Income", ids: ["wages", "rsuIncome", "nsoIncome", "agi", "deduction", "taxableIncome"] },
+  { title: "Income", ids: ["salarySelf", "salarySpouse", "rsuIncome", "nsoIncome", "pretaxContributions", "wages", "netLongTermGain", "capitalLossDeduction", "agi"] },
+  { title: "Deductions", ids: ["saltDeduction", "mortgageInterest", "charitableDeduction", "deduction", "taxableIncome"] },
   { title: "Regular tax", ids: ["ordinaryTax", "capGainsTax", "regularTax", "marginalBracket"] },
   { title: "AMT", ids: ["isoSharesExercised", "isoBargainElement", "amti", "amtExemption", "tentativeMinimumTax", "amt"] },
   { title: "AMT credit", ids: ["amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut"] },
@@ -16,6 +17,7 @@ interface Props { plan: PlanResult; pinned: PlanResult | null; focusYear: number
 export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Props) {
   const years = plan.years;
   const row = (id: string, total = false) => {
+    if (!years.every((y) => y.lines[id])) return null;
     const label = years[0]!.lines[id]?.label ?? id;
     return (
       <tr key={id} className={total ? "total" : ""}>

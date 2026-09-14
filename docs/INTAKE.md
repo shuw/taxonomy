@@ -258,6 +258,15 @@ example, a 25% gain rate it does not model).
 chip when one exists. Hover reads the full source string. This is what makes a number on the
 screen trustworthy six months later.
 
+## Status
+
+Built as of 2026-09-14: the schema and parser (`intake/schema.ts`), the prompt
+(`intake/prompt.ts`), the review and apply mapping (`intake/apply.ts`), the modal, source chips,
+and the calibration card. The profile schema is at version 2 with people, carryforwards, prior
+return, holdings, mortgage-as-loan and charitable by kind. Not yet: the sales lever that
+holdings exist for, ESPP, withholding-based cash view, and a "future" section (deliberately: the
+future is what the levers are for).
+
 ## Build plan
 
 1. **Schema and mapping in the engine.** `intake/schema.ts` (types, validation with clear

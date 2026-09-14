@@ -1,54 +1,81 @@
-# Taxonomy profile. Real profiles live in data/profiles/<id>.yaml (gitignored); the app creates them.
-# Every amount is annual, in dollars, for the plan's start year unless noted.
-version: 1
+# Taxonomy profile. Amounts are annual dollars for plan.startYear unless noted.
+# Real profiles live in data/profiles/<id>.yaml (gitignored); the app creates them.
+version: 2
 name: Example
 
+# single | mfj | mfs | hoh; state is a two-letter code (only WA is modeled so far)
 filer:
-  filingStatus: single      # single | mfj | mfs | hoh
-  state: WA                 # only WA is modeled so far; other codes get zero state tax
+  filingStatus: single
+  state: WA
+  dependents: 0
 
+# the years on screen
 plan:
   startYear: 2026
-  years: 6                  # 2026 through 2031
+  years: 6
 
+# inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to the share value
 assumptions:
-  inflation: 0.025          # indexes brackets, exemptions and caps after the last published year (2026)
+  inflation: 0.025
   wageGrowth: 0.03
-  fmvGrowth: 0.15           # annual growth of the company's share value
+  fmvGrowth: 0.15
 
+# base salary and bonus per earner; RSU vests and option exercises are added by the engine
+people:
+  self:
+    name: Me
+    salary: 320000
+    bonus: 0
+    pretaxContributions: 23500
+  # spouse:
+  #   salary: 150000
+
+# household investment and other income for the start year
 income:
-  wages: 320000
   otherOrdinary: 0
   interest: 6000
+  ordinaryDividends: 4500
   qualifiedDividends: 4000
-  longTermGains: 0
   shortTermGains: 0
+  longTermGains: 0
 
-deductions:
-  mortgageInterest: 0
-  propertyTax: 0
-  stateIncomeTax: 0         # WA has none
+# balances entering the first plan year: Form 8801 credit, Schedule D losses, unused charitable gifts
+carryforwards:
+  amtCredit: 0
+  capitalLoss: { shortTerm: 0, longTerm: 0 }
   charitable: 0
 
+# sharePrice is per share at the start year; grants are iso | nso | rsu with a vesting schedule or per-year counts
 equity:
-  sharePrice: 18.00         # per share at plan.startYear (409A for private companies)
+  company: Example Inc.
+  sharePrice: 18.00
   grants:
     - name: "2023 ISO grant"
-      type: iso             # iso | nso | rsu
-      shares: 40000
+      type: iso
+      shares: 40000          # unexercised
       strike: 2.00
-      vested: 40000         # already vested at the start of the plan
+      vested: 40000          # vested and unexercised at the start of the plan
     - name: "2025 RSU refresh"
       type: rsu
       shares: 8000
-      schedule:             # or list `vesting: { 2026: 2000, 2027: 2000 }` directly
+      schedule:
         start: 2025-03-15
         years: 4
         cliffMonths: 12
         cadence: quarterly
-  amtCreditCarryforward: 0
+  holdings: []
 
-# Where the levers start when the app opens.
+# the mortgage as a loan; interest and the $750k cap are computed
+home:
+  propertyTax: 0
+  # mortgage: { balance: 800000, rate: 0.06, originated: 2022-08-01, originalAmount: 900000 }
+
+# charitable by kind; stateIncomeTax; medical
+deductions:
+  stateIncomeTax: 0
+  charitable: { cash: 0, appreciatedStock: 0, daf: 0 }
+
+# where the sliders start
 levers:
   exercises:
     iso:

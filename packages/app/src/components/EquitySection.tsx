@@ -1,6 +1,7 @@
 import { grantFmv, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, vestingOf, type AmtCrossover, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { shares, usd, usdCompact } from "../format.ts";
 import { Field, MoneyInput, NumberInput, Segmented, Select } from "./fields.tsx";
+import { sourceOf } from "./Sidebar.tsx";
 import { Section } from "./Section.tsx";
 
 interface Props {
@@ -36,7 +37,7 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
         <span className="muted small" style={{ margin: 0 }}>The assistant fills this in; you approve each change.</span>
       </div>
 
-      <Field label="Share value now" hint="409A or market price, per share" wide><MoneyInput value={profile.equity.sharePrice} onChange={(n) => set(["equity", "sharePrice"], n)} decimals={2} /></Field>
+      <Field label="Share value now" hint={profile.equity.sharePriceAsOf ? `per share, as of ${profile.equity.sharePriceAsOf}` : "409A or market price, per share"} wide source={sourceOf(profile, ["equity", "sharePrice"])}><MoneyInput value={profile.equity.sharePrice} onChange={(n) => set(["equity", "sharePrice"], n)} decimals={2} /></Field>
 
       {hasType("iso") && (
         <>
@@ -68,13 +69,27 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
       )}
 
       <div className="subhead">Grants</div>
-      {grants.map((g, i) => <GrantCard key={i} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
+      {grants.map((g, i) => <GrantCard key={i} index={i} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
       <div className="add-grant">
         {TYPE_OPTIONS.map((t) => (
           <button type="button" key={t.value} className="link" onClick={() => set(["equity", "grants"], [...grants, blankGrant(t.value, grants.length + 1, profile.plan.startYear)])}>+ {t.label}</button>
         ))}
       </div>
-      <Field label="AMT credit already banked" hint="from earlier years" wide><MoneyInput value={profile.equity.amtCreditCarryforward ?? 0} onChange={(n) => set(["equity", "amtCreditCarryforward"], n)} /></Field>
+      {(profile.equity.holdings?.length ?? 0) > 0 && (
+        <>
+          <div className="subhead">Shares owned</div>
+          <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
+          <div className="vest-rows">
+            {profile.equity.holdings!.map((h, i) => (
+              <div key={i} className="vest-row holding">
+                <span>{h.lot}{h.owner === "spouse" ? " (spouse)" : ""}</span>
+                <span>{shares(h.quantity)} sh · {h.via.replace("_", " ")} · {h.acquired}</span>
+                <span className="mono">basis {usd(h.costBasis)}{h.amtBasis !== undefined ? ` / AMT ${usd(h.amtBasis)}` : ""}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </Section>
   );
 }
@@ -89,6 +104,10 @@ function blankGrant(type: GrantType, n: number, startYear: number): EquityGrant 
 /** Drop keys the YAML should not carry (undefined values, strike on RSUs). */
 function clean(g: EquityGrant): EquityGrant {
   const out: EquityGrant = { name: g.name, type: g.type, shares: g.shares };
+  if (g.owner) out.owner = g.owner;
+  if (g.grantDate) out.grantDate = g.grantDate;
+  if (g.granted !== undefined) out.granted = g.granted;
+  if (g.expires) out.expires = g.expires;
   if (g.type !== "rsu" && g.strike !== undefined) out.strike = g.strike;
   if (g.fmv !== undefined) out.fmv = g.fmv;
   if (g.vested !== undefined) out.vested = g.vested;
@@ -97,7 +116,8 @@ function clean(g: EquityGrant): EquityGrant {
   return out;
 }
 
-function GrantCard({ grant: g, profile, onChange, onRemove }: { grant: EquityGrant; profile: Profile; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
+function GrantCard({ grant: g, index, profile, onChange, onRemove }: { grant: EquityGrant; index: number; profile: Profile; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
+  const source = sourceOf(profile, ["equity", "grants", index]);
   const v = vestingOf(profile, g);
   const mode: "schedule" | "years" | "none" = g.schedule ? "schedule" : g.vesting ? "years" : "none";
   const years = Array.from({ length: profile.plan.years }, (_, i) => profile.plan.startYear + i);
@@ -108,6 +128,8 @@ function GrantCard({ grant: g, profile, onChange, onRemove }: { grant: EquityGra
       <div className="grant-head">
         <span className={"badge " + g.type}>{TYPE_LABEL[g.type]}</span>
         <input className="grant-name" value={g.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Grant name" />
+        {source && <span className="src" title={source}>source</span>}
+        {profile.people.spouse && <Select options={[{ value: "self", label: "mine" }, { value: "spouse", label: "spouse's" }]} value={g.owner ?? "self"} onChange={(o) => onChange({ owner: o })} />}
         <button type="button" className="link danger" onClick={onRemove}>Remove</button>
       </div>
       <div className="row3">

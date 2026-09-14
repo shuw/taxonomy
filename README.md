@@ -18,13 +18,31 @@ Equity grants come in three types, each taxed the way the code treats it: ISO ex
 NSO (NQSO) exercises are ordinary income, RSUs are ordinary income when they vest. Grants take a
 vesting schedule (start date, years, cliff, cadence) or explicit per-year counts.
 
+## Filling the profile from documents
+
+The **Fill from documents** button opens a three-step modal. Pick the sections to gather, copy
+the generated request into any agent that can see your documents (Claude with connectors, a
+CLI agent pointed at a folder of PDFs, ChatGPT with uploads), and paste back the YAML it
+returns. The app validates it, shows every proposed change beside the current value with the
+source the agent cited, and writes only the rows you accept. Sources stay with each number and
+show as chips in the sidebar. If the intake includes last year's return, a calibration card
+shows how closely the engine reproduces it.
+
+The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live in
+`packages/engine/src/intake/` and are tested against a fixture.
+
 ## Assistant
 
-The Assistant button opens a panel where you paste screenshots from Carta, Shareworks, E*Trade
-or a pay stub, or just describe your grants. It proposes profile changes as a card; nothing is
-written until you click Apply. It calls the Anthropic API from the local dev server, so the
-machine running `bun run dev` needs credentials: either `export ANTHROPIC_API_KEY=...` before
-starting, or sign in with `ant auth login`. Screenshots go to the API and nowhere else. Set
-`TAXONOMY_MODEL` to use a different model (default `claude-opus-5`).
+The Assistant button opens a panel for quick edits from a single screenshot or a sentence. It
+calls the Anthropic API from the local dev server, so the machine running `bun run dev` needs
+credentials: `export ANTHROPIC_API_KEY=...` or `ant auth login`. Proposals appear as cards;
+nothing is written until you click Apply. Set `TAXONOMY_MODEL` to change the model (default
+`claude-opus-5`).
 
-See `docs/PROPOSAL.md` for the approach and what is deliberately simplified.
+## Profile schema (version 2)
+
+`people` (self and optional spouse: salary, bonus, pre-tax contributions), household `income`,
+`carryforwards` (AMT credit, capital losses, charitable), `priorReturn` for calibration,
+`equity` (share price, typed grants with vesting, holdings with cost and AMT basis), `home`
+(mortgage as a loan; interest and the $750k cap are computed), `deductions` (charitable by kind,
+state tax, medical), `levers`, and `sources`. Version 1 files are migrated on first read.

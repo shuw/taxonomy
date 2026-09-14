@@ -96,6 +96,58 @@ export const FEDERAL_2026: FederalParams = {
   charitableAgiFloor: 0.005,
 };
 
+/** Tax year 2025: Rev. Proc. 2024-40 as amended by OBBBA (standard deduction, SALT cap). Used for calibration against a filed 2025 return. */
+export const FEDERAL_2025: FederalParams = {
+  year: 2025,
+  published: true,
+  standardDeduction: { single: 15_750, mfj: 31_500, mfs: 15_750, hoh: 23_625 },
+  brackets: {
+    single: [
+      { upTo: 11_925, rate: 0.10 }, { upTo: 48_475, rate: 0.12 }, { upTo: 103_350, rate: 0.22 },
+      { upTo: 197_300, rate: 0.24 }, { upTo: 250_525, rate: 0.32 }, { upTo: 626_350, rate: 0.35 },
+      { upTo: Infinity, rate: 0.37 },
+    ],
+    mfj: [
+      { upTo: 23_850, rate: 0.10 }, { upTo: 96_950, rate: 0.12 }, { upTo: 206_700, rate: 0.22 },
+      { upTo: 394_600, rate: 0.24 }, { upTo: 501_050, rate: 0.32 }, { upTo: 751_600, rate: 0.35 },
+      { upTo: Infinity, rate: 0.37 },
+    ],
+    mfs: [
+      { upTo: 11_925, rate: 0.10 }, { upTo: 48_475, rate: 0.12 }, { upTo: 103_350, rate: 0.22 },
+      { upTo: 197_300, rate: 0.24 }, { upTo: 250_525, rate: 0.32 }, { upTo: 375_800, rate: 0.35 },
+      { upTo: Infinity, rate: 0.37 },
+    ],
+    hoh: [
+      { upTo: 17_000, rate: 0.10 }, { upTo: 64_850, rate: 0.12 }, { upTo: 103_350, rate: 0.22 },
+      { upTo: 197_300, rate: 0.24 }, { upTo: 250_500, rate: 0.32 }, { upTo: 626_350, rate: 0.35 },
+      { upTo: Infinity, rate: 0.37 },
+    ],
+  },
+  capGains: {
+    single: { zeroUpTo: 48_350, fifteenUpTo: 533_400 },
+    mfj: { zeroUpTo: 96_700, fifteenUpTo: 600_050 },
+    mfs: { zeroUpTo: 48_350, fifteenUpTo: 300_000 },
+    hoh: { zeroUpTo: 64_750, fifteenUpTo: 566_700 },
+  },
+  amt: {
+    exemption: { single: 88_100, mfj: 137_000, mfs: 68_500, hoh: 88_100 },
+    phaseoutStart: { single: 626_350, mfj: 1_252_700, mfs: 626_350, hoh: 626_350 },
+    phaseoutRate: 0.25,
+    rateBreak: { single: 239_100, mfj: 239_100, mfs: 119_550, hoh: 239_100 },
+    lowRate: 0.26,
+    highRate: 0.28,
+  },
+  niit: { threshold: { single: 200_000, mfj: 250_000, mfs: 125_000, hoh: 200_000 }, rate: 0.038 },
+  additionalMedicare: { threshold: { single: 200_000, mfj: 250_000, mfs: 125_000, hoh: 200_000 }, rate: 0.009 },
+  salt: {
+    cap: { single: 40_000, mfj: 40_000, mfs: 20_000, hoh: 40_000 },
+    phaseoutStart: { single: 500_000, mfj: 500_000, mfs: 250_000, hoh: 500_000 },
+    phaseoutRate: 0.3,
+    floor: { single: 10_000, mfj: 10_000, mfs: 5_000, hoh: 10_000 },
+  },
+  charitableAgiFloor: 0,
+};
+
 /** SALT cap schedule written into OBBBA: +1%/yr through 2029, then back to $10,000. */
 function saltFor(year: number, status: FilingStatus): { cap: number; phaseoutStart: number } {
   const half = status === "mfs" ? 0.5 : 1;
@@ -120,6 +172,7 @@ function scaleByStatus(v: ByStatus, f: number, step: number): ByStatus {
  */
 export function federalParams(year: number, inflation: number): FederalParams {
   const base = FEDERAL_2026;
+  if (year === 2025) return FEDERAL_2025;
   if (year <= base.year) return base;
   const f = (1 + inflation) ** (year - base.year);
   const statuses: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];

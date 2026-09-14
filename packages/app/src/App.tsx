@@ -12,6 +12,8 @@ import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
 import { Mark, Wordmark } from "./components/Mark.tsx";
 import { AssistantPanel } from "./components/AssistantPanel.tsx";
+import { IntakeModal } from "./components/IntakeModal.tsx";
+import { CalibrationCard } from "./components/CalibrationCard.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -96,6 +98,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const select = (sel: Selection | null) => { setSelected(sel); if (sel) setAssistantOpen(false); };
   const openAssistant = () => { setAssistantOpen(true); setSelected(null); };
 
@@ -119,6 +122,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
+        <button type="button" className="btn" onClick={() => setIntakeOpen(true)}>Fill from documents</button>
         <button type="button" className={"btn" + (assistantOpen ? " on" : "")} onClick={() => (assistantOpen ? setAssistantOpen(false) : openAssistant())}>Assistant</button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
@@ -126,12 +130,13 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       </header>
 
       <aside className="sidebar">
-        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenAssistant={openAssistant} />
+        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenAssistant={openAssistant} onOpenIntake={() => setIntakeOpen(true)} />
       </aside>
 
       <main className="main">
         {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
+        <CalibrationCard profile={profile} />
         <section className="card">
           <h2>Tax by year</h2>
           <div className="sub">Click a year to focus it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
@@ -163,6 +168,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={select} onClose={() => setSelected(null)} />
         </aside>
       )}
+      {intakeOpen && <IntakeModal profile={profile} onApply={edit} onClose={() => setIntakeOpen(false)} />}
       {assistantOpen && !selected && (
         <aside className="explain assistant-aside">
           <AssistantPanel profile={profile} profileText={profileText} edit={edit} onClose={() => setAssistantOpen(false)} />
