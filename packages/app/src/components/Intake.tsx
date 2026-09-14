@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { editProfileText, type FilingStatus, type ProfileEdit } from "@taxonomy/engine";
 import { FILING_OPTIONS, Field, MoneyInput, NumberInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
+import { Mark, Wordmark } from "./Mark.tsx";
 
 interface Props {
   exampleText: string;
@@ -49,7 +50,7 @@ export function Intake({ exampleText, onCancel, onCreate }: Props) {
   return (
     <div className={"intake" + (onCancel ? " overlay" : "")}>
       <div className="intake-card">
-        <div className="brand"><span className="mark" />Taxonomy</div>
+        <div className="brand"><Mark size={28} /><Wordmark /></div>
         <h1>{onCancel ? "New profile." : "Start with the basics."}</h1>
         <p className="lede">{onCancel ? "A separate file with its own numbers and levers. Nothing you have entered elsewhere changes." : "A few facts and you have a picture. Everything else has a sensible default you can change later, in the sidebar or straight in the file."}</p>
         <div className="intake-grid">

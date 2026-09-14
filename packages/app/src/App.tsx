@@ -10,6 +10,7 @@ import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
+import { Mark, Wordmark } from "./components/Mark.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -108,7 +109,7 @@ function Workspace({ profile, path, error, edit, saving, switcher }: WorkspacePr
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
       <header className="topbar">
-        <div className="brand"><span className="mark" />Taxonomy</div>
+        <div className="brand"><Mark size={24} /><Wordmark /></div>
         {switcher}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>

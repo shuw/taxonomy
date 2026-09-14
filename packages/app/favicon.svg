@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .bar { fill: #16151d; }
+    .keep { stroke: #d9d6cf; }
+    @media (prefers-color-scheme: dark) { .bar { fill: #f2f2f5; } .keep { stroke: #4a4f5e; } }
+  </style>
+  <rect class="bar" x="4" y="6" width="56" height="14" rx="4"/>
+  <path d="M18 20C18 36 10 38 10 56" stroke="#eb6834" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <path class="keep" d="M46 20C46 36 54 38 54 56" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <path d="M32 20V56" stroke="#2a78d6" stroke-width="12" stroke-linecap="round"/>
+</svg>
