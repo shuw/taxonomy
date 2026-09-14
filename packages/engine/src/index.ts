@@ -7,4 +7,5 @@ export { stateModule } from "./state/index.ts";
 export { runPlan, computeYear, yearInputs, planYears, resolveLevers, isoSharesAvailable, isoBargainElement, fmvInYear } from "./plan.ts";
 export { amtCrossover, sweepIsoExercise } from "./thresholds.ts";
 export type { AmtCrossover, SweepPoint } from "./thresholds.ts";
-export { parseProfile } from "./profile.ts";
+export { parseProfile, editProfileText, FILING_STATUSES } from "./profile.ts";
+export type { ProfileEdit, ProfilePath } from "./profile.ts";

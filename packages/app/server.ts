@@ -1,28 +1,40 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { parseProfile } from "@taxonomy/engine";
 import index from "./index.html";
 
 const root = resolve(import.meta.dir, "../..");
-const candidates = ["data/profile.yaml", "data/profile.example.yaml"].map((p) => resolve(root, p));
+const profilePath = resolve(root, "data/profile.yaml");
+const examplePath = resolve(root, "data/profile.example.yaml");
 
-function profileFile(): string {
-  const found = candidates.find((p) => existsSync(p));
-  if (!found) throw new Error("no profile file found; expected data/profile.yaml or data/profile.example.yaml");
-  return found;
+function readProfile() {
+  const exists = existsSync(profilePath);
+  const file = exists ? profilePath : examplePath;
+  return { exists, path: relative(root, file), mtime: statSync(file).mtimeMs, text: readFileSync(file, "utf8") };
 }
 
-const port = Number(process.env.PORT ?? 5173);
+const port = Number(process.env.PORT ?? 5180);
 Bun.serve({
   port,
   hostname: "127.0.0.1",
   development: true,
   routes: {
     "/": index,
-    "/api/profile": () => {
-      const file = profileFile();
-      return Response.json({ path: relative(root, file), mtime: statSync(file).mtimeMs, text: readFileSync(file, "utf8") });
+    "/api/profile": {
+      GET: () => Response.json(readProfile()),
+      PUT: async (req) => {
+        const body = (await req.json()) as { text?: string };
+        if (typeof body.text !== "string") return Response.json({ error: "text is required" }, { status: 400 });
+        try {
+          parseProfile(body.text);
+        } catch (e) {
+          return Response.json({ error: String((e as Error).message ?? e) }, { status: 400 });
+        }
+        writeFileSync(profilePath, body.text);
+        return Response.json({ path: relative(root, profilePath), mtime: statSync(profilePath).mtimeMs });
+      },
     },
   },
   fetch: () => new Response("Not found", { status: 404 }),
 });
-console.log(`Taxonomy: http://127.0.0.1:${port}  (profile: ${relative(root, profileFile())})`);
+console.log(`Taxonomy: http://127.0.0.1:${port}  (profile: ${readProfile().path})`);

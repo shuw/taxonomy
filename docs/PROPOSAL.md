@@ -71,12 +71,16 @@ levers:
 ```
 
 Amounts are for the start year; wages grow by `wageGrowth`, ISO value by `fmvGrowth`.
-The app re-reads the file when it changes, so the YAML is a second set of levers.
+The file is the source of truth in both directions: the sidebar edits it in place (comments
+preserved), and the app re-reads it when you edit it by hand. On first run, when the file does
+not exist, a one-card intake asks for filing status, state, salary and first plan year, plus an
+optional ISO grant, and writes the file.
 
 ## First screen
 
-- **Left: levers.** One slider per plan year for ISO shares exercised, with the AMT
-  crossover drawn on the track ("AMT-free up to N shares"), and the shares still available.
+- **Left: you and your levers.** Collapsible sections (You, ISO exercises, Other income,
+  Deductions, Assumptions) that shrink to one-line summaries. The ISO section has one slider
+  per plan year with the AMT crossover drawn on the track.
 - **Top: the headline.** Total tax over the plan, and its delta against the pinned scenario.
 - **Year strip.** One stacked column per year: regular tax, AMT, NIIT and Medicare, state.
   A second strip shows the AMT credit bank. When a scenario is pinned, its columns sit

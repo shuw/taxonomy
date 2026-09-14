@@ -1,7 +1,7 @@
-import { parse } from "yaml";
+import { isMap, isScalar, isSeq, parse, parseDocument, type Document } from "yaml";
 import type { FilingStatus, Profile } from "./types.ts";
 
-const STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
+export const FILING_STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
 
 /** Parse a profile file and fail loudly on anything the engine cannot work with. */
 export function parseProfile(text: string): Profile {
@@ -9,7 +9,7 @@ export function parseProfile(text: string): Profile {
   if (!raw || typeof raw !== "object") throw new Error("profile is empty");
   const problems: string[] = [];
   if (raw.version !== 1) problems.push("version must be 1");
-  if (!raw.filer || !STATUSES.includes(raw.filer.filingStatus)) problems.push(`filer.filingStatus must be one of ${STATUSES.join(", ")}`);
+  if (!raw.filer || !FILING_STATUSES.includes(raw.filer.filingStatus)) problems.push(`filer.filingStatus must be one of ${FILING_STATUSES.join(", ")}`);
   if (!raw.filer?.state) problems.push("filer.state is required");
   if (!raw.plan || !Number.isInteger(raw.plan.startYear) || !Number.isInteger(raw.plan.years) || raw.plan.years < 1) problems.push("plan.startYear and plan.years are required");
   if (!raw.assumptions) problems.push("assumptions is required");
@@ -25,4 +25,45 @@ export function parseProfile(text: string): Profile {
     equity: { isoGrants: [], ...raw.equity },
     levers: raw.levers,
   };
+}
+
+export type ProfilePath = (string | number)[];
+export interface ProfileEdit { path: ProfilePath; value: unknown }
+
+/**
+ * Apply edits to the YAML text of a profile, keeping comments and ordering intact so the
+ * file stays pleasant to read and edit by hand. `undefined` deletes the key.
+ */
+export function editProfileText(text: string, edits: ProfileEdit[]): string {
+  const doc = parseDocument(text);
+  for (const { path, value } of edits) {
+    const resolved = resolvePath(doc, path);
+    if (value === undefined) doc.deleteIn(resolved);
+    else doc.setIn(resolved, typeof value === "object" && value !== null ? doc.createNode(value) : value);
+  }
+  return doc.toString({ lineWidth: 0 });
+}
+
+/**
+ * YAML tells `2026:` and `"2026":` apart; we do not want two keys for one year. Where a map
+ * already has a key that prints the same as a path segment, use that existing key.
+ */
+function resolvePath(doc: Document, path: ProfilePath): ProfilePath {
+  const out: ProfilePath = [];
+  let node: unknown = doc.contents;
+  for (const seg of path) {
+    let key: string | number = seg;
+    if (isMap(node)) {
+      const pair = node.items.find((p) => String(isScalar(p.key) ? p.key.value : p.key) === String(seg));
+      if (pair) {
+        const k = isScalar(pair.key) ? pair.key.value : pair.key;
+        if (typeof k === "string" || typeof k === "number") key = k;
+        node = pair.value;
+      } else node = undefined;
+    } else if (isSeq(node) && typeof seg === "number") {
+      node = node.items[seg];
+    } else node = undefined;
+    out.push(key);
+  }
+  return out;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile } from "@taxonomy/engine";
+import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { useProfile } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
-import { LeverPanel } from "./components/Levers.tsx";
+import { Sidebar } from "./components/Sidebar.tsx";
+import { Intake } from "./components/Intake.tsx";
 import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
@@ -12,46 +13,49 @@ export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
 
 export function App() {
-  const state = useProfile();
-  if (!state) return <div className="empty">Loading profile…</div>;
-  if (!state.profile) return <div className="empty"><div className="error">{state.error}</div></div>;
-  return <Workspace key={state.path} profile={state.profile} path={state.path} error={state.error} />;
+  const store = useProfile();
+  const file = store.file;
+  if (!file) return <div className="empty">Loading profile…</div>;
+  if (!file.profile) return <div className="empty"><div className="error">{file.error}</div></div>;
+  if (!file.exists) return <Intake exampleText={file.text} onCreate={store.create} />;
+  return <Workspace profile={file.profile} path={file.path} error={file.error} edit={store.edit} saving={store.saving} />;
 }
 
-function Workspace({ profile, path, error }: { profile: Profile; path: string; error: string | null }) {
+interface WorkspaceProps { profile: Profile; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; }
+
+function Workspace({ profile, path, error, edit, saving }: WorkspaceProps) {
   const years = planYears(profile);
-  const [levers, setLevers] = useState<Levers>(() => resolveLevers(profile));
+  const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = useState(years[0]!);
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
 
-  // Keep the focus year valid if the plan window changes in the file.
-  useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [years.join(","), focusYear]);
+  useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
+  const levers = useMemo(() => resolveLevers(profile), [profile]);
   const plan = useMemo(() => runPlan(profile, levers), [profile, levers]);
-  const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, years.join(",")]);
+  const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
   const sweep = useMemo(() => sweepIsoExercise(profile, levers, focusYear, 40), [profile, levers, focusYear]);
-  const focusCrossover = crossovers.find((c) => c.year === focusYear)!;
+  const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0]!;
+  const hasIso = profile.equity.isoGrants.length > 0;
 
-  const setExercise = (year: number, shares: number) =>
-    setLevers((l) => ({ ...l, isoExercises: { ...l.isoExercises, [year]: Math.max(0, Math.round(shares)) } }));
+  const setExercise = (year: number, n: number) => edit([{ path: ["levers", "isoExercises", year], value: Math.max(0, Math.round(n)) }]);
 
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
       <header className="topbar">
-        <h1>Taxonomy</h1>
+        <div className="brand"><span className="mark" />Taxonomy</div>
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
-        <span className="chip" title="Edit this file; the app follows it">{path}</span>
+        <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
-        <button className="btn" onClick={() => setLevers(resolveLevers(profile))}>Reset levers</button>
         {pinned
-          ? <button className="btn" onClick={() => setPinned(null)}>Unpin</button>
-          : <button className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}
+          ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
+          : <button type="button" className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}
       </header>
 
       <aside className="sidebar">
-        <LeverPanel profile={profile} levers={levers} crossovers={crossovers} focusYear={focusYear} onFocus={setFocusYear} onChange={setExercise} />
+        <Sidebar profile={profile} levers={levers} crossovers={crossovers} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} />
       </aside>
 
       <main className="main">
@@ -62,18 +66,20 @@ function Workspace({ profile, path, error }: { profile: Profile; path: string; e
           <div className="sub">Click a year to focus it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
         </section>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 22 }}>
-          <section className="card">
-            <h2>AMT credit bank</h2>
-            <div className="sub">Credit generated by ISO exercises, waiting to offset regular tax in later years.</div>
-            <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-          </section>
-          <section className="card">
-            <h2>AMT in {focusYear} vs shares exercised</h2>
-            <div className="sub">Holding the other years fixed. The marker is where AMT starts.</div>
-            <SweepChart sweep={sweep} crossover={focusCrossover} current={levers.isoExercises[focusYear] ?? 0} onChange={(n) => setExercise(focusYear, n)} />
-          </section>
-        </div>
+        {hasIso && (
+          <div className="two-up">
+            <section className="card">
+              <h2>AMT credit bank</h2>
+              <div className="sub">Credit generated by ISO exercises, waiting to offset regular tax in later years.</div>
+              <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+            </section>
+            <section className="card">
+              <h2>AMT in {focusYear} vs shares exercised</h2>
+              <div className="sub">Holding the other years fixed. The marker is where AMT starts; click the curve to set the lever.</div>
+              <SweepChart sweep={sweep} crossover={focusCrossover} current={levers.isoExercises[focusYear] ?? 0} onChange={(n) => setExercise(focusYear, n)} />
+            </section>
+          </div>
+        )}
         <section className="card">
           <h2>Ledger</h2>
           <div className="sub">Click any number for the reason behind it.</div>
