@@ -1,6 +1,7 @@
-# Taxonomy profile. Copy to data/profile.yaml (gitignored) and put your real numbers in.
+# Taxonomy profile. Real profiles live in data/profiles/<id>.yaml (gitignored); the app creates them.
 # Every amount is annual, in dollars, for the plan's start year unless noted.
 version: 1
+name: Example
 
 filer:
   filingStatus: single      # single | mfj | mfs | hoh

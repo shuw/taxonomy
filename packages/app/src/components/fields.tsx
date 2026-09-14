@@ -27,14 +27,24 @@ export function NumberInput({ value, onChange, prefix, suffix, decimals = 0, min
         onChange={(e) => {
           const raw = e.target.value;
           setText(raw);
-          const n = Number(raw.replace(/[^0-9.\-]/g, ""));
-          if (raw.trim() !== "" && Number.isFinite(n)) onChange(min !== undefined ? Math.max(min, n) : n);
+          const n = parseAmount(raw);
           if (raw.trim() === "") onChange(0);
+          else if (n !== null) onChange(min !== undefined ? Math.max(min, n) : n);
         }}
       />
       {suffix && <span className="affix">{suffix}</span>}
     </span>
   );
+}
+
+/** "620k" -> 620000, "1.2m" -> 1200000, "$45,000" -> 45000. Null when not a number. */
+export function parseAmount(raw: string): number | null {
+  const m = raw.trim().match(/^\$?\s*(-?[\d,]*\.?\d*)\s*([kKmM])?$/);
+  if (!m || !m[1] || m[1] === "-" || m[1] === ".") return null;
+  const n = Number(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(n)) return null;
+  const mult = m[2]?.toLowerCase() === "k" ? 1_000 : m[2]?.toLowerCase() === "m" ? 1_000_000 : 1;
+  return n * mult;
 }
 
 export const MoneyInput = (p: Omit<NumProps, "prefix">) => <NumberInput prefix="$" min={0} {...p} />;

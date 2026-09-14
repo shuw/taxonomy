@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { useProfile } from "./useProfile.ts";
+import { amtCrossover, editProfileText, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { api, type ProfileSummary } from "./api.ts";
+import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { Intake } from "./components/Intake.tsx";
+import { ProfileSwitcher } from "./components/ProfileSwitcher.tsx";
 import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
@@ -12,18 +14,80 @@ import { ExplainPanel } from "./components/ExplainPanel.tsx";
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
 
-export function App() {
-  const store = useProfile();
-  const file = store.file;
-  if (!file) return <div className="empty">Loading profile…</div>;
-  if (!file.profile) return <div className="empty"><div className="error">{file.error}</div></div>;
-  if (!file.exists) return <Intake exampleText={file.text} onCreate={store.create} />;
-  return <Workspace profile={file.profile} path={file.path} error={file.error} edit={store.edit} saving={store.saving} />;
+const STORAGE_KEY = "taxonomy.profile";
+
+function rememberedId(): string | null {
+  const fromUrl = new URLSearchParams(location.search).get("p");
+  if (fromUrl) return fromUrl;
+  try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
-interface WorkspaceProps { profile: Profile; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; }
+function remember(id: string) {
+  try { localStorage.setItem(STORAGE_KEY, id); } catch {}
+  const url = new URL(location.href);
+  url.searchParams.set("p", id);
+  history.replaceState(null, "", url);
+}
 
-function Workspace({ profile, path, error, edit, saving }: WorkspaceProps) {
+export function App() {
+  const { list, refresh } = useProfileList();
+  const [wantedId, setWantedId] = useState<string | null>(rememberedId);
+  const [creating, setCreating] = useState(false);
+  const [exampleText, setExampleText] = useState<string | null>(null);
+
+  const currentId = useMemo(() => {
+    if (!list || list.length === 0) return null;
+    return list.some((p) => p.id === wantedId) ? wantedId : list[0]!.id;
+  }, [list, wantedId]);
+  useEffect(() => { if (currentId) remember(currentId); }, [currentId]);
+
+  const store = useProfile(currentId);
+  const needIntake = list !== null && (list.length === 0 || creating);
+  useEffect(() => { if (needIntake && exampleText === null) void api.example().then((b) => setExampleText(b.text)); }, [needIntake, exampleText]);
+
+  const switchTo = (id: string) => { setWantedId(id); setCreating(false); };
+  const create = async (name: string, text: string) => {
+    const created = await api.create(name, text);
+    await refresh();
+    switchTo(created.id);
+  };
+
+  if (list === null) return <div className="empty">Loading profiles…</div>;
+  if (needIntake) {
+    if (exampleText === null) return <div className="empty">Loading…</div>;
+    return <Intake exampleText={exampleText} onCreate={create} onCancel={list.length > 0 ? () => setCreating(false) : undefined} />;
+  }
+  const file = store.file;
+  if (!file || file.id !== currentId) return <div className="empty">Loading profile…</div>;
+  if (!file.profile) return <div className="empty"><div className="error">{file.error}</div></div>;
+
+  const currentName = file.profile.name?.trim() || file.id;
+  const actions = {
+    onSwitch: switchTo,
+    onNew: () => setCreating(true),
+    onDuplicate: async () => {
+      const created = await api.create(`${currentName} copy`, file.text);
+      await refresh();
+      switchTo(created.id);
+    },
+    onRename: (name: string) => store.edit([{ path: ["name"], value: name }]),
+    onDelete: async () => {
+      await api.remove(file.id);
+      const l = await refresh();
+      const next = l.find((p) => p.id !== file.id);
+      if (next) switchTo(next.id);
+    },
+  };
+
+  return (
+    <Workspace key={file.id} profile={file.profile} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
+      switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
+  );
+}
+
+interface WorkspaceProps { profile: Profile; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
+
+function Workspace({ profile, path, error, edit, saving, switcher }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = useState(years[0]!);
@@ -45,6 +109,7 @@ function Workspace({ profile, path, error, edit, saving }: WorkspaceProps) {
     <div className={"app" + (selected ? " has-explain" : "")}>
       <header className="topbar">
         <div className="brand"><span className="mark" />Taxonomy</div>
+        {switcher}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>

@@ -3,3 +3,4 @@ dist/
 .DS_Store
 # Your real numbers live here; only the example is committed.
 data/profile.yaml
+data/profiles/

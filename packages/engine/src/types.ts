@@ -3,6 +3,8 @@ export type FilingStatus = "single" | "mfj" | "mfs" | "hoh";
 /** The human-edited profile file (data/profile.yaml). */
 export interface Profile {
   version: 1;
+  /** Display name; the file name is the id. */
+  name?: string;
   filer: {
     filingStatus: FilingStatus;
     state: string; // two-letter code; "WA" is the only one modeled so far

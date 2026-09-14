@@ -242,3 +242,19 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 
 .error { background: var(--bad-bg); color: var(--bad); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; }
 .empty { padding: 80px; color: var(--muted); text-align: center; }
+
+/* Profile switcher ------------------------------------------------------------- */
+.switcher { position: relative; display: flex; align-items: center; gap: 4px; }
+.input-wrap.pill { border-radius: 999px; padding: 0 12px; background: var(--surface-2); }
+.input-wrap.pill select { padding: 6px 18px 6px 0; font-weight: 600; font-family: var(--display); background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%23898799' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right center; }
+.btn.icon { padding: 5px 10px; line-height: 1; font-weight: 700; letter-spacing: .05em; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; z-index: 10; display: flex; flex-direction: column; }
+.menu > button { text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+.menu > button:hover { background: var(--surface-2); }
+.menu > button:disabled { color: var(--muted); cursor: default; background: none; }
+.menu > button.danger { color: var(--bad); }
+.menu-form { padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 10px; }
+.menu-form p { margin: 0; font-size: 13px; line-height: 1.45; }
+.menu-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.btn.danger { background: var(--bad); color: #fff; border-color: transparent; }
+.intake.overlay { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--page) 80%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overflow: auto; }

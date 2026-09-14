@@ -1,16 +1,67 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { parseProfile } from "@taxonomy/engine";
+import { parse } from "yaml";
+import { editProfileText, parseProfile } from "@taxonomy/engine";
 import index from "./index.html";
 
 const root = resolve(import.meta.dir, "../..");
-const profilePath = resolve(root, "data/profile.yaml");
+const profilesDir = resolve(root, "data/profiles");
 const examplePath = resolve(root, "data/profile.example.yaml");
+const legacyPath = resolve(root, "data/profile.yaml");
 
-function readProfile() {
-  const exists = existsSync(profilePath);
-  const file = exists ? profilePath : examplePath;
-  return { exists, path: relative(root, file), mtime: statSync(file).mtimeMs, text: readFileSync(file, "utf8") };
+mkdirSync(profilesDir, { recursive: true });
+if (existsSync(legacyPath)) {
+  const target = resolve(profilesDir, "profile.yaml");
+  if (!existsSync(target)) {
+    renameSync(legacyPath, target);
+    console.log(`moved data/profile.yaml to data/profiles/profile.yaml`);
+  }
+}
+
+const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const fileFor = (id: string) => resolve(profilesDir, `${id}.yaml`);
+
+function slug(name: string): string {
+  const s = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  return s || "profile";
+}
+
+function uniqueId(name: string): string {
+  const base = slug(name);
+  let id = base;
+  for (let n = 2; existsSync(fileFor(id)); n++) id = `${base}-${n}`;
+  return id;
+}
+
+function nameOf(text: string, id: string): string {
+  try {
+    const raw = parse(text) as { name?: unknown } | null;
+    if (raw && typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
+  } catch {}
+  return id;
+}
+
+function listProfiles() {
+  return readdirSync(profilesDir)
+    .filter((f) => f.endsWith(".yaml"))
+    .map((f) => {
+      const id = f.slice(0, -5);
+      const path = fileFor(id);
+      return { id, name: nameOf(readFileSync(path, "utf8"), id), path: relative(root, path), mtime: statSync(path).mtimeMs };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function readProfile(id: string) {
+  const path = fileFor(id);
+  return { id, path: relative(root, path), mtime: statSync(path).mtimeMs, text: readFileSync(path, "utf8") };
+}
+
+const bad = (message: string, status = 400) => Response.json({ error: message }, { status });
+
+function validate(text: unknown): string | null {
+  if (typeof text !== "string") return "text is required";
+  try { parseProfile(text); return null; } catch (e) { return String((e as Error).message ?? e); }
 }
 
 const port = Number(process.env.PORT ?? 5180);
@@ -20,21 +71,45 @@ Bun.serve({
   development: true,
   routes: {
     "/": index,
-    "/api/profile": {
-      GET: () => Response.json(readProfile()),
+    "/api/example": () => Response.json({ text: readFileSync(examplePath, "utf8") }),
+    "/api/profiles": {
+      GET: () => Response.json(listProfiles()),
+      POST: async (req) => {
+        const body = (await req.json()) as { name?: string; text?: string };
+        const name = (body.name ?? "").trim();
+        if (!name) return bad("name is required");
+        const text = editProfileText(body.text ?? readFileSync(examplePath, "utf8"), [{ path: ["name"], value: name }]);
+        const problem = validate(text);
+        if (problem) return bad(problem);
+        const id = uniqueId(name);
+        writeFileSync(fileFor(id), text);
+        return Response.json(readProfile(id));
+      },
+    },
+    "/api/profiles/:id": {
+      GET: (req) => {
+        const { id } = req.params;
+        if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
+        return Response.json(readProfile(id));
+      },
       PUT: async (req) => {
+        const { id } = req.params;
+        if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         const body = (await req.json()) as { text?: string };
-        if (typeof body.text !== "string") return Response.json({ error: "text is required" }, { status: 400 });
-        try {
-          parseProfile(body.text);
-        } catch (e) {
-          return Response.json({ error: String((e as Error).message ?? e) }, { status: 400 });
-        }
-        writeFileSync(profilePath, body.text);
-        return Response.json({ path: relative(root, profilePath), mtime: statSync(profilePath).mtimeMs });
+        const problem = validate(body.text);
+        if (problem) return bad(problem);
+        writeFileSync(fileFor(id), body.text as string);
+        const { path, mtime } = readProfile(id);
+        return Response.json({ id, path, mtime });
+      },
+      DELETE: (req) => {
+        const { id } = req.params;
+        if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
+        unlinkSync(fileFor(id));
+        return Response.json({ ok: true });
       },
     },
   },
   fetch: () => new Response("Not found", { status: 404 }),
 });
-console.log(`Taxonomy: http://127.0.0.1:${port}  (profile: ${readProfile().path})`);
+console.log(`Taxonomy: http://127.0.0.1:${port}  (${listProfiles().length} profile(s) in data/profiles)`);

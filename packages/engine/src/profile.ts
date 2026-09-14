@@ -17,6 +17,7 @@ export function parseProfile(text: string): Profile {
   if (problems.length) throw new Error("profile problems:\n - " + problems.join("\n - "));
   return {
     version: 1,
+    name: typeof raw.name === "string" ? raw.name : undefined,
     filer: raw.filer!,
     plan: raw.plan!,
     assumptions: { inflation: 0.025, wageGrowth: 0, fmvGrowth: 0, ...raw.assumptions },

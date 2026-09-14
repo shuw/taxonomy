@@ -54,10 +54,14 @@ dev-only dependency, never in the loop.
 
 ## Profile file
 
-`data/profile.yaml` (gitignored; `data/profile.example.yaml` is committed):
+One file per profile in `data/profiles/<id>.yaml` (gitignored; `data/profile.example.yaml`
+is committed). A profile is a person, a household, or a what-if version of either; the top bar
+switches between them and can create, duplicate, rename and delete. The `name` field is the
+display name; the file name is the id.
 
 ```yaml
 version: 1
+name: Me
 filer:       { filingStatus: single, state: WA }
 plan:        { startYear: 2026, years: 6 }
 assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.15 }

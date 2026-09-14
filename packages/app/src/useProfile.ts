@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editProfileText, parseProfile, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { api, type ProfileSummary } from "./api.ts";
 
 export interface ProfileFile {
-  /** false while the app is still running on the example because data/profile.yaml does not exist yet. */
-  exists: boolean;
+  id: string;
   path: string;
   text: string;
   profile: Profile | null;
@@ -14,61 +14,58 @@ export interface ProfileStore {
   file: ProfileFile | null;
   /** Apply edits locally right away and write them to the file shortly after. */
   edit: (edits: ProfileEdit[]) => void;
-  /** Create data/profile.yaml from the given text (used by the intake). */
-  create: (text: string) => Promise<void>;
   saving: boolean;
 }
 
 const WRITE_DELAY_MS = 500;
 
-export function useProfile(pollMs = 1500): ProfileStore {
+/** One profile file: loads it, polls for outside edits, and writes edits back with a short debounce. */
+export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
   const [file, setFile] = useState<ProfileFile | null>(null);
   const [saving, setSaving] = useState(false);
   const lastMtime = useRef(-1);
   const pendingText = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const apply = useCallback((exists: boolean, path: string, text: string) => {
-    try {
-      setFile({ exists, path, text, profile: parseProfile(text), error: null });
-    } catch (e) {
-      setFile((prev) => ({ exists, path, text, profile: prev?.profile ?? null, error: String((e as Error).message ?? e) }));
-    }
-  }, []);
-
   useEffect(() => {
+    setFile(null);
+    lastMtime.current = -1;
+    pendingText.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    if (!id) return;
     let cancelled = false;
     const tick = async () => {
       if (pendingText.current !== null) return; // our own write is in flight; don't clobber it
       try {
-        const res = await fetch("/api/profile");
-        const body = (await res.json()) as { exists: boolean; path: string; mtime: number; text: string };
+        const body = await api.get(id);
         if (cancelled || body.mtime === lastMtime.current) return;
         lastMtime.current = body.mtime;
-        apply(body.exists, body.path, body.text);
+        try {
+          setFile({ id, path: body.path, text: body.text, profile: parseProfile(body.text), error: null });
+        } catch (e) {
+          setFile((prev) => ({ id, path: body.path, text: body.text, profile: prev?.profile ?? null, error: String((e as Error).message ?? e) }));
+        }
       } catch (e) {
-        if (!cancelled) setFile((prev) => prev ?? { exists: false, path: "", text: "", profile: null, error: `could not load profile: ${String(e)}` });
+        if (!cancelled) setFile((prev) => prev ?? { id, path: "", text: "", profile: null, error: `could not load profile: ${String((e as Error).message ?? e)}` });
       }
     };
     void tick();
-    const id = setInterval(tick, pollMs);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [pollMs, apply]);
+    const handle = setInterval(tick, pollMs);
+    return () => { cancelled = true; clearInterval(handle); };
+  }, [id, pollMs]);
 
   const write = useCallback(async (text: string) => {
+    if (!id) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }) });
-      const body = (await res.json()) as { mtime?: number; path?: string; error?: string };
-      if (!res.ok) throw new Error(body.error ?? res.statusText);
-      lastMtime.current = body.mtime ?? lastMtime.current;
-      setFile((prev) => (prev ? { ...prev, exists: true, path: body.path ?? prev.path } : prev));
+      const body = await api.put(id, text);
+      lastMtime.current = body.mtime;
     } catch (e) {
       setFile((prev) => (prev ? { ...prev, error: `could not save: ${String((e as Error).message ?? e)}` } : prev));
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [id]);
 
   const edit = useCallback((edits: ProfileEdit[]) => {
     setFile((prev) => {
@@ -89,10 +86,21 @@ export function useProfile(pollMs = 1500): ProfileStore {
     });
   }, [write]);
 
-  const create = useCallback(async (text: string) => {
-    apply(true, "data/profile.yaml", text);
-    await write(text);
-  }, [apply, write]);
+  return { file, edit, saving };
+}
 
-  return { file, edit, create, saving };
+/** The list of profile files, refreshed on a slow poll and on demand. */
+export function useProfileList(pollMs = 3000): { list: ProfileSummary[] | null; refresh: () => Promise<ProfileSummary[]> } {
+  const [list, setList] = useState<ProfileSummary[] | null>(null);
+  const refresh = useCallback(async () => {
+    const l = await api.list();
+    setList(l);
+    return l;
+  }, []);
+  useEffect(() => {
+    void refresh().catch(() => setList([]));
+    const handle = setInterval(() => void refresh().catch(() => {}), pollMs);
+    return () => clearInterval(handle);
+  }, [refresh, pollMs]);
+  return { list, refresh };
 }
