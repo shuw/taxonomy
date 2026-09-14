@@ -1,0 +1,43 @@
+# Taxonomy profile. Copy to data/profile.yaml (gitignored) and put your real numbers in.
+# Every amount is annual, in dollars, for the plan's start year unless noted.
+version: 1
+
+filer:
+  filingStatus: single      # single | mfj | mfs | hoh
+  state: WA                 # only WA is modeled so far; other codes get zero state tax
+
+plan:
+  startYear: 2026
+  years: 6                  # 2026 through 2031
+
+assumptions:
+  inflation: 0.025          # indexes brackets, exemptions and caps after the last published year (2026)
+  wageGrowth: 0.03
+  fmvGrowth: 0.15           # annual growth of ISO share value
+
+income:
+  wages: 320000
+  otherOrdinary: 0
+  interest: 6000
+  qualifiedDividends: 4000
+  longTermGains: 0
+  shortTermGains: 0
+
+deductions:
+  mortgageInterest: 0
+  propertyTax: 0
+  stateIncomeTax: 0         # WA has none
+  charitable: 0
+
+equity:
+  isoGrants:
+    - name: "2023 grant"
+      strike: 2.00
+      fmv: 18.00            # per share, at plan.startYear
+      shares: 40000
+  amtCreditCarryforward: 0
+
+# Where the levers start when the app opens.
+levers:
+  isoExercises:
+    2026: 4000

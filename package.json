@@ -1,0 +1,16 @@
+{
+  "name": "taxonomy",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "bun --watch packages/app/server.ts",
+    "test": "bun test packages/engine",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/app",
+    "plan": "bun packages/engine/src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.4",
+    "typescript": "^5.9.2"
+  }
+}

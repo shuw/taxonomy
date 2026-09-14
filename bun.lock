@@ -1,0 +1,61 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "taxonomy",
+      "devDependencies": {
+        "@types/bun": "^1.2.4",
+        "typescript": "^5.9.2",
+      },
+    },
+    "packages/app": {
+      "name": "@taxonomy/app",
+      "version": "0.1.0",
+      "dependencies": {
+        "@taxonomy/engine": "workspace:*",
+        "react": "^19.1.1",
+        "react-dom": "^19.1.1",
+      },
+      "devDependencies": {
+        "@types/react": "^19.1.12",
+        "@types/react-dom": "^19.1.9",
+      },
+    },
+    "packages/engine": {
+      "name": "@taxonomy/engine",
+      "version": "0.1.0",
+      "dependencies": {
+        "yaml": "^2.8.1",
+      },
+    },
+  },
+  "packages": {
+    "@taxonomy/app": ["@taxonomy/app@workspace:packages/app"],
+
+    "@taxonomy/engine": ["@taxonomy/engine@workspace:packages/engine"],
+
+    "@types/bun": ["@types/bun@1.4.2", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/@types/bun/-/bun-1.4.2.tgz", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
+
+    "@types/node": ["@types/node@26.4.0", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/@types/node/-/node-26.4.0.tgz", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ=="],
+
+    "@types/react": ["@types/react@19.2.18", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/@types/react/-/react-19.2.18.tgz", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w=="],
+
+    "@types/react-dom": ["@types/react-dom@19.2.5", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/@types/react-dom/-/react-dom-19.2.5.tgz", { "peerDependencies": { "@types/react": "^19.2.0" } }, "sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg=="],
+
+    "bun-types": ["bun-types@1.4.2", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/bun-types/-/bun-types-1.4.2.tgz", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+
+    "csstype": ["csstype@3.2.3", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/csstype/-/csstype-3.2.3.tgz", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
+
+    "react": ["react@19.2.8", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/react/-/react-19.2.8.tgz", {}, "sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw=="],
+
+    "react-dom": ["react-dom@19.2.8", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/react-dom/-/react-dom-19.2.8.tgz", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.8" } }, "sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ=="],
+
+    "scheduler": ["scheduler@0.27.0", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/scheduler/-/scheduler-0.27.0.tgz", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
+
+    "typescript": ["typescript@5.9.3", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/typescript/-/typescript-5.9.3.tgz", { "bin": { "tsc": "./bin/tsc", "tsserver": "./bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "undici-types": ["undici-types@8.3.0", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/undici-types/-/undici-types-8.3.0.tgz", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
+
+    "yaml": ["yaml@2.9.0", "https://artifactory.infra.ant.dev:443/artifactory/api/npm/npm-all/yaml/-/yaml-2.9.0.tgz", { "bin": "./bin.mjs" }, "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA=="],
+  }
+}
