@@ -14,4 +14,17 @@ Profiles are plain YAML files in `data/profiles/`, one per person or what-if. Sw
 duplicate and delete them from the top bar, or edit the files by hand; the app follows.
 Money fields accept `620k` and `1.2m`.
 
+Equity grants come in three types, each taxed the way the code treats it: ISO exercises feed AMT,
+NSO (NQSO) exercises are ordinary income, RSUs are ordinary income when they vest. Grants take a
+vesting schedule (start date, years, cliff, cadence) or explicit per-year counts.
+
+## Assistant
+
+The Assistant button opens a panel where you paste screenshots from Carta, Shareworks, E*Trade
+or a pay stub, or just describe your grants. It proposes profile changes as a card; nothing is
+written until you click Apply. It calls the Anthropic API from the local dev server, so the
+machine running `bun run dev` needs credentials: either `export ANTHROPIC_API_KEY=...` before
+starting, or sign in with `ant auth login`. Screenshots go to the API and nowhere else. Set
+`TAXONOMY_MODEL` to use a different model (default `claude-opus-5`).
+
 See `docs/PROPOSAL.md` for the approach and what is deliberately simplified.

@@ -8,7 +8,7 @@ const base: YearInputs = {
   year: 2026, filingStatus: "single", state: "WA",
   wages: 0, otherOrdinary: 0, interest: 0, qualifiedDividends: 0, longTermGains: 0, shortTermGains: 0,
   mortgageInterest: 0, propertyTax: 0, stateIncomeTax: 0, charitable: 0,
-  isoSharesExercised: 0, isoBargainElement: 0, amtCreditCarryforwardIn: 0,
+  isoSharesExercised: 0, isoBargainElement: 0, nsoSharesExercised: 0, nsoIncome: 0, rsuSharesVested: 0, rsuIncome: 0, amtCreditCarryforwardIn: 0,
 };
 
 function fed(over: Partial<YearInputs>) {
@@ -90,6 +90,16 @@ describe("AMT", () => {
     const a = fed({ wages: 300_000, longTermGains: 200_000 });
     const b = fed({ wages: 300_000, otherOrdinary: 200_000 });
     expect(a.get("tentativeMinimumTax")).toBeLessThan(b.get("tentativeMinimumTax"));
+  });
+});
+
+describe("equity income", () => {
+  test("RSU vesting and NSO spread are ordinary income and count for Medicare", () => {
+    const L = fed({ wages: 190_000, rsuSharesVested: 1_000, rsuIncome: 30_000, nsoSharesExercised: 500, nsoIncome: 10_000 });
+    expect(L.get("ordinaryIncome")).toBe(230_000);
+    expect(L.get("agi")).toBe(230_000);
+    expect(L.get("additionalMedicare")).toBeCloseTo(30_000 * 0.009);
+    expect(L.get("amti")).toBe(L.get("taxableIncome") + L.get("standardDeduction"));
   });
 });
 

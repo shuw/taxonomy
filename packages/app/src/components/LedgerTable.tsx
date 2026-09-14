@@ -3,7 +3,7 @@ import { fmtDelta, fmtLine } from "../format.ts";
 import type { Selection } from "../App.tsx";
 
 const GROUPS: { title: string; ids: string[] }[] = [
-  { title: "Income", ids: ["wages", "agi", "deduction", "taxableIncome"] },
+  { title: "Income", ids: ["wages", "rsuIncome", "nsoIncome", "agi", "deduction", "taxableIncome"] },
   { title: "Regular tax", ids: ["ordinaryTax", "capGainsTax", "regularTax", "marginalBracket"] },
   { title: "AMT", ids: ["isoSharesExercised", "isoBargainElement", "amti", "amtExemption", "tentativeMinimumTax", "amt"] },
   { title: "AMT credit", ids: ["amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut"] },

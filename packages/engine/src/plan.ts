@@ -1,4 +1,5 @@
 import { computeFederal } from "./federal.ts";
+import { exerciseSpread, rsuVesting, sharesExercisable } from "./equity.ts";
 import { Ledger, pct, usd } from "./ledger.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
@@ -9,46 +10,22 @@ export function planYears(profile: Profile): number[] {
 }
 
 export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Levers {
-  return { isoExercises: { ...(profile.levers?.isoExercises ?? {}), ...(overrides?.isoExercises ?? {}) } };
-}
-
-/** FMV per share for a grant in a given plan year. */
-export function fmvInYear(profile: Profile, grantFmv: number, year: number): number {
-  return grantFmv * (1 + profile.assumptions.fmvGrowth) ** (year - profile.plan.startYear);
-}
-
-/** Shares still unexercised at the start of `year`, given the exercise lever. */
-export function isoSharesAvailable(profile: Profile, levers: Levers, year: number): number {
-  const total = profile.equity.isoGrants.reduce((s, g) => s + g.shares, 0);
-  const used = Object.entries(levers.isoExercises).reduce((s, [y, n]) => (Number(y) < year ? s + n : s), 0);
-  return Math.max(0, total - used);
-}
-
-/**
- * Bargain element for exercising `shares` in `year`: shares are drawn from grants in profile
- * order, after the shares already consumed by earlier years.
- */
-export function isoBargainElement(profile: Profile, levers: Levers, year: number, shares: number): number {
-  let alreadyUsed = Object.entries(levers.isoExercises).reduce((s, [y, n]) => (Number(y) < year ? s + n : s), 0);
-  let remaining = shares;
-  let bargain = 0;
-  for (const g of profile.equity.isoGrants) {
-    const skip = Math.min(g.shares, alreadyUsed);
-    alreadyUsed -= skip;
-    const take = Math.min(g.shares - skip, remaining);
-    if (take > 0) {
-      bargain += take * Math.max(0, fmvInYear(profile, g.fmv, year) - g.strike);
-      remaining -= take;
-    }
-  }
-  return bargain;
+  const base = profile.levers?.exercises;
+  return {
+    exercises: {
+      iso: { ...(base?.iso ?? {}), ...(overrides?.exercises?.iso ?? {}) },
+      nso: { ...(base?.nso ?? {}), ...(overrides?.exercises?.nso ?? {}) },
+    },
+  };
 }
 
 export function yearInputs(profile: Profile, levers: Levers, year: number, carryIn: number): YearInputs {
   const t = year - profile.plan.startYear;
   const inc = profile.income;
   const ded = profile.deductions;
-  const shares = Math.min(levers.isoExercises[year] ?? 0, isoSharesAvailable(profile, levers, year));
+  const iso = Math.min(levers.exercises.iso[year] ?? 0, sharesExercisable(profile, levers, "iso", year));
+  const nso = Math.min(levers.exercises.nso[year] ?? 0, sharesExercisable(profile, levers, "nso", year));
+  const rsu = rsuVesting(profile, year);
   return {
     year,
     filingStatus: profile.filer.filingStatus,
@@ -63,8 +40,12 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carry
     propertyTax: ded.propertyTax ?? 0,
     stateIncomeTax: ded.stateIncomeTax ?? 0,
     charitable: ded.charitable ?? 0,
-    isoSharesExercised: shares,
-    isoBargainElement: isoBargainElement(profile, levers, year, shares),
+    isoSharesExercised: iso,
+    isoBargainElement: exerciseSpread(profile, levers, "iso", year, iso),
+    nsoSharesExercised: nso,
+    nsoIncome: exerciseSpread(profile, levers, "nso", year, nso),
+    rsuSharesVested: rsu.shares,
+    rsuIncome: rsu.income,
     amtCreditCarryforwardIn: carryIn,
   };
 }

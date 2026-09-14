@@ -14,7 +14,7 @@ plan:
 assumptions:
   inflation: 0.025          # indexes brackets, exemptions and caps after the last published year (2026)
   wageGrowth: 0.03
-  fmvGrowth: 0.15           # annual growth of ISO share value
+  fmvGrowth: 0.15           # annual growth of the company's share value
 
 income:
   wages: 320000
@@ -31,14 +31,26 @@ deductions:
   charitable: 0
 
 equity:
-  isoGrants:
-    - name: "2023 grant"
-      strike: 2.00
-      fmv: 18.00            # per share, at plan.startYear
+  sharePrice: 18.00         # per share at plan.startYear (409A for private companies)
+  grants:
+    - name: "2023 ISO grant"
+      type: iso             # iso | nso | rsu
       shares: 40000
+      strike: 2.00
+      vested: 40000         # already vested at the start of the plan
+    - name: "2025 RSU refresh"
+      type: rsu
+      shares: 8000
+      schedule:             # or list `vesting: { 2026: 2000, 2027: 2000 }` directly
+        start: 2025-03-15
+        years: 4
+        cliffMonths: 12
+        cadence: quarterly
   amtCreditCarryforward: 0
 
 # Where the levers start when the app opens.
 levers:
-  isoExercises:
-    2026: 4000
+  exercises:
+    iso:
+      2026: 4000
+    nso: {}

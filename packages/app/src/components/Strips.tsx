@@ -37,9 +37,9 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
   const band = Math.min(120, (width - m.left - m.right) / years.length);
   const totals = years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0));
   const pinnedTotals = pinned ? pinned.years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0)) : null;
-  const max = Math.max(1, ...totals, ...(pinnedTotals ?? []));
-  const ticks = niceTicks(max);
-  const top = ticks[ticks.length - 1] ?? max;
+  const max = Math.max(...totals, ...(pinnedTotals ?? []));
+  const ticks = max < 1 ? [0] : niceTicks(max);
+  const top = Math.max(1, ticks[ticks.length - 1] ?? max);
   const plotH = height - m.top - m.bottom;
   const yOf = (v: number) => m.top + plotH - (v / top) * plotH;
   const baseY = m.top + plotH;

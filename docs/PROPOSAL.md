@@ -94,6 +94,17 @@ optional ISO grant, and writes the file.
 - **Ledger table.** The key lines for every year. Click any number and the right panel
   explains it and links to what it was computed from.
 
+## Equity and the assistant
+
+Grants are typed (`iso`, `nso`, `rsu`) with a vesting schedule or explicit per-year counts; the
+engine expands schedules into per-year vests, tracks what is exercisable, and routes each type
+to the right place (AMT preference, ordinary income at exercise, ordinary income at vest).
+Because portals show this information as screenshots and tables rather than fields, the
+sidebar's primary path is an assistant: the server forwards the conversation (text and pasted
+images) to the Anthropic API with the profile schema and current YAML in the system prompt, and
+a single strict tool the model uses to propose edits. The client renders proposals as cards and
+only an approved card is written, through the same edit path the sidebar uses.
+
 ## Deliberate simplifications (v1)
 
 Listed in `packages/engine/src/federal.ts`. The big ones: no sale of ISO shares yet (so no
@@ -102,7 +113,7 @@ carryforward, mortgage interest taken as given, no credits besides the minimum t
 
 ## Next levers, in likely order
 
-1. ISO sales (dual basis, holding periods) and the AMT credit recovery they unlock.
+1. Sales of ISO, NSO and RSU shares (dual basis, holding periods, disqualifying dispositions).
 2. Mortgage as a lever (balance x rate, $750k cap) instead of an interest figure.
 3. Charitable giving and realized gains as levers; NIIT interplay.
 4. Future rate-change assumption (a "what if rates rise in 2029" lever).

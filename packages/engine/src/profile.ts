@@ -1,5 +1,5 @@
 import { isMap, isScalar, isSeq, parse, parseDocument, type Document } from "yaml";
-import type { FilingStatus, Profile } from "./types.ts";
+import type { Equity, EquityGrant, FilingStatus, GrantType, Levers, Profile } from "./types.ts";
 
 export const FILING_STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
 
@@ -14,6 +14,7 @@ export function parseProfile(text: string): Profile {
   if (!raw.plan || !Number.isInteger(raw.plan.startYear) || !Number.isInteger(raw.plan.years) || raw.plan.years < 1) problems.push("plan.startYear and plan.years are required");
   if (!raw.assumptions) problems.push("assumptions is required");
   if (!raw.income || typeof raw.income.wages !== "number") problems.push("income.wages is required");
+  const equity = normalizeEquity(raw as LegacyProfile, problems);
   if (problems.length) throw new Error("profile problems:\n - " + problems.join("\n - "));
   return {
     version: 1,
@@ -23,9 +24,57 @@ export function parseProfile(text: string): Profile {
     assumptions: { inflation: 0.025, wageGrowth: 0, fmvGrowth: 0, ...raw.assumptions },
     income: raw.income!,
     deductions: raw.deductions ?? {},
-    equity: { isoGrants: [], ...raw.equity },
-    levers: raw.levers,
+    equity,
+    levers: normalizeLevers(raw as LegacyProfile),
   };
+}
+
+const GRANT_TYPES: GrantType[] = ["iso", "nso", "rsu"];
+
+/** Shapes from before grants had types, still accepted on read. */
+interface LegacyProfile extends Omit<Partial<Profile>, "equity" | "levers"> {
+  equity?: Partial<Equity> & { isoGrants?: { name: string; strike: number; fmv: number; shares: number }[] };
+  levers?: Partial<Levers> & { isoExercises?: Record<number, number> };
+}
+
+function normalizeEquity(raw: LegacyProfile, problems: string[]): Equity {
+  const e = raw.equity ?? {};
+  const grants: EquityGrant[] = [...(e.grants ?? [])];
+  if (e.isoGrants) for (const g of e.isoGrants) grants.push({ name: g.name, type: "iso", shares: g.shares, strike: g.strike, fmv: g.fmv, vested: g.shares });
+  grants.forEach((g, i) => {
+    if (!GRANT_TYPES.includes(g.type)) problems.push(`equity.grants[${i}].type must be one of ${GRANT_TYPES.join(", ")}`);
+    if (typeof g.shares !== "number" || g.shares < 0) problems.push(`equity.grants[${i}].shares must be a number`);
+    if (g.type !== "rsu" && typeof g.strike !== "number") problems.push(`equity.grants[${i}].strike is required for options`);
+    if (g.schedule && !/^\d{4}-\d{2}-\d{2}$/.test(g.schedule.start)) problems.push(`equity.grants[${i}].schedule.start must be YYYY-MM-DD`);
+  });
+  const sharePrice = e.sharePrice ?? grants.find((g) => g.fmv !== undefined)?.fmv ?? 0;
+  return { sharePrice, grants, amtCreditCarryforward: e.amtCreditCarryforward };
+}
+
+function normalizeLevers(raw: LegacyProfile): Profile["levers"] {
+  const l = raw.levers;
+  if (!l) return undefined;
+  return { exercises: { iso: { ...(l.isoExercises ?? {}), ...(l.exercises?.iso ?? {}) }, nso: { ...(l.exercises?.nso ?? {}) } } };
+}
+
+/** Whether a profile file still uses the pre-grant-type keys. */
+export function hasLegacyEquity(text: string): boolean {
+  const raw = parse(text) as LegacyProfile | null;
+  return !!(raw?.equity?.isoGrants || raw?.levers?.isoExercises);
+}
+
+/** Rewrite legacy keys into the current shape, keeping everything else (and comments) intact. */
+export function migrateProfileText(text: string): string {
+  if (!hasLegacyEquity(text)) return text;
+  const p = parseProfile(text);
+  const edits: ProfileEdit[] = [
+    { path: ["equity", "isoGrants"], value: undefined },
+    { path: ["equity", "sharePrice"], value: p.equity.sharePrice },
+    { path: ["equity", "grants"], value: p.equity.grants.map((g) => ({ ...g, fmv: undefined })) },
+    { path: ["levers", "isoExercises"], value: undefined },
+  ];
+  if (p.levers) edits.push({ path: ["levers", "exercises"], value: p.levers.exercises });
+  return editProfileText(text, edits);
 }
 
 export type ProfilePath = (string | number)[];

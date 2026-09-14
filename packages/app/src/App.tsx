@@ -11,6 +11,7 @@ import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
 import { Mark, Wordmark } from "./components/Mark.tsx";
+import { AssistantPanel } from "./components/AssistantPanel.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -81,19 +82,22 @@ export function App() {
   };
 
   return (
-    <Workspace key={file.id} profile={file.profile} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
+    <Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
       switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
   );
 }
 
-interface WorkspaceProps { profile: Profile; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
+interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
 
-function Workspace({ profile, path, error, edit, saving, switcher }: WorkspaceProps) {
+function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = useState(years[0]!);
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const select = (sel: Selection | null) => { setSelected(sel); if (sel) setAssistantOpen(false); };
+  const openAssistant = () => { setAssistantOpen(true); setSelected(null); };
 
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
@@ -102,12 +106,12 @@ function Workspace({ profile, path, error, edit, saving, switcher }: WorkspacePr
   const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
   const sweep = useMemo(() => sweepIsoExercise(profile, levers, focusYear, 40), [profile, levers, focusYear]);
   const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0]!;
-  const hasIso = profile.equity.isoGrants.length > 0;
+  const hasIso = profile.equity.grants.some((g) => g.type === "iso");
 
-  const setExercise = (year: number, n: number) => edit([{ path: ["levers", "isoExercises", year], value: Math.max(0, Math.round(n)) }]);
+  const setExercise = (type: "iso" | "nso", year: number, n: number) => edit([{ path: ["levers", "exercises", type, year], value: Math.max(0, Math.round(n)) }]);
 
   return (
-    <div className={"app" + (selected ? " has-explain" : "")}>
+    <div className={"app" + (selected || assistantOpen ? " has-explain" : "")}>
       <header className="topbar">
         <div className="brand"><Mark size={24} /><Wordmark /></div>
         {switcher}
@@ -115,13 +119,14 @@ function Workspace({ profile, path, error, edit, saving, switcher }: WorkspacePr
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
+        <button type="button" className={"btn" + (assistantOpen ? " on" : "")} onClick={() => (assistantOpen ? setAssistantOpen(false) : openAssistant())}>Assistant</button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
           : <button type="button" className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}
       </header>
 
       <aside className="sidebar">
-        <Sidebar profile={profile} levers={levers} crossovers={crossovers} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} />
+        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenAssistant={openAssistant} />
       </aside>
 
       <main className="main">
@@ -142,20 +147,25 @@ function Workspace({ profile, path, error, edit, saving, switcher }: WorkspacePr
             <section className="card">
               <h2>AMT in {focusYear} vs shares exercised</h2>
               <div className="sub">Holding the other years fixed. The marker is where AMT starts; click the curve to set the lever.</div>
-              <SweepChart sweep={sweep} crossover={focusCrossover} current={levers.isoExercises[focusYear] ?? 0} onChange={(n) => setExercise(focusYear, n)} />
+              <SweepChart sweep={sweep} crossover={focusCrossover} current={levers.exercises.iso[focusYear] ?? 0} onChange={(n) => setExercise("iso", focusYear, n)} />
             </section>
           </div>
         )}
         <section className="card">
           <h2>Ledger</h2>
           <div className="sub">Click any number for the reason behind it.</div>
-          <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} />
+          <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={select} />
         </section>
       </main>
 
       {selected && (
         <aside className="explain">
-          <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={setSelected} onClose={() => setSelected(null)} />
+          <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={select} onClose={() => setSelected(null)} />
+        </aside>
+      )}
+      {assistantOpen && !selected && (
+        <aside className="explain assistant-aside">
+          <AssistantPanel profile={profile} profileText={profileText} edit={edit} onClose={() => setAssistantOpen(false)} />
         </aside>
       )}
     </div>

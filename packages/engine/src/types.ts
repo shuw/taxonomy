@@ -23,11 +23,7 @@ export interface Profile {
   };
   income: Income;
   deductions: Deductions;
-  equity: {
-    isoGrants: IsoGrant[];
-    /** Minimum tax credit already banked from prior years' AMT, entering startYear. */
-    amtCreditCarryforward?: number;
-  };
+  equity: Equity;
   /** Default lever positions. The UI starts here. */
   levers?: Partial<Levers>;
 }
@@ -48,20 +44,48 @@ export interface Deductions {
   charitable?: number;
 }
 
-export interface IsoGrant {
+export type GrantType = "iso" | "nso" | "rsu";
+
+/** A vesting schedule the engine expands into per-year vest counts. */
+export interface VestingSchedule {
+  /** Vesting commencement date, YYYY-MM-DD. */
+  start: string;
+  /** Total vesting period in years. */
+  years: number;
+  /** Months before the first vest; everything accrued by then vests at once. */
+  cliffMonths?: number;
+  cadence?: "monthly" | "quarterly" | "annual";
+}
+
+export interface EquityGrant {
   name: string;
-  /** Exercise price per share. */
-  strike: number;
-  /** Fair market value per share at plan.startYear; grows by assumptions.fmvGrowth. */
-  fmv: number;
-  /** Shares exercisable over the plan (vesting is not modeled yet). */
+  type: GrantType;
+  /** Total shares (or units) in the grant. */
   shares: number;
+  /** Exercise price per share. Options only. */
+  strike?: number;
+  /** Per-share value at plan.startYear; defaults to equity.sharePrice. */
+  fmv?: number;
+  /** Shares already vested at the start of the plan (options: vested and still unexercised). Overrides the schedule for the past. */
+  vested?: number;
+  /** Shares vesting in each plan year, when you would rather state it than derive it. */
+  vesting?: Record<number, number>;
+  /** Derive per-year vesting from a schedule instead. */
+  schedule?: VestingSchedule;
+}
+
+export interface Equity {
+  /** Per-share value (409A or market) at plan.startYear; grows by assumptions.fmvGrowth. */
+  sharePrice: number;
+  grants: EquityGrant[];
+  /** Minimum tax credit already banked from prior years' AMT, entering startYear. */
+  amtCreditCarryforward?: number;
 }
 
 /** Everything the user turns. Keyed by year where it varies. */
 export interface Levers {
-  /** ISO shares exercised in each plan year. Shares are drawn from grants in the order listed. */
-  isoExercises: Record<number, number>;
+  /** Option shares exercised per year, by grant type. Shares are drawn from grants of that type in profile order. */
+  exercises: { iso: Record<number, number>; nso: Record<number, number> };
 }
 
 /** Fully resolved inputs for one tax year, after profile defaults, growth and levers are applied. */
@@ -80,8 +104,14 @@ export interface YearInputs {
   stateIncomeTax: number;
   charitable: number;
   isoSharesExercised: number;
-  /** Sum over exercised shares of (FMV - strike). */
+  /** Sum over exercised ISO shares of (FMV - strike): an AMT preference, invisible to regular tax. */
   isoBargainElement: number;
+  nsoSharesExercised: number;
+  /** Sum over exercised NSO shares of (FMV - strike): ordinary wage income. */
+  nsoIncome: number;
+  rsuSharesVested: number;
+  /** RSU shares vesting this year x FMV: ordinary wage income. */
+  rsuIncome: number;
   amtCreditCarryforwardIn: number;
 }
 

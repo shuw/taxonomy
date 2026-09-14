@@ -8,7 +8,7 @@ const path = process.argv[2] ?? "data/profile.yaml";
 const profile = parseProfile(readFileSync(path, "utf8"));
 const plan = runPlan(profile);
 
-const rows = ["agi", "taxableIncome", "regularTax", "isoBargainElement", "tentativeMinimumTax", "amt", "amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "stateTax", "totalTax", "effectiveRate"];
+const rows = ["wages", "rsuIncome", "nsoIncome", "agi", "taxableIncome", "regularTax", "isoBargainElement", "tentativeMinimumTax", "amt", "amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "stateTax", "totalTax", "effectiveRate"];
 const w = 12;
 console.log("".padEnd(28) + plan.years.map((y) => String(y.year).padStart(w)).join(""));
 for (const id of rows) {
@@ -18,6 +18,6 @@ for (const id of rows) {
 console.log("");
 for (const y of plan.years) {
   const c = amtCrossover(profile, undefined, y.year);
-  console.log(`${y.year}: exercising ${y.inputs.isoSharesExercised} of ${c.available} available shares; AMT starts after ${c.sharesBeforeAmt} shares${c.overCrossover ? " (over)" : ""}`);
+  console.log(`${y.year}: exercising ${y.inputs.isoSharesExercised} of ${c.available} exercisable ISO shares; AMT starts after ${c.sharesBeforeAmt} shares${c.overCrossover ? " (over)" : ""}`);
 }
 console.log(`\nPlan total tax ${usd(plan.totals.totalTax)}, of which AMT ${usd(plan.totals.amt)}; AMT credit left at end ${usd(plan.totals.amtCreditCarryforwardEnd)}`);

@@ -31,11 +31,13 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   const ltcgTaxable = Math.max(0, netGains < 0 ? 0 : Math.min(inputs.longTermGains, netGains));
   const stcgTaxable = netGains < 0 ? -netLoss : Math.max(0, netGains - ltcgTaxable);
 
+  L.put("rsuIncome", "RSU vesting income", inputs.rsuIncome, inputs.rsuSharesVested > 0 ? `${Math.round(inputs.rsuSharesVested).toLocaleString("en-US")} units vested x share value. Taxed as wages the year they vest, whether or not you sell.` : "No RSUs vest this year.");
+  L.put("nsoIncome", "NSO exercise income", inputs.nsoIncome, inputs.nsoSharesExercised > 0 ? `(FMV - strike) x ${Math.round(inputs.nsoSharesExercised).toLocaleString("en-US")} NSO shares exercised. Unlike ISOs, the spread is ordinary wage income right away, and there is no AMT preference.` : "No NSO exercises this year.");
   const ordinaryIncome = L.put(
     "ordinaryIncome", "Ordinary income",
-    inputs.wages + inputs.otherOrdinary + inputs.interest + stcgTaxable,
-    `Wages + other ordinary income + interest + short-term gains${netLoss ? ` (net capital loss limited to $3,000)` : ""}. Taxed on the bracket schedule.`,
-    ["wages", "otherOrdinary", "interest", "shortTermGains"],
+    inputs.wages + inputs.rsuIncome + inputs.nsoIncome + inputs.otherOrdinary + inputs.interest + stcgTaxable,
+    `Wages + RSU vesting + NSO exercise spread + other ordinary income + interest + short-term gains${netLoss ? ` (net capital loss limited to $3,000)` : ""}. Taxed on the bracket schedule.`,
+    ["wages", "rsuIncome", "nsoIncome", "otherOrdinary", "interest", "shortTermGains"],
   );
   const preferentialGross = inputs.qualifiedDividends + ltcgTaxable;
   const agi = L.put(
@@ -111,7 +113,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   // AMT -----------------------------------------------------------------------
   const addback = usesItemized ? saltDeduction : standard;
   L.put("amtAddbacks", "AMT addbacks", addback, usesItemized ? "The SALT deduction is not allowed under AMT, so it is added back. Mortgage interest and charitable gifts stay deductible." : "The standard deduction is not allowed under AMT, so it is added back.", ["usesItemized"]);
-  L.put("isoSharesExercised", "ISO shares exercised", inputs.isoSharesExercised, "The lever. Shares exercised this year, drawn from grants in profile order.", [], "shares");
+  L.put("isoSharesExercised", "ISO shares exercised", inputs.isoSharesExercised, "The lever. Vested ISO shares exercised this year, drawn from ISO grants in profile order.", [], "shares");
   L.put(
     "isoBargainElement", "ISO bargain element", inputs.isoBargainElement,
     inputs.isoSharesExercised > 0
@@ -188,8 +190,9 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
       : agi > p.niit.threshold[fs] ? "AGI is over the threshold but there is no investment income." : `AGI is under the ${usd(p.niit.threshold[fs])} threshold.`,
     ["agi", "interest", "qualifiedDividends", "longTermGains"],
   );
-  const medicareBase = Math.max(0, inputs.wages - p.additionalMedicare.threshold[fs]);
-  L.put("additionalMedicare", "Additional Medicare tax", medicareBase * p.additionalMedicare.rate, medicareBase > 0 ? `0.9% of wages over ${usd(p.additionalMedicare.threshold[fs])}.` : `Wages are under the ${usd(p.additionalMedicare.threshold[fs])} threshold.`, ["wages"]);
+  const medicareWages = inputs.wages + inputs.rsuIncome + inputs.nsoIncome;
+  const medicareBase = Math.max(0, medicareWages - p.additionalMedicare.threshold[fs]);
+  L.put("additionalMedicare", "Additional Medicare tax", medicareBase * p.additionalMedicare.rate, medicareBase > 0 ? `0.9% of wages (including RSU and NSO income) over ${usd(p.additionalMedicare.threshold[fs])}.` : `Wages are under the ${usd(p.additionalMedicare.threshold[fs])} threshold.`, ["wages", "rsuIncome", "nsoIncome"]);
 
   L.put("federalTotal", "Total federal tax", federalIncomeTax + L.get("niit") + L.get("additionalMedicare"), "Federal income tax + NIIT + additional Medicare tax.", ["federalIncomeTax", "niit", "additionalMedicare"]);
 }

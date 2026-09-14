@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import { parse } from "yaml";
-import { editProfileText, parseProfile } from "@taxonomy/engine";
+import { editProfileText, migrateProfileText, parseProfile } from "@taxonomy/engine";
+import { describeAssistantError, runAssistant } from "./assistant.ts";
 import index from "./index.html";
 
 const root = resolve(import.meta.dir, "../..");
@@ -54,7 +55,14 @@ function listProfiles() {
 
 function readProfile(id: string) {
   const path = fileFor(id);
-  return { id, path: relative(root, path), mtime: statSync(path).mtimeMs, text: readFileSync(path, "utf8") };
+  let text = readFileSync(path, "utf8");
+  const migrated = migrateProfileText(text);
+  if (migrated !== text) {
+    writeFileSync(path, migrated);
+    text = migrated;
+    console.log(`migrated ${relative(root, path)} to typed grants`);
+  }
+  return { id, path: relative(root, path), mtime: statSync(path).mtimeMs, text };
 }
 
 const bad = (message: string, status = 400) => Response.json({ error: message }, { status });
@@ -107,6 +115,19 @@ Bun.serve({
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         unlinkSync(fileFor(id));
         return Response.json({ ok: true });
+      },
+    },
+    "/api/assistant": {
+      POST: async (req) => {
+        const body = (await req.json()) as { profileText?: string; messages?: unknown };
+        if (typeof body.profileText !== "string") return bad("profileText is required");
+        try {
+          return Response.json(await runAssistant(body.profileText, body.messages));
+        } catch (e) {
+          const { status, message } = describeAssistantError(e);
+          if (status >= 500) console.error("assistant:", e);
+          return Response.json({ error: message }, { status });
+        }
       },
     },
   },
