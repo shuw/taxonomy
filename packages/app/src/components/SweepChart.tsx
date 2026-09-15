@@ -68,7 +68,7 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
         <circle cx={xOf(cur)} cy={yOf(curAmt)} r={5} fill="var(--series-amt)" stroke="var(--surface)" strokeWidth={2} />
         {cur > 0 && <text className="cap-label" x={xOf(cur) + (cur > maxShares * 0.7 ? -8 : 8)} y={yOf(curAmt) - 8} textAnchor={cur > maxShares * 0.7 ? "end" : "start"}>now: {shares(cur)} sh · {usdCompact(curAmt)}</text>}
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
-        {[0, 0.5, 1].map((f) => <text key={f} className="axis-label" x={xOf(f * maxShares)} y={height - 8} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"}>{shares(f * maxShares)} sh</text>)}
+        {[0, 0.5, 1].map((f) => <text key={f} className="axis-label" x={xOf(f * maxShares)} y={height - 8} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"}>{f === 0 ? "0" : f === 1 ? `all ${shares(maxShares)}` : shares(f * maxShares)}{f === 0.5 ? ` ISO shares exercised in ${crossover.year}` : ""}</text>)}
       </svg>
       {hp && (
         <div className="tooltip" style={hp.shares > maxShares * 0.6 ? { right: width - xOf(hp.shares) + 14, top: m.top } : { left: xOf(hp.shares) + 14, top: m.top }}>

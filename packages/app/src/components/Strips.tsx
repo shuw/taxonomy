@@ -25,7 +25,7 @@ function taxSeries(plan: PlanResult): Series[] {
   return [...TAX_SERIES, { ...STATE_SERIES, label: lines.stateTax?.label ?? "State" }];
 }
 const CREDIT_SERIES: Series[] = [
-  { id: "credit", label: "AMT credit carried forward", color: "var(--series-amt)", value: (y) => y.lines.amtCreditCarryforwardOut!.value },
+  { id: "credit", label: "Credit on hand at year end", color: "var(--series-amt)", value: (y) => y.lines.amtCreditCarryforwardOut!.value },
 ];
 
 interface StripProps { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void; }
