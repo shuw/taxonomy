@@ -186,9 +186,27 @@ export interface Deductions {
   medical?: number;
 }
 
-/** Everything the user turns. Keyed by year where it varies. */
+/** A decision placed on the plan's timeline. Facts live elsewhere; these are the things you can change your mind about. */
+export type ScenarioEvent =
+  | {
+      id: string;
+      kind: "exercise";
+      year: number;
+      /** YYYY-MM-DD when it matters for holding periods; defaults to January 1 of the year. */
+      date?: string;
+      type: "iso" | "nso";
+      /** Shares drawn from grants of that type in profile order. */
+      shares: number;
+    };
+
+/** A named list of decisions. */
+export interface Scenario {
+  events: ScenarioEvent[];
+}
+
+/** The per-year lever table the engine computes from; derived from a scenario's events. */
 export interface Levers {
-  /** Option shares exercised per year, by grant type. Shares are drawn from grants of that type in profile order. */
+  /** Option shares exercised per year, by grant type. */
   exercises: { iso: Record<number, number>; nso: Record<number, number> };
 }
 
@@ -262,8 +280,8 @@ export interface Profile {
   deductions?: Deductions;
   /** Dated changes to the facts above. */
   timeline?: TimelineEntry[];
-  /** Named lever settings. */
-  scenarios?: Record<string, Levers>;
+  /** Named lists of decisions. */
+  scenarios?: Record<string, Scenario>;
   activeScenario?: string;
   /** Where numbers came from, keyed by profile path ("people.self.salary"); grants and holdings by id ("grants.g1"). */
   sources?: Record<string, Source>;

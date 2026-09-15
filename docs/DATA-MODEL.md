@@ -25,14 +25,14 @@ everything that *changes on a date* lives in `timeline`.
 | `home` | the mortgage as a loan (balance, rate, origination, original amount, term), property tax, or a direct interest figure when there is no loan | interest is amortized month by month; the $750k acquisition-debt cap applies by average balance |
 | `deductions` | charitable by kind (cash, appreciated stock, DAF), state income tax, medical | cash and DAF up to 60% of AGI, stock up to 30%, excess carried forward |
 | `timeline` | `{ year, path, value, note? }` | applied cumulatively before each year is computed; growth assumptions still compound from the plan start |
-| `scenarios`, `activeScenario` | named lever settings | exercises per year by grant type today; every future lever lands here |
+| `scenarios`, `activeScenario` | named lists of decisions: `{ events: [...] }` | an event has an id, a kind (`exercise` today; `sell` and `liquidity` next), a year, an optional date, and its own fields. The engine collapses events into a per-year lever table. Files that stored the table directly are read and mapped |
 | `sources` | provenance keyed by path; grants and holdings by id (`grants.g1`), companies by id | a string, or `{ doc, asOf, note }` |
 
 ## Identity
 
 Grants, holdings and companies carry ids (`g1`, `h1`, `c1`) assigned on creation or migration.
-Sources and levers key on ids, so reordering or renaming never orphans anything. Names are
-labels.
+Sources key on ids, so reordering or renaming never orphans anything. Events carry ids too
+(`e1`), so the app can select and move them. Names are labels.
 
 ## The field registry
 

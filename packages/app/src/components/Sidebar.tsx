@@ -1,8 +1,8 @@
-import { statusName, timelineFields, type AmtCrossover, type FieldDef, type Levers, type Profile, type ProfileEdit, type TimelineEntry } from "@taxonomy/engine";
+import { statusName, timelineFields, type FieldDef, type Levers, type Profile, type ProfileEdit, type TimelineEntry } from "@taxonomy/engine";
 import { pct, usdCompact } from "../format.ts";
-import { EquityLevers } from "./EquitySection.tsx";
+import { EquityKnobs } from "./EquitySection.tsx";
 import type { FactTab } from "./FactsModal.tsx";
-import { FILING_OPTIONS, Field, MoneyInput, PercentInput, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 import { Section } from "./Section.tsx";
 
 export { sourceOf } from "../sources.ts";
@@ -10,17 +10,13 @@ export { sourceOf } from "../sources.ts";
 interface Props {
   profile: Profile;
   levers: Levers;
-  crossovers: AmtCrossover[];
   years: number[];
-  focusYear: number;
-  onFocus: (year: number) => void;
-  onExercise: (type: "iso" | "nso", year: number, shares: number) => void;
   edit: (edits: ProfileEdit[]) => void;
   onOpenFacts: (tab: FactTab) => void;
 }
 
-/** What you turn: a few basics, the equity levers, dated changes and assumptions. The facts behind them live in the Facts dialog. */
-export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenFacts }: Props) {
+/** What you turn: a few basics, share prices, dated changes and assumptions. Decisions live on the timeline; the facts behind them in the information dialog. */
+export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const self = profile.people.self;
   const spouse = profile.people.spouse;
@@ -36,11 +32,12 @@ export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus
           <Field label="State"><Select options={STATE_OPTIONS} value={profile.filer.state} onChange={(v) => set(["filer", "state"], v)} /></Field>
           <Field label={spouse ? "Your salary" : "Base salary"}><MoneyInput value={self.salary} onChange={(n) => set(["people", "self", "salary"], n)} /></Field>
           {spouse && <Field label="Spouse's salary"><MoneyInput value={spouse.salary} onChange={(n) => set(["people", "spouse", "salary"], n)} /></Field>}
+          <Field label="Years to plan" hint={`${profile.plan.startYear}–${endYear}`}><NumberInput value={profile.plan.years} onChange={(n) => set(["plan", "years"], Math.max(1, Math.min(15, Math.round(n))))} min={1} /></Field>
         </div>
-        <button type="button" className="link" onClick={() => onOpenFacts("you")}>Bonus, pre-tax, dependents, plan years →</button>
+        <button type="button" className="link" onClick={() => onOpenFacts("you")}>Bonus, pre-tax, dependents →</button>
       </Section>
 
-      <EquityLevers profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={onFocus} onExercise={onExercise} edit={edit} onOpenFacts={() => onOpenFacts("equity")} />
+      <EquityKnobs profile={profile} levers={levers} edit={edit} onOpenFacts={() => onOpenFacts("equity")} />
 
       <Section id="timeline" title="Changes over time" color="var(--series-regular)" summary={timeline.length ? timeline.map((t) => `${t.year}: ${labelOf(t.path)}`).join(" · ") : "nothing changes"}>
         <p className="muted small">A dated change to any fact, in force from that year on. Growth assumptions still apply from the plan start.</p>

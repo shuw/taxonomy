@@ -12,7 +12,7 @@ filer:
 # the years on screen
 plan:
   startYear: 2026
-  years: 6
+  years: 5
 
 # inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to share values; bracketRateDelta shifts every bracket rate
 assumptions:
@@ -91,8 +91,6 @@ timeline: []
 # named lever settings; activeScenario picks one
 scenarios:
   default:
-    exercises:
-      iso:
-        2026: 4000
-      nso: {}
+    events:
+      - { id: e1, kind: exercise, type: iso, year: 2026, shares: 4000 }
 activeScenario: default

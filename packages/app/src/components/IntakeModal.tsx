@@ -22,11 +22,11 @@ function profileTextFrom(b: Basics): string {
   return stringifyProfile({
     version: 3, name: b.name.trim() || "New profile",
     filer: { filingStatus: "single", state: "WA", dependents: [] },
-    plan: { startYear: thisYear(), years: 6 },
+    plan: { startYear: thisYear(), years: 5 },
     assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
     people: { self: { salary: 0 } },
     income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
-    timeline: [], scenarios: { default: { exercises: { iso: {}, nso: {} } } }, activeScenario: "default",
+    timeline: [], scenarios: { default: { events: [] } }, activeScenario: "default",
   });
 }
 

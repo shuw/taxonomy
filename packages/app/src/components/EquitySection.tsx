@@ -1,5 +1,5 @@
-import { companyOf, grantFmv, grantsMissingVesting, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { pct, shares, usd, usdCompact } from "../format.ts";
+import { companyOf, grantFmv, grantsMissingVesting, newId, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { pct, shares, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
 import { sourceOf } from "../sources.ts";
 import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
@@ -18,28 +18,19 @@ export function equitySummary(profile: Profile, levers: Levers): string {
   return [hasType(profile, "iso") && `${shares(exercisedIso)} ISO exercised`, hasType(profile, "rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType(profile, "nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
 }
 
-interface LeversProps {
+interface KnobsProps {
   profile: Profile;
   levers: Levers;
-  crossovers: AmtCrossover[];
-  years: number[];
-  focusYear: number;
-  onFocus: (year: number) => void;
-  onExercise: (type: "iso" | "nso", year: number, shares: number) => void;
   edit: (edits: ProfileEdit[]) => void;
   onOpenFacts: () => void;
 }
 
-/** The sidebar's equity block: share prices to play with, and the exercise levers by year. */
-export function EquityLevers({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenFacts }: LeversProps) {
+/** The sidebar's equity block: share prices to play with. Decisions live on the timeline in the main view. */
+export function EquityKnobs({ profile, levers, edit, onOpenFacts }: KnobsProps) {
   const { companies, grants } = profile.equity;
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const setCompany = (i: number, patch: Partial<Company>) => set(["equity", "companies"], companies.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const missing = grantsMissingVesting(profile);
-  const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0];
-  const nsoAvailable = sharesExercisable(profile, levers, "nso", focusYear);
-  const any = hasType(profile, "iso") || hasType(profile, "nso") || hasType(profile, "rsu");
-
   return (
     <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={equitySummary(profile, levers)}>
       {companies.map((c, i) => (
@@ -56,44 +47,6 @@ export function EquityLevers({ profile, levers, crossovers, years, focusYear, on
         <div className="notice">
           {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule, so nothing more of them vests here. <button type="button" className="link" onClick={onOpenFacts}>Set the schedule</button>
         </div>
-      )}
-
-      {any && (
-        <>
-          <div className="subhead">By year <span className="muted">· pick a year, then move its levers</span></div>
-          <div className="year-strip">
-            {years.map((y) => {
-              const iso = levers.exercises.iso[y] ?? 0;
-              const nso = levers.exercises.nso[y] ?? 0;
-              const rsu = hasType(profile, "rsu") ? rsuVesting(profile, y).shares : 0;
-              const parts = [iso > 0 && <span key="i" className="yc-iso">{shares(iso)} ISO</span>, nso > 0 && <span key="n" className="yc-nso">{shares(nso)} NSO</span>, rsu > 0 && <span key="r" className="yc-rsu">{shares(rsu)} RSU</span>].filter(Boolean);
-              return (
-                <button type="button" key={y} className={"year-chip" + (y === focusYear ? " on" : "")} onClick={() => onFocus(y)}>
-                  <span className="yc-year">{y}</span>
-                  {parts.length ? parts : <span className="yc-val">—</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div className="lever focus">
-            <div className="year">{focusYear}</div>
-            {hasType(profile, "iso") && focusCrossover && (
-              <LeverRow label="ISO" hint="spread goes to AMT" available={focusCrossover.available} value={Math.min(levers.exercises.iso[focusYear] ?? 0, focusCrossover.available)}
-                mark={focusCrossover.available > 0 && focusCrossover.sharesBeforeAmt < focusCrossover.available ? focusCrossover.sharesBeforeAmt : null}
-                over={focusCrossover.overCrossover} sharesBeforeAmt={focusCrossover.sharesBeforeAmt} spread={nextShareSpread(profile, "iso", focusYear)} onChange={(n) => onExercise("iso", focusYear, n)} />
-            )}
-            {hasType(profile, "nso") && (
-              <LeverRow label="NSO" hint="spread is wage income" available={nsoAvailable} value={Math.min(levers.exercises.nso[focusYear] ?? 0, nsoAvailable)} mark={null} over={false} sharesBeforeAmt={0}
-                spread={nextShareSpread(profile, "nso", focusYear)} onChange={(n) => onExercise("nso", focusYear, n)} />
-            )}
-            {hasType(profile, "rsu") && (() => { const v = rsuVesting(profile, focusYear); return (
-              <div className="lever-row">
-                <div className="head"><span className="badge rsu">RSU</span><span className="lever-hint muted">wages the year units settle</span></div>
-                <div className="foot"><span>{v.shares ? `${shares(v.shares)} units settle · ${usdCompact(v.income)} of wages` : "nothing settles this year"}</span></div>
-              </div>
-            ); })()}
-          </div>
-        </>
       )}
       <button type="button" className="link" onClick={onOpenFacts}>Grants, schedules and holdings →</button>
     </Section>
@@ -297,33 +250,6 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-interface LeverProps { label: string; hint: string; available: number; value: number; mark: number | null; over: boolean; sharesBeforeAmt: number; spread: number; onChange: (n: number) => void; }
-
-function LeverRow({ label, hint, available, value, mark, over, sharesBeforeAmt, spread, onChange }: LeverProps) {
-  const pctOf = (n: number) => (available > 0 ? (n / available) * 100 : 0);
-  return (
-    <div className="lever-row">
-      <div className="head">
-        <span className={"badge " + label.toLowerCase()}>{label}</span>
-        <span className="lever-hint muted">{hint}</span>
-        <NumberInput value={value} onChange={(n) => onChange(Math.min(available, n))} min={0} suffix="sh" />
-      </div>
-      <div className="track">
-        <input type="range" className="range" min={0} max={available} step={available > 5000 ? 50 : 10} value={value} disabled={available === 0}
-          style={{ "--pct": `${pctOf(value)}%` } as React.CSSProperties}
-          onChange={(e) => onChange(Number(e.target.value))} />
-        {mark !== null && <div className="mark" style={{ left: `calc(9px + (100% - 18px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares`} />}
-      </div>
-      <div className="foot">
-        <span className={over ? "over" : ""}>
-          {available === 0 ? "nothing exercisable this year" : mark === null ? "" : over ? `${shares(value - sharesBeforeAmt)} past the AMT line` : `AMT-free up to ${shares(sharesBeforeAmt)}`}
-        </span>
-        <span>{shares(available)} exercisable · {usd(spread)}/sh spread</span>
-      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
-import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, Levers, PriorReturn, Profile, Source } from "./types.ts";
+import { eventsFromLevers } from "./events.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, Levers, PriorReturn, Profile, Source, Scenario } from "./types.ts";
 
 export const FILING_STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
 const GRANT_TYPES: GrantType[] = ["iso", "nso", "rsu"];
@@ -33,7 +34,7 @@ interface RawProfile {
     amtCreditCarryforward?: number;
   };
   levers?: Partial<Levers> & { isoExercises?: Record<number, number> };
-  scenarios?: Record<string, Levers>;
+  scenarios?: Record<string, Partial<Levers> & Partial<Scenario>>;
   activeScenario?: string;
   timeline?: Profile["timeline"];
   sources?: Record<string, Source>;
@@ -68,8 +69,9 @@ export function parseProfile(text: string): Profile {
   const dependents: Dependent[] | undefined = Array.isArray(dependentsRaw) ? dependentsRaw : typeof dependentsRaw === "number" ? Array.from({ length: dependentsRaw }, () => ({})) : undefined;
   const returns = raw.returns ?? (raw.priorReturn ? [raw.priorReturn] : undefined);
 
-  let scenarios = raw.scenarios;
-  if (!scenarios && raw.levers) scenarios = { default: normalizeLevers(raw.levers) };
+  let scenarios: Record<string, Scenario> | undefined;
+  if (raw.scenarios) scenarios = Object.fromEntries(Object.entries(raw.scenarios).map(([k, v]) => [k, normalizeScenario(v)]));
+  else if (raw.levers) scenarios = { default: { events: eventsFromLevers(normalizeLevers(raw.levers)) } };
 
   return {
     version: 3,
@@ -94,6 +96,13 @@ export function parseProfile(text: string): Profile {
 
 function normalizeLevers(l: NonNullable<RawProfile["levers"]>): Levers {
   return { exercises: { iso: { ...(l.isoExercises ?? {}), ...(l.exercises?.iso ?? {}) }, nso: { ...(l.exercises?.nso ?? {}) } } };
+}
+
+/** A scenario is a list of events; older files stored the per-year lever table instead. */
+function normalizeScenario(raw: Partial<Levers> & Partial<Scenario> | null | undefined): Scenario {
+  if (raw && Array.isArray(raw.events)) return { events: raw.events };
+  if (raw && raw.exercises) return { events: eventsFromLevers(normalizeLevers(raw)) };
+  return { events: [] };
 }
 
 function normalizeEquity(raw: RawProfile, problems: string[]): Profile["equity"] {
@@ -175,7 +184,7 @@ const COMMENTS: Record<string, string> = {
   home: "the mortgage as a loan; interest and the $750k cap are computed",
   deductions: "charitable by kind; stateIncomeTax; medical",
   timeline: "dated changes to any value above, in force from that year on: { year, path, value }",
-  scenarios: "named lever settings; activeScenario picks one",
+  scenarios: "named lists of decisions on the timeline (exercise events; sales and liquidity events next); activeScenario picks one",
   sources: "where each number came from, keyed by path (grants and holdings by id)",
   followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
 };

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { activeScenario, amtCrossover, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent } from "@taxonomy/engine";
+import { EventTimeline, factMarkers } from "./components/EventTimeline.tsx";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
@@ -116,19 +117,41 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
   const levers = useMemo(() => resolveLevers(profile), [profile]);
-  const scenario = profile.activeScenario ?? "default";
+  const scenarioName = profile.activeScenario ?? "default";
+  const scenario = useMemo(() => activeScenario(profile), [profile]);
+  const events = scenario.events;
   const plan = useMemo(() => runPlan(profile, levers), [profile, levers]);
   const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
-  const sweep = useMemo(() => sweepIsoExercise(profile, levers, focusYear, 40), [profile, levers, focusYear]);
-  const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0]!;
   const hasIso = profile.equity.grants.some((g) => g.type === "iso");
+  const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
+  const selectedExercise = events.find((e) => e.id === selectedEvent && e.kind === "exercise" && e.type === "iso");
+  const sweepYear = selectedExercise?.year ?? focusYear;
+  const sweep = useMemo(() => sweepIsoExercise(profile, levers, sweepYear, 40), [profile, levers, sweepYear]);
+  const sweepCrossover = crossovers.find((c) => c.year === sweepYear) ?? crossovers[0]!;
 
-  const setExercise = (type: "iso" | "nso", year: number, n: number) => {
+  const writeEvents = (next: ScenarioEvent[]) => {
     const edits: ProfileEdit[] = [];
-    if (!profile.scenarios?.[scenario]) edits.push({ path: ["scenarios", scenario], value: levers }, { path: ["activeScenario"], value: scenario });
-    edits.push({ path: ["scenarios", scenario, "exercises", type, year], value: Math.max(0, Math.round(n)) });
+    if (!profile.scenarios?.[scenarioName]) edits.push({ path: ["activeScenario"], value: scenarioName });
+    edits.push(...scenarioEdits(scenarioName, next));
     edit(edits);
   };
+  const selectEvent = (id: string | null) => { setSelectedEvent(id); const e = events.find((x) => x.id === id); if (e) setFocusYear(e.year); };
+  const addEvent = (kind: "exercise", type: "iso" | "nso", year: number) => {
+    const existing = events.find((e) => e.kind === kind && e.type === type && e.year === year);
+    if (existing) { selectEvent(existing.id); return; }
+    const id = newEventId(events);
+    writeEvents([...events, { id, kind, type, year, shares: 0 }]);
+    setSelectedEvent(id);
+    setFocusYear(year);
+  };
+  const changeEvent = (id: string, patch: Partial<ScenarioEvent>) => {
+    writeEvents(events.map((e) => (e.id === id ? ({ ...e, ...patch } as ScenarioEvent) : e)));
+    if (typeof patch.year === "number") setFocusYear(patch.year);
+  };
+  const removeEvent = (id: string) => { writeEvents(events.filter((e) => e.id !== id)); if (selectedEvent === id) setSelectedEvent(null); };
+  /** The sweep chart sets the ISO count for its year directly. */
+  const setIsoShares = (year: number, n: number) => { const r = setExerciseEvent(events, "iso", year, n); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
+  const facts = useMemo(() => factMarkers(profile, years, () => { /* timeline lives in the sidebar */ }, () => openFacts("equity")), [profile, yearsKey]);
 
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
@@ -137,7 +160,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         {switcher}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
-        <ScenarioBar profile={profile} levers={levers} edit={edit} />
+        <ScenarioBar profile={profile} scenario={scenario} edit={edit} />
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
         <ThemeToggle />
@@ -148,17 +171,18 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       </header>
 
       <aside className="sidebar">
-        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenFacts={openFacts} />
+        <Sidebar profile={profile} levers={levers} years={years} edit={edit} onOpenFacts={openFacts} />
       </aside>
 
       <main className="main">
         {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} />
-        <section className="card">
-          <h2>Tax by year</h2>
-          <div className="sub">Click a year to focus it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
+        <section className="card timeline-card">
+          <h2>Your plan, year by year</h2>
+          <div className="sub">Tax above, decisions below. Press + under a year to add one; click a chip to adjust it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+          <EventTimeline profile={profile} levers={levers} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} />
         </section>
         {hasIso && (
           <div className="two-up">
@@ -168,9 +192,9 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
             </section>
             <section className="card">
-              <h2>AMT in {focusYear} vs shares exercised</h2>
-              <div className="sub">Holding the other years fixed. The marker is where AMT starts; click the curve to set the lever.</div>
-              <SweepChart sweep={sweep} crossover={focusCrossover} current={levers.exercises.iso[focusYear] ?? 0} onChange={(n) => setExercise("iso", focusYear, n)} />
+              <h2>AMT in {sweepYear} vs ISO shares exercised</h2>
+              <div className="sub">Holding the other years fixed. The marker is where AMT starts; click the curve to set that year's exercise.</div>
+              <SweepChart sweep={sweep} crossover={sweepCrossover} current={levers.exercises.iso[sweepYear] ?? 0} onChange={(n) => setIsoShares(sweepYear, n)} />
             </section>
           </div>
         )}

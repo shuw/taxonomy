@@ -511,3 +511,33 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .notice .link { padding: 0; font-size: inherit; }
 @media (max-width: 760px) { .facts-body { grid-template-columns: 1fr; } .facts-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); } .facts-tab-summary { display: none; } }
 .btn.edit-info { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* Timeline of decisions ------------------------------------------------------------ */
+.event-strip { display: flex; align-items: flex-start; padding: 2px 12px 0 46px; min-height: 36px; }
+.event-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0 3px; min-width: 0; }
+.ev-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 5px 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); text-align: left; cursor: pointer; color: inherit; min-width: 0; transition: border-color .12s ease, background .12s ease; }
+.ev-chip:hover { border-color: var(--ink-2); }
+.ev-chip.on { border-color: var(--accent); background: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
+.ev-chip .ev-kind { font: 700 11px/1.2 var(--display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ev-chip .ev-val { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ev-chip.exercise.iso { border-left: 3px solid var(--series-amt); }
+.ev-chip.exercise.nso { border-left: 3px solid var(--series-violet); }
+.ev-chip.fact { border-style: dashed; background: transparent; }
+.ev-chip.fact .ev-kind { color: var(--muted); }
+.ev-add-wrap { position: relative; display: flex; justify-content: center; }
+.ev-add { width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--muted); background: transparent; color: var(--muted); font: 700 16px/1 var(--display); cursor: pointer; transition: all .12s ease; }
+.ev-add:hover, .ev-add.on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--focus); }
+.ev-menu { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; animation: fade-in .12s ease; }
+.ev-menu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: inherit; font-weight: 500; white-space: nowrap; }
+.ev-menu button:hover { background: var(--surface-2); }
+.event-inspector { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--focus); display: flex; flex-direction: column; gap: 10px; animation: fade-in .15s ease; }
+.event-inspector.fact { background: var(--surface-2); }
+.ei-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ei-head .spacer { flex: 1; }
+.ei-year .input-wrap { width: 110px; }
+.event-inspector .input-wrap { background: var(--surface); }
+.event-inspector .lever-row .head .input-wrap { width: 130px; }
+.badge.fact { background: var(--surface-3); color: var(--ink-2); }
+.events-empty { margin: 10px 0 0; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.tooltip { animation: fade-in .12s ease; }

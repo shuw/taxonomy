@@ -1,3 +1,4 @@
+import { activeScenario, leversOf } from "./events.ts";
 import type { Levers, Profile, TimelineEntry } from "./types.ts";
 
 /** Set a dot-path value on a plain object, creating intermediate objects. */
@@ -57,9 +58,7 @@ export function emptyLevers(): Levers {
   return { exercises: { iso: {}, nso: {} } };
 }
 
-/** The lever settings of the active scenario. */
+/** The lever table of the active scenario, derived from its events. */
 export function activeLevers(profile: Profile): Levers {
-  const name = profile.activeScenario ?? DEFAULT_SCENARIO;
-  const s = profile.scenarios?.[name] ?? profile.scenarios?.[DEFAULT_SCENARIO];
-  return s ? { exercises: { iso: { ...(s.exercises?.iso ?? {}) }, nso: { ...(s.exercises?.nso ?? {}) } } } : emptyLevers();
+  return leversOf(activeScenario(profile));
 }

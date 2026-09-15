@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { Levers, Profile, ProfileEdit } from "@taxonomy/engine";
+import type { Profile, ProfileEdit, Scenario } from "@taxonomy/engine";
 
-interface Props { profile: Profile; levers: Levers; edit: (edits: ProfileEdit[]) => void; }
+interface Props { profile: Profile; scenario: Scenario; edit: (edits: ProfileEdit[]) => void; }
 
 /** Pick, save and drop named lever settings. */
-export function ScenarioBar({ profile, levers, edit }: Props) {
+export function ScenarioBar({ profile, scenario, edit }: Props) {
   const names = Object.keys(profile.scenarios ?? { default: {} });
   const active = profile.activeScenario ?? names[0] ?? "default";
   const [naming, setNaming] = useState(false);
@@ -12,7 +12,7 @@ export function ScenarioBar({ profile, levers, edit }: Props) {
   const save = () => {
     const name = draft.trim();
     if (!name) return;
-    edit([{ path: ["scenarios", name], value: levers }, { path: ["activeScenario"], value: name }]);
+    edit([{ path: ["scenarios", name], value: { events: scenario.events } }, { path: ["activeScenario"], value: name }]);
     setNaming(false);
     setDraft("");
   };
@@ -30,7 +30,7 @@ export function ScenarioBar({ profile, levers, edit }: Props) {
             <button type="button" className="btn" onClick={() => setNaming(false)}>Cancel</button>
           </form>
         : <>
-            <button type="button" className="btn" onClick={() => setNaming(true)} title="Save the current lever settings under a new name">Save as…</button>
+            <button type="button" className="btn" onClick={() => setNaming(true)} title="Save the current decisions under a new name">Save as…</button>
             {names.length > 1 && <button type="button" className="btn icon" title="Delete this scenario" onClick={() => { const rest = names.filter((n) => n !== active); edit([{ path: ["scenarios", active], value: undefined }, { path: ["activeScenario"], value: rest[0] }]); }}>🗑</button>}
           </>}
     </div>

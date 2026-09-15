@@ -7,6 +7,7 @@ export { stateModule, MODELED_STATES } from "./state/index.ts";
 export { runPlan, computeYear, yearInputs, planYears, resolveLevers, openingCarries } from "./plan.ts";
 export { profileInYear, changesIn, activeLevers, emptyLevers, setPath, getPath, DEFAULT_SCENARIO } from "./timeline.ts";
 export type { Carries } from "./plan.ts";
+export { activeScenario, emptyScenario, leversOf, eventsFromLevers, newEventId, setExerciseEvent, sortedEvents, scenarioEdits } from "./events.ts";
 export { grantFmv, companyOf, companyPrice, sharesOutstanding, vestingOf, vestedThrough, sharesExercisable, sharesGranted, exerciseSpread, rsuVesting, nextShareSpread, newId, grantsMissingVesting } from "./equity.ts";
 export { amortize, acquisitionDebtCap } from "./mortgage.ts";
 export type { MortgageYear } from "./mortgage.ts";

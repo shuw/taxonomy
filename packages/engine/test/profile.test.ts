@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { editProfileText, isLegacyProfileText, migrateProfileText, parseProfile, stringifyProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
+import { activeLevers } from "../src/timeline.ts";
 
 const example = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
 
@@ -10,12 +11,12 @@ describe("profile editing", () => {
     const out = editProfileText(example, [
       { path: ["people", "self", "salary"], value: 410_000 },
       { path: ["filer", "filingStatus"], value: "mfj" },
-      { path: ["scenarios", "default", "exercises", "iso", 2027], value: 1_500 },
+      { path: ["scenarios", "default", "events", 0, "shares"], value: 1_500 },
     ]);
     const p = parseProfile(out);
     expect(p.people.self.salary).toBe(410_000);
     expect(p.filer.filingStatus).toBe("mfj");
-    expect(p.scenarios?.default?.exercises.iso[2027]).toBe(1_500);
+    expect(activeLevers(p).exercises.iso[2026]).toBe(1_500);
     expect(out).toContain("# Taxonomy profile");
     expect(out).toContain("# already exercised");
   });
@@ -29,14 +30,23 @@ describe("profile editing", () => {
     expect(p.equity.grants.map((g) => g.name)).toEqual(["A", "B"]);
   });
   test("numeric and quoted year keys resolve to the same entry", () => {
-    const quoted = example.replace("        2026: 4000", '        "2026": 4000');
-    expect(quoted).not.toBe(example);
-    const out = editProfileText(quoted, [{ path: ["scenarios", "default", "exercises", "iso", 2026], value: 9_000 }]);
-    expect(out.match(/2026/g)!.length).toBe(example.match(/2026/g)!.length);
-    expect(parseProfile(out).scenarios?.default?.exercises.iso[2026]).toBe(9_000);
-    const created = editProfileText(example, [{ path: ["scenarios", "default", "exercises", "nso"], value: {} }, { path: ["scenarios", "default", "exercises", "nso", 2027], value: 5 }]);
+    const quoted = editProfileText(example, [{ path: ["equity", "grants", 0, "vesting"], value: { 2026: 4000 } }, { path: ["equity", "grants", 0, "schedule"], value: undefined }]);
+    expect(quoted).toContain('"2026": 4000');
+    const plain = quoted.replace('"2026": 4000', "2026: 4000");
+    for (const text of [quoted, plain]) {
+      const out = editProfileText(text, [{ path: ["equity", "grants", 0, "vesting", 2026], value: 9_000 }]);
+      expect(out.match(/2026/g)!.length).toBe(text.match(/2026/g)!.length);
+      expect(parseProfile(out).equity.grants[0]!.vesting?.[2026]).toBe(9_000);
+    }
+    const created = editProfileText(plain, [{ path: ["equity", "grants", 0, "vesting", 2027], value: 5 }]);
     expect(created).toContain("2027: 5");
     expect(created).not.toContain('"2027"');
+  });
+  test("a scenario stored as a lever table becomes exercise events", () => {
+    const old = example.replace(/scenarios:[\s\S]*?activeScenario/, "scenarios:\n  default:\n    exercises:\n      iso:\n        2026: 4000\n      nso: { 2027: 10 }\nactiveScenario");
+    const p = parseProfile(old);
+    expect(p.scenarios?.default?.events).toEqual([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 4000 }, { id: "e2", kind: "exercise", type: "nso", year: 2027, shares: 10 }]);
+    expect(activeLevers(p).exercises.nso[2027]).toBe(10);
   });
   test("version 1 files parse into the current shape and migrate to a fresh document", () => {
     const legacy = `version: 1
@@ -66,7 +76,7 @@ levers:
     expect(p.home?.propertyTax).toBe(9000);
     expect(p.home?.mortgageInterest).toBe(15000);
     expect(p.deductions?.charitable).toEqual({ cash: 1200 });
-    expect(p.scenarios?.default?.exercises.iso[2026]).toBe(100);
+    expect(activeLevers(p).exercises.iso[2026]).toBe(100);
     expect(p.activeScenario).toBe("default");
     const migrated = migrateProfileText(legacy);
     expect(isLegacyProfileText(migrated)).toBe(false);

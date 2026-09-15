@@ -99,7 +99,7 @@ describe("other states", () => {
     expect(ca.lines.stateTax!.value).toBeLessThan(40_000);
     expect(ca.inputs.stateIncomeTax).toBeCloseTo(ca.lines.stateIncomeTax!.value);
     expect(ca.lines.saltDeduction!.value).toBeGreaterThan(0);
-    const exercise = runPlan({ ...profile, filer: { ...profile.filer, state: "CA" }, scenarios: { default: { exercises: { iso: { 2026: 30_000 }, nso: {} } } } }).years[0]!;
+    const exercise = runPlan({ ...profile, filer: { ...profile.filer, state: "CA" }, scenarios: { default: { events: [{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 30_000 }] } } }).years[0]!;
     expect(exercise.lines.stateAmt!.value).toBeGreaterThan(0);
   });
   test("California's mental health surtax applies over $1M of taxable income", () => {
@@ -181,7 +181,8 @@ describe("timeline, scenarios and companies", () => {
     expect(profileInYear(p, 2026).people.self.salary).toBe(320_000);
   });
   test("the active scenario supplies the levers", () => {
-    const p = { ...profile, scenarios: { default: { exercises: { iso: { 2026: 4_000 }, nso: {} } }, big: { exercises: { iso: { 2026: 30_000 }, nso: {} } } }, activeScenario: "big" };
+    const ev = (shares: number) => ({ events: [{ id: "e1", kind: "exercise" as const, type: "iso" as const, year: 2026, shares }] });
+    const p = { ...profile, scenarios: { default: ev(4_000), big: ev(30_000) }, activeScenario: "big" };
     expect(runPlan(p).years[0]!.inputs.isoSharesExercised).toBe(30_000);
     expect(runPlan({ ...p, activeScenario: "default" }).years[0]!.inputs.isoSharesExercised).toBe(4_000);
   });
