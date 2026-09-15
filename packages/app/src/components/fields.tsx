@@ -82,5 +82,10 @@ export const FILING_OPTIONS = [
   { value: "hoh", label: "Head of household" },
 ] as const;
 
+import { MODELED_STATES } from "@taxonomy/engine";
 const STATES = "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(" ");
-export const STATE_OPTIONS = STATES.map((s) => ({ value: s, label: s === "WA" ? "WA (Washington, modeled)" : `${s} (state tax not modeled yet)` }));
+const modeled = new Map(MODELED_STATES.map((m) => [m.code, m]));
+export const STATE_OPTIONS = [
+  ...MODELED_STATES.map((m) => ({ value: m.code, label: `${m.code} · ${m.name} (${m.note})` })),
+  ...STATES.filter((s) => !modeled.has(s)).map((s) => ({ value: s, label: `${s} (state tax not modeled yet)` })),
+];

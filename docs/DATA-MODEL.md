@@ -56,7 +56,7 @@ review rows.
 
 - Sales of shares (the holdings exist for it), ESPP, 83(b) and early-exercise flags, QSBS.
 - Estimated payments and a cash view built on withholding.
-- Per-state parameters beyond Washington.
+- States beyond Washington, California, Texas, Florida and Nevada (the California model is approximate: no credits, indexed exemptions).
 - Retirement levers (Roth conversions, contribution changes) beyond pre-tax contributions.
 
 Each is additive: a new section or a new lever type in `scenarios`, plus registry entries.

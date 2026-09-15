@@ -1,5 +1,6 @@
 import type { Ledger } from "../ledger.ts";
 import type { StatePolicy, YearInputs } from "../types.ts";
+import { california } from "./ca.ts";
 import { washington } from "./wa.ts";
 
 export interface StateContext {
@@ -24,7 +25,30 @@ const none: StateModule = {
   },
 };
 
-const modules: Record<string, StateModule> = { WA: washington };
+const noIncomeTax = (code: string, name: string): StateModule => ({
+  code,
+  name,
+  compute(_inputs, ledger) {
+    ledger.put("stateTax", `${name} tax`, 0, `${name} has no personal income tax and no capital gains tax.`, []);
+  },
+});
+
+const modules: Record<string, StateModule> = {
+  WA: washington,
+  CA: california,
+  TX: noIncomeTax("TX", "Texas"),
+  FL: noIncomeTax("FL", "Florida"),
+  NV: noIncomeTax("NV", "Nevada"),
+};
+
+/** States with a model, for the picker. */
+export const MODELED_STATES: { code: string; name: string; note: string }[] = [
+  { code: "WA", name: "Washington", note: "capital gains excise tax" },
+  { code: "CA", name: "California", note: "income tax with AMT" },
+  { code: "TX", name: "Texas", note: "no income tax" },
+  { code: "FL", name: "Florida", note: "no income tax" },
+  { code: "NV", name: "Nevada", note: "no income tax" },
+];
 
 export function stateModule(code: string): StateModule {
   return modules[code.toUpperCase()] ?? none;

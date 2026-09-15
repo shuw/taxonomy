@@ -91,6 +91,23 @@ describe("mortgage, carryforwards and calibration", () => {
   });
 });
 
+describe("other states", () => {
+  test("Texas, Florida and Nevada owe nothing; California owes income tax that feeds the SALT deduction", () => {
+    for (const st of ["TX", "FL", "NV"]) expect(runPlan({ ...profile, filer: { ...profile.filer, state: st } }).years[0]!.lines.stateTax!.value).toBe(0);
+    const ca = runPlan({ ...profile, filer: { ...profile.filer, state: "CA" } }).years[0]!;
+    expect(ca.lines.stateTax!.value).toBeGreaterThan(20_000);
+    expect(ca.lines.stateTax!.value).toBeLessThan(40_000);
+    expect(ca.inputs.stateIncomeTax).toBeCloseTo(ca.lines.stateIncomeTax!.value);
+    expect(ca.lines.saltDeduction!.value).toBeGreaterThan(0);
+    const exercise = runPlan({ ...profile, filer: { ...profile.filer, state: "CA" }, scenarios: { default: { exercises: { iso: { 2026: 30_000 }, nso: {} } } } }).years[0]!;
+    expect(exercise.lines.stateAmt!.value).toBeGreaterThan(0);
+  });
+  test("California's mental health surtax applies over $1M of taxable income", () => {
+    const rich = runPlan({ ...profile, filer: { ...profile.filer, state: "CA" }, people: { self: { salary: 1_500_000 } } }).years[0]!;
+    expect(rich.lines.stateRegularTax!.why).toContain("mental health surtax");
+  });
+});
+
 describe("Washington switches", () => {
   test("capital gains tax and surtax can be turned off; the proposed high-earner tax can be turned on", () => {
     const gains = { ...profile, income: { ...profile.income, longTermGains: 2_000_000 } };

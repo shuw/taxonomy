@@ -89,10 +89,20 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
 }
 
 export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
-  const ledger = new Ledger();
   const params = federalParams(inputs.year, profile.assumptions.inflation, inputs.bracketRateDelta);
+  const ctx = { inflation: profile.assumptions.inflation, policy: profile.assumptions.state ?? {} };
+  let ledger = new Ledger();
   computeFederal(inputs, params, ledger);
-  stateModule(inputs.state).compute(inputs, ledger, { inflation: profile.assumptions.inflation, policy: profile.assumptions.state ?? {}, agi: ledger.get("agi") });
+  stateModule(inputs.state).compute(inputs, ledger, { ...ctx, agi: ledger.get("agi") });
+  // A modeled state income tax is deductible federally (within the SALT cap); run once more with it in place.
+  const stateIncome = ledger.lines.stateIncomeTax?.value ?? 0;
+  if (stateIncome > 0 && inputs.stateIncomeTax === 0) {
+    const withState = { ...inputs, stateIncomeTax: stateIncome };
+    ledger = new Ledger();
+    computeFederal(withState, params, ledger);
+    stateModule(inputs.state).compute(withState, ledger, { ...ctx, agi: ledger.get("agi") });
+    inputs = withState;
+  }
   const total = ledger.put("totalTax", "Total tax", ledger.get("federalTotal") + ledger.get("stateTax"), "Federal + state.", ["federalTotal", "stateTax"]);
   const agi = ledger.get("agi");
   ledger.put("effectiveRate", "Effective rate", agi > 0 ? total / agi : 0, `Total tax as a share of AGI (${usd(agi)}). ISO bargain element is not in AGI, so an exercise year can look expensive by this measure.`, ["totalTax", "agi"], "rate");

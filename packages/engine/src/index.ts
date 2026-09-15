@@ -3,7 +3,7 @@ export { Ledger, usd, pct } from "./ledger.ts";
 export { federalParams, FEDERAL_2025, FEDERAL_2026, bracketTax, bracketRate, capGainsTax } from "./params.ts";
 export type { FederalParams, Bracket } from "./params.ts";
 export { computeFederal, statusName } from "./federal.ts";
-export { stateModule } from "./state/index.ts";
+export { stateModule, MODELED_STATES } from "./state/index.ts";
 export { runPlan, computeYear, yearInputs, planYears, resolveLevers, openingCarries } from "./plan.ts";
 export { profileInYear, changesIn, activeLevers, emptyLevers, setPath, getPath, DEFAULT_SCENARIO } from "./timeline.ts";
 export type { Carries } from "./plan.ts";
