@@ -28,7 +28,7 @@ source the agent cited, and writes only the rows you accept. Sources stay with e
 show as chips in the sidebar. If the intake includes last year's return, a calibration card
 shows how closely the engine reproduces it.
 
-The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live in
+The overall design is in `docs/ARCHITECTURE.md`. The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live in
 `packages/engine/src/intake/` and are tested against a fixture.
 
 ## Profile schema (version 3)

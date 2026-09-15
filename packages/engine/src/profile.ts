@@ -187,7 +187,7 @@ const COMMENTS: Record<string, string> = {
   home: "the mortgage as a loan; interest and the $750k cap are computed",
   deductions: "charitable by kind; stateIncomeTax; medical",
   timeline: "dated changes to any value above, in force from that year on: { year, path, value }",
-  scenarios: "named lists of decisions on the timeline (exercise events; sales and liquidity events next); activeScenario picks one",
+  scenarios: "named lists of decisions on the timeline: exercise, sell and liquidity events; activeScenario picks one",
   sources: "where each number came from, keyed by path (grants and holdings by id)",
   followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
 };
