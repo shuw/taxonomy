@@ -218,12 +218,12 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <div className="two-up">
             <section className="card">
               <h2>AMT credit bank</h2>
-              <div className="sub">Credit on hand at each year end: {profile.carryforwards?.amtCredit ? `${usdCompact(profile.carryforwards.amtCredit)} brought in from before the plan, ` : ""}plus what ISO exercises add, less what each year's regular tax absorbs.</div>
+              <div className="sub">Credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}.</div>
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
             </section>
             <section className="card">
               <h2>AMT in {sweepYear} vs ISO shares exercised</h2>
-              <div className="sub">Holding the other years fixed. The marker is where AMT starts; click the curve to set that year's exercise.</div>
+              <div className="sub">Other years held as they are. Click the curve to set the exercise.</div>
               <SweepChart sweep={sweep} crossover={sweepCrossover} current={levers.exercises.iso[sweepYear] ?? 0} onChange={(n) => setIsoShares(sweepYear, n)} />
             </section>
           </div>

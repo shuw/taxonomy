@@ -82,12 +82,12 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
       )}
       <div className="legend">
         <span><span className="sw" style={{ background: "var(--series-amt)" }} />AMT this year</span>
-        <span><span className="sw dashed" />Extra tax over the whole plan, after the credit comes back</span>
+        <span><span className="sw dashed" />Net cost over the plan</span>
       </div>
       <p className="muted small sweep-reading">
         {crossover.sharesBeforeAmt >= crossover.available
-          ? `Every one of the ${shares(crossover.available)} exercisable shares fits under this year's AMT line.`
-          : `Up to ${shares(crossover.sharesBeforeAmt)} shares this year cost no AMT: regular tax already covers the tentative minimum. Past that, each share adds about ${usd(perShare)} of AMT now, most of it a prepayment that returns as credit in later years` + (last ? `: exercising all ${shares(last.shares)} means ${usdCompact(last.amt)} of AMT in ${crossover.year} but about ${usdCompact(extra(last))} more tax over the plan (${Math.round(keptShare * 100)}% of it).` : ".")}
+          ? `All ${shares(crossover.available)} exercisable shares fit under the AMT line this year.`
+          : `AMT-free up to ${shares(crossover.sharesBeforeAmt)} shares; about ${usd(perShare)} per share after that.` + (last ? ` All ${shares(last.shares)}: ${usdCompact(last.amt)} of AMT now, ${usdCompact(extra(last))} after the credit returns within the plan.` : "")}
       </p>
     </div>
   );
