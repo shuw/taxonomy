@@ -125,9 +125,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
   const hasIso = profile.equity.grants.some((g) => g.type === "iso");
   const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
-  const selectedExercise = events.find((e) => e.id === selectedEvent && e.kind === "exercise" && e.type === "iso");
-  const inPlan = (y: number | undefined) => y !== undefined && years.includes(y);
-  const sweepYear = inPlan(selectedExercise?.year) ? selectedExercise!.year : inPlan(focusYear) ? focusYear : years[0]!;
+  // The AMT chart follows the focused year; selecting anything on the timeline focuses its year.
+  const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
   const sweep = useMemo(() => sweepIsoExercise(profile, levers, sweepYear, 40), [profile, levers, sweepYear]);
   const sweepCrossover = crossovers.find((c) => c.year === sweepYear) ?? crossovers[0]!;
 
@@ -137,7 +136,12 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
     edits.push(...scenarioEdits(scenarioName, next));
     edit(edits);
   };
-  const selectEvent = (id: string | null) => { setSelectedEvent(id); const e = events.find((x) => x.id === id); if (e) setFocusYear(e.year); };
+  const facts = useMemo(() => factMarkers(profile, years, () => {}, () => openFacts("equity")), [profile, yearsKey]);
+  const selectEvent = (id: string | null) => {
+    setSelectedEvent(id);
+    const year = events.find((x) => x.id === id)?.year ?? facts.find((f) => f.id === id)?.year;
+    if (year !== undefined) setFocusYear(year);
+  };
   const addEvent = (what: AddKind, year: number) => {
     const existing = what.kind === "exercise" ? events.find((e) => e.kind === "exercise" && e.type === what.type && e.year === year) : undefined;
     if (existing) { selectEvent(existing.id); return; }
@@ -161,7 +165,6 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const removeEvent = (id: string) => { writeEvents(events.filter((e) => e.id !== id)); if (selectedEvent === id) setSelectedEvent(null); };
   /** The sweep chart sets the ISO count for its year directly. */
   const setIsoShares = (year: number, n: number) => { const r = setExerciseEvent(events, "iso", year, n); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
-  const facts = useMemo(() => factMarkers(profile, years, () => {}, () => openFacts("equity")), [profile, yearsKey]);
   const timeline = profile.timeline ?? [];
   const addFact = (path: string, year: number) => {
     const f = timelineFields().find((x) => x.path === path);
