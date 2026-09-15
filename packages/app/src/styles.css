@@ -381,7 +381,8 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .section-list.one-col { grid-template-columns: 1fr; }
 .choose, .copy { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .copy .prompt-box { min-height: 380px; }
-.create-basics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 12px 14px; background: var(--surface-2); border-radius: 14px; }
+.create-basics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; padding: 12px 14px; background: var(--surface-2); border-radius: 14px; }
+@media (max-width: 900px) { .create-basics { grid-template-columns: 1fr 1fr; } }
 .create-basics .wide { grid-column: 1 / -1; }
 .modal { width: min(1180px, 100%); }
 

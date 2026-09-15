@@ -181,6 +181,11 @@ questions:
   - "Shareworks shows 12,500 ISO shares exercised in 2025 but no Form 3921 was found. Was the FMV at exercise $16.50?"
 ```
 
+Basics are asked in the app, not of the agent: filing status, state, dependents, salaries,
+bonus, pre-tax contributions and the first plan year are a short form at the top of the
+new-profile dialog (and fields in the sidebar afterward). The request defaults to the four
+document-backed sections and tells the agent not to re-ask what the profile already holds.
+
 The request is two-phase. The agent first reads what it can, then asks the user, in one
 batched message, for anything *required* it could not find: naming the form and line, the
 portal page, or the number to type, and suggesting which document to upload. Only when every

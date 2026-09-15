@@ -11,7 +11,7 @@ export interface SectionInfo {
 }
 
 export const INTAKE_SECTIONS: SectionInfo[] = [
-  { id: "basics", title: "Basics and pay", what: "Filing status, state, dependents, base salary and bonus per earner, pre-tax contributions, withholding so far.", documents: "last return's header, a recent pay stub or offer letter, W-2 box 12" },
+  { id: "basics", title: "Basics and pay", what: "Filing status, state, dependents, base salary and bonus per earner, pre-tax contributions, withholding so far. Usually answered in the app instead.", documents: "last return's header, a recent pay stub or offer letter, W-2 box 12" },
   { id: "prior_return", title: "Last filed return", what: "The figures the model must reproduce, plus the carryforwards that enter this year: AMT credit, capital losses, unused charitable gifts.", documents: "Form 1040, Form 6251, Form 8801, Schedule D, Schedule A" },
   { id: "income", title: "Investment and other income", what: "Interest, dividends (total and qualified), gains realized so far, K-1 or side income.", documents: "1099-INT, 1099-DIV, 1099-B or brokerage year-to-date" },
   { id: "equity", title: "Equity", what: "Every grant with its type, strike, vesting and how much is vested, exercised and unexercised; the current share value; shares already owned with cost and AMT basis.", documents: "Shareworks, Carta, E*Trade, Schwab or Fidelity grant pages; the latest 409A notice; Form 3921 for ISO exercises" },
@@ -93,6 +93,9 @@ function template(section: IntakeSection): string {
   return extra ? `${scalars}\n${extra}` : scalars;
 }
 
+/** Sections whose answers live in documents rather than in the user's head; the request asks for these by default. */
+export const DOCUMENT_SECTIONS: IntakeSection[] = ["prior_return", "income", "equity", "home"];
+
 export interface PromptOptions {
   sections: IntakeSection[];
   /** When present, the agent sees the current values and reports the full current state (the app diffs). */
@@ -156,7 +159,7 @@ questions:
   if (opts.profile) {
     parts.push(`## What the tool has now
 
-Below is my current profile. Report the full current state for the sections above (not a diff); the tool will show me what changed. Values here that no document contradicts can be repeated as-is, with their source if you know it, or left out.
+Below is my current profile. I entered the basics (filing status, state, salaries, dependents) myself; do not ask about those, and do not report them unless the section above asks for them. For the sections above, report the full current state (not a diff); the tool will show me what changed. Values here that no document contradicts can be repeated as-is, with their source if you know it, or left out.
 
 \`\`\`yaml
 ${stringifyProfile(opts.profile).replace(/^# .*\n/gm, "").trim()}

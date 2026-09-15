@@ -101,6 +101,7 @@ describe("intake review and apply", () => {
 describe("intake prompt", () => {
   test("includes the chosen sections, the rules, and the current profile", () => {
     const text = intakePrompt({ sections: ["basics", "equity"], profile });
+    expect(text).toContain("do not ask about those");
     expect(text).toContain("taxonomy_intake: 1");
     expect(text).toContain("baseSalary:");
     expect(text).toContain("unexercised:");

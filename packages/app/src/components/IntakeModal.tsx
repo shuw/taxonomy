@@ -1,38 +1,56 @@
 import { useMemo, useState } from "react";
-import { changesToEdits, editProfileText, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
-import { FILING_OPTIONS, Field, MoneyInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { FILING_OPTIONS, Field, MoneyInput, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
 interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
 type Props = FillProps | CreateProps;
 
-/** A minimal, valid profile to start a new one from. */
-export function blankProfileText(name: string, filingStatus: FilingStatus, state: string, salary: number): string {
-  const year = new Date().getFullYear();
+/** The facts a person knows without looking anything up. */
+interface Basics {
+  name: string;
+  filingStatus: FilingStatus;
+  state: string;
+  salary: number;
+  bonus: number;
+  pretax: number;
+  spouseSalary: number;
+  dependents: string;
+  startYear: number;
+}
+
+const thisYear = () => Math.max(2026, new Date().getFullYear());
+
+function profileTextFrom(b: Basics): string {
+  const dependents = b.dependents.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}));
   return stringifyProfile({
-    version: 3, name, filer: { filingStatus, state, dependents: [] }, plan: { startYear: Math.max(2026, year), years: 6 },
+    version: 3, name: b.name.trim() || "New profile",
+    filer: { filingStatus: b.filingStatus, state: b.state, dependents },
+    plan: { startYear: b.startYear, years: 6 },
     assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
-    people: { self: { salary } }, income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
+    people: {
+      self: { salary: b.salary, bonus: b.bonus || undefined, pretaxContributions: b.pretax || undefined },
+      spouse: b.filingStatus === "mfj" || b.filingStatus === "mfs" ? { salary: b.spouseSalary } : undefined,
+    },
+    income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
     timeline: [], scenarios: { default: { exercises: { iso: {}, nso: {} } } }, activeScenario: "default",
   });
 }
 
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
-  const [name, setName] = useState("");
-  const [start, setStart] = useState<"agent" | "manual">("agent");
-  const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
-  const [state, setState] = useState("WA");
-  const [salary, setSalary] = useState(0);
+  const [basics, setBasics] = useState<Basics>({ name: "", filingStatus: "single", state: "WA", salary: 0, bonus: 0, pretax: 0, spouseSalary: 0, dependents: "", startYear: thisYear() });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
 
-  const baseText = useMemo(() => (create ? blankProfileText(name.trim() || "New profile", filingStatus, state, salary) : null), [create, name, filingStatus, state, salary]);
+  const baseText = useMemo(() => (create ? profileTextFrom(basics) : null), [create, basics]);
   const profile: Profile = useMemo(() => (props.mode === "fill" ? props.profile : parseProfile(baseText!)), [props, baseText]);
-  const canCreate = !create || name.trim() !== "";
+  const canCreate = !create || basics.name.trim() !== "";
   const onClose = props.onClose;
+  const married = basics.filingStatus === "mfj" || basics.filingStatus === "mfs";
 
   const finish = async (edits: ProfileEdit[]) => {
     if (props.mode === "fill") {
@@ -42,53 +60,49 @@ export function IntakeModal(props: Props) {
     }
     setBusy(true);
     setError(null);
-    try { await props.onCreate(name.trim() || "New profile", editProfileText(baseText!, edits)); }
+    try { await props.onCreate(basics.name.trim() || "New profile", editProfileText(baseText!, edits)); }
     catch (e) { setError(String((e as Error).message ?? e)); }
     finally { setBusy(false); }
   };
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div className={"modal intake-modal" + (start === "agent" ? " wide" : "")} role="dialog" aria-modal="true" aria-label={create ? "New profile" : "Fill from documents"}>
+      <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label={create ? "New profile" : "Fill from documents"}>
         <header className="modal-head">
           <div>
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "Name it, hand the request to an agent that can see your documents, paste back what it finds." : "Your agent reads the documents; you approve every number."}</div>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Answer what you know by heart. Your agent reads the rest from your documents; you approve every number." : "Your agent reads the documents; you approve every number."}</div>
           </div>
           {create && !onClose && <ThemeToggle />}
-          {create && start === "manual" && <button type="button" className="btn" onClick={() => setStart("agent")}>Back</button>}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
         </header>
 
         {create && (
           <div className="modal-body create-head">
-            <Field label="Name" wide><span className="input-wrap"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" /></span></Field>
-          </div>
-        )}
-
-        {create && start === "manual" && (
-          <div className="modal-body">
             <div className="create-basics">
-              <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={filingStatus} onChange={setFilingStatus} /></Field>
-              <Field label="State"><Select options={STATE_OPTIONS} value={state} onChange={setState} /></Field>
-              <Field label="Base salary" hint="320k works"><MoneyInput value={salary} onChange={setSalary} placeholder="0" /></Field>
-            </div>
-            {error && <div className="error">{error}</div>}
-            <div className="modal-actions">
-              <span className="spacer" />
-              <button type="button" className="btn primary" disabled={!canCreate || busy} onClick={() => void finish([])}>{busy ? "Creating…" : "Create profile"}</button>
+              <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" /></span></Field>
+              <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={basics.filingStatus} onChange={(v) => set("filingStatus", v)} /></Field>
+              <Field label="State"><Select options={STATE_OPTIONS} value={basics.state} onChange={(v) => set("state", v)} /></Field>
+              <Field label="Dependents" hint="birth years, if any"><span className="input-wrap"><input value={basics.dependents} onChange={(e) => set("dependents", e.target.value)} placeholder="e.g. 2019, 2022" /></span></Field>
+              <Field label="Your base salary" hint="320k works"><MoneyInput value={basics.salary} onChange={(n) => set("salary", n)} placeholder="0" /></Field>
+              {married
+                ? <Field label="Spouse base salary"><MoneyInput value={basics.spouseSalary} onChange={(n) => set("spouseSalary", n)} placeholder="0" /></Field>
+                : <Field label="Expected bonus"><MoneyInput value={basics.bonus} onChange={(n) => set("bonus", n)} /></Field>}
+              {married && <Field label="Expected bonus"><MoneyInput value={basics.bonus} onChange={(n) => set("bonus", n)} /></Field>}
+              <Field label="Pre-tax contributions" hint="401(k), HSA"><MoneyInput value={basics.pretax} onChange={(n) => set("pretax", n)} /></Field>
+              <Field label="First plan year"><NumberInput value={basics.startYear} onChange={(n) => set("startYear", Math.max(2026, Math.round(n)))} min={2026} grouping={false} /></Field>
             </div>
           </div>
         )}
 
-        {start === "agent" && <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} onManual={create ? () => setStart("manual") : undefined} />}
+        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} />
       </div>
     </div>
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish, onManual }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void>; onManual?: () => void }) {
-  const [sections, setSections] = useState<IntakeSection[]>(INTAKE_SECTIONS.map((s) => s.id));
+function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void> }) {
+  const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
   const [pasted, setPasted] = useState("");
   const [accepted, setAccepted] = useState<Set<string> | null>(null);
@@ -132,19 +146,20 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, onManu
   const sameCount = review ? review.changes.filter((c) => c.status === "same").length : 0;
   const changeCount = selected.size;
   const hasTyped = Object.values(typed).some((v) => v.trim());
+  const sectionLabel = sections.length === INTAKE_SECTIONS.length ? "Everything" : sections.length === DOCUMENT_SECTIONS.length && DOCUMENT_SECTIONS.every((s) => sections.includes(s)) ? "Documents only" : `${sections.length} of ${INTAKE_SECTIONS.length} sections`;
 
   return (
     <div className="modal-body">
       <div className="two-col">
         <div className="col">
-          <div className="col-title"><span className="step-no">1</span> Copy this into your agent</div>
-          <p className="muted small">Any agent that can see your documents: Claude with your Drive or mail, a CLI agent pointed at a folder of PDFs, ChatGPT with uploads. It returns one YAML document.</p>
+          <div className="col-title"><span className="step-no">1</span> {create ? "Then copy this into your agent" : "Copy this into your agent"}</div>
+          <p className="muted small">It asks for what lives in documents: last year's return, 1099s, your equity portal, Form 3921, Form 1098. Any agent that can see those works: Claude with your Drive or mail, a CLI agent pointed at a folder, ChatGPT with uploads.</p>
           <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
           <div className="modal-actions">
-            <button type="button" className="btn primary" onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
-            <button type="button" className="btn" onClick={download}>Download .md</button>
+            <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
+            <button type="button" className="btn" disabled={sections.length === 0} onClick={download}>Download .md</button>
             <details className="sections-details">
-              <summary>{sections.length === INTAKE_SECTIONS.length ? "Everything" : `${sections.length} of ${INTAKE_SECTIONS.length} sections`}</summary>
+              <summary>{sectionLabel}</summary>
               <ul>
                 {INTAKE_SECTIONS.map((s) => (
                   <li key={s.id}><label><input type="checkbox" checked={sections.includes(s.id)} onChange={() => setSections((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))} /> <strong>{s.title}</strong> <span className="muted">{s.documents}</span></label></li>
@@ -163,7 +178,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, onManu
             </div>
           )}
           {parsed && parsed.doc && parsed.warnings.length > 0 && <div className="muted small">Read with small corrections: {parsed.warnings.map((w) => `${w.path} (${w.message})`).join("; ")}.</div>}
-          {!review && <p className="muted small">The changes will show up here for you to approve.</p>}
+          {!review && <p className="muted small">{create ? "Optional now: you can create the profile and paste this later from the sidebar." : "The changes will show up here for you to approve."}</p>}
         </div>
       </div>
 
@@ -213,11 +228,10 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, onManu
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.{onManual && <> No documents handy? <button type="button" className="link" onClick={onManual}>Fill it in by hand</button>.</>}</span>
+        <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.</span>
         <span className="spacer" />
-        {create && !review && <button type="button" className="btn" disabled={!canFinish || busy} onClick={() => void onFinish([])}>{busy ? "Creating…" : "Create now, paste later"}</button>}
-        <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped) || (create && !review)} onClick={() => void onFinish(edits())}>
-          {busy ? "Creating…" : create ? `Create profile with ${changeCount} value${changeCount === 1 ? "" : "s"}` : `Apply ${changeCount} change${changeCount === 1 ? "" : "s"}`}
+        <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits())}>
+          {busy ? "Creating…" : create ? (review ? `Create profile with ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Create profile") : `Apply ${changeCount} change${changeCount === 1 ? "" : "s"}`}
         </button>
       </div>
     </div>

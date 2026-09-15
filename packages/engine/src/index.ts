@@ -23,5 +23,5 @@ export { reviewIntake, changesToEdits, toGrant, profilePathForIntake } from "./i
 export { FIELDS, fieldByPath, fieldByIntake, timelineFields, requiredFields } from "./fields.ts";
 export type { FieldDef, FieldType } from "./fields.ts";
 export type { IntakeChange, IntakeReview, IntakeSection } from "./intake/apply.ts";
-export { intakePrompt, INTAKE_SECTIONS } from "./intake/prompt.ts";
+export { intakePrompt, INTAKE_SECTIONS, DOCUMENT_SECTIONS } from "./intake/prompt.ts";
 export type { PromptOptions, SectionInfo } from "./intake/prompt.ts";
