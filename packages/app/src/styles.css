@@ -21,6 +21,7 @@
   --series-surtax: #1baf7a;
   --series-state: #eda100;
   --series-state-2: #c2417a;
+  --series-kept: #2f9e6b;
   --series-violet: #5d6b8f;
   --series-pinned: #c9c5bb;
   --good: #0a7a2f;
@@ -57,6 +58,7 @@
     --series-surtax: #22b783;
     --series-state: #d69200;
     --series-state-2: #e0699a;
+    --series-kept: #3fbf82;
     --series-violet: #a9b6d2;
     --series-pinned: #565c6d;
     --good: #5ad975;
@@ -90,6 +92,7 @@
     --series-surtax: #22b783;
     --series-state: #d69200;
     --series-state-2: #e0699a;
+    --series-kept: #3fbf82;
     --series-violet: #a9b6d2;
     --series-pinned: #565c6d;
     --good: #5ad975;
@@ -603,3 +606,4 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .card-head .plan-years + .plan-years { margin-left: 4px; }
 .ledger.compare th:not(:first-child), .ledger.compare td:not(:first-child) { text-align: right; white-space: nowrap; }
 .ledger.compare td:first-child { max-width: 46ch; }
+.legend .sw.hatch { background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface) 2px 3px); }

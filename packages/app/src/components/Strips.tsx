@@ -3,7 +3,7 @@ import { useWidth } from "../useWidth.ts";
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, niceTicks, usd, usdCompact } from "../format.ts";
 
-interface Series { id: string; label: string; color: string; value: (y: PlanResult["years"][number]) => number; }
+interface Series { id: string; label: string; color: string; value: (y: PlanResult["years"][number]) => number; /** Draw with a hatch over the color instead of a solid fill. */ hatch?: boolean; }
 
 const TAX_SERIES: Series[] = [
   { id: "regular", label: "Regular tax (after AMT credit)", color: "var(--series-regular)", value: (y) => y.lines.regularTax!.value - y.lines.amtCreditUsed!.value },
@@ -31,6 +31,22 @@ const CREDIT_SERIES: Series[] = [
 interface StripProps { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void; }
 
 export const TaxStrip = (p: StripProps) => <ColumnStrip {...p} series={taxSeries(p.plan)} height={230} />;
+
+/** Where each year's cash goes: tax at the bottom, exercise cost, then what is kept; a red line marks cash in when a year runs short. */
+function combinedSeries(plan: PlanResult): Series[] {
+  const tax = taxSeries(plan);
+  const cashIn = (y: PlanResult["years"][number]) => y.lines.cashIn?.value ?? 0;
+  const outOf = (y: PlanResult["years"][number]) => (y.lines.totalTax?.value ?? 0) + (y.lines.exerciseCost?.value ?? 0);
+  return [
+    ...tax,
+    { id: "exercise", label: "Exercise cost", color: "var(--series-violet)", value: (y) => y.lines.exerciseCost?.value ?? 0 },
+    { id: "kept", label: "Kept", color: "var(--series-kept)", hatch: true, value: (y) => Math.max(0, cashIn(y) - outOf(y)) },
+  ];
+}
+export const CombinedStrip = (p: StripProps) => (
+  <ColumnStrip {...p} series={combinedSeries(p.plan)} height={230} totalLabel="Net cash" capLabel={(y) => { const n = y.lines.netCash?.value ?? 0; return `${n < 0 ? "−" : "+"}${usdCompact(Math.abs(n))}`; }}
+    marker={(y) => { const n = y.lines.netCash?.value ?? 0; return n < 0 ? { value: y.lines.cashIn?.value ?? 0, label: "cash in" } : null; }} />
+);
 export const CreditStrip = (p: StripProps) => <ColumnStrip {...p} series={CREDIT_SERIES} height={170} />;
 
 const GAP = 2;
@@ -44,7 +60,7 @@ function topRounded(x: number, y: number, w: number, h: number, r: number): stri
   return `M${x},${y + h} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + w - rr} Q${x + w},${y} ${x + w},${y + rr} V${y + h} Z`;
 }
 
-function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: StripProps & { series: Series[]; height: number }) {
+function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLabel = "Total", capLabel, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null }) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
@@ -62,7 +78,10 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
 
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="Tax by year">
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="By year">
+        <defs>
+          <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--series-kept)" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--surface)" strokeWidth="2" /></pattern>
+        </defs>
         {ticks.map((t) => (
           <g key={t}>
             <line className="grid" x1={m.left} x2={width - m.right} y1={yOf(t)} y2={yOf(t)} />
@@ -91,11 +110,13 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
               {segs.map((s, j) => {
                 const h = Math.max(0, s.y0 - s.y1 - (j < lastIdx ? GAP : 0));
                 const yTop = s.y1 + (j < lastIdx ? GAP : 0);
+                const fill = s.sr.hatch ? "url(#hatch)" : s.sr.color;
                 return j === lastIdx
-                  ? <path key={s.sr.id} d={topRounded(barX, yTop, BAR, h, 4)} fill={s.sr.color} />
-                  : <rect key={s.sr.id} x={barX} y={yTop} width={BAR} height={h} fill={s.sr.color} />;
+                  ? <path key={s.sr.id} d={topRounded(barX, yTop, BAR, h, 4)} fill={fill} />
+                  : <rect key={s.sr.id} x={barX} y={yTop} width={BAR} height={h} fill={fill} />;
               })}
-              {totals[i]! > 0 && <text className="cap-label" x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{usdCompact(totals[i]!)}</text>}
+              {(() => { const mk = marker?.(y); return mk ? <g><line x1={barX - 6} x2={barX + BAR + 6} y1={yOf(mk.value)} y2={yOf(mk.value)} stroke="var(--bad)" strokeWidth={2} /><text className="cap-label neg" x={barX + BAR + 8} y={yOf(mk.value) + 4}>{mk.label}</text></g> : null; })()}
+              {totals[i]! > 0 && <text className={"cap-label" + (capLabel?.(y).startsWith("−") ? " neg" : "")} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{capLabel ? capLabel(y) : usdCompact(totals[i]!)}</text>}
               <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
               <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
             </g>
@@ -111,13 +132,16 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
           {series.map((sr) => (
             <div className="row" key={sr.id}><span><span className="sw" style={{ background: sr.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{sr.label}</span><span>{usd(sr.value(years[hover]!))}</span></div>
           ))}
-          {series.length > 1 && <div className="row total"><span>Total</span><span>{usd(totals[hover]!)}</span></div>}
-          {pinnedTotals && <div className="row muted"><span>vs pinned</span><span>{fmtDelta(totals[hover]! - pinnedTotals[hover]!) || "same"}</span></div>}
+          {series.length > 1 && !capLabel && <div className="row total"><span>{totalLabel}</span><span>{usd(totals[hover]!)}</span></div>}
+          {capLabel && <div className="row total"><span>{totalLabel}</span><span>{fmtDelta(years[hover]!.lines.netCash?.value ?? 0) || "$0"}</span></div>}
+          {capLabel && <div className="row muted"><span>Cash in</span><span>{usd(years[hover]!.lines.cashIn?.value ?? 0)}</span></div>}
+          {pinnedTotals && !capLabel && <div className="row muted"><span>vs pinned</span><span>{fmtDelta(totals[hover]! - pinnedTotals[hover]!) || "same"}</span></div>}
+          {pinnedTotals && capLabel && <div className="row muted"><span>vs pinned</span><span>{fmtDelta((years[hover]!.lines.netCash?.value ?? 0) - (pinned!.years[hover]?.lines.netCash?.value ?? 0)) || "same"}</span></div>}
         </div>
       )}
       {(series.length > 1 || pinned) && (
         <div className="legend">
-          {series.length > 1 && series.map((sr) => <span key={sr.id}><span className="sw" style={{ background: sr.color }} />{sr.label}</span>)}
+          {series.length > 1 && series.map((sr) => <span key={sr.id}><span className={"sw" + (sr.hatch ? " hatch" : "")} style={{ background: sr.color }} />{sr.label}</span>)}
           {pinned && <span><span className="sw" style={{ background: "var(--series-pinned)" }} />Pinned scenario</span>}
         </div>
       )}

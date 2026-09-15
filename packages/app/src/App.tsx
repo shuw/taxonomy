@@ -12,7 +12,7 @@ import { Sidebar } from "./components/Sidebar.tsx";
 import { ScenarioBar } from "./components/ScenarioBar.tsx";
 import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { ProfileSwitcher } from "./components/ProfileSwitcher.tsx";
-import { TaxStrip, CreditStrip, CashStrip } from "./components/Strips.tsx";
+import { TaxStrip, CreditStrip, CashStrip, CombinedStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
@@ -171,7 +171,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   /** The sweep chart sets the ISO count for its year directly. */
   const setIsoShares = (year: number, n: number, company: string) => { const r = setExerciseEvent(events, "iso", year, n, profile.equity.companies.length > 1 ? company : undefined); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
   const [ledgerOpen, setLedgerOpen] = usePersisted<boolean>("ledgerOpen", true, (v): v is boolean => typeof v === "boolean");
-  const [planView, setPlanView] = usePersisted<"tax" | "cash">("planView", "tax", (v): v is "tax" | "cash" => v === "tax" || v === "cash");
+  const [planView, setPlanView] = usePersisted<"combined" | "tax" | "cash">("planView", "combined", (v): v is "combined" | "tax" | "cash" => v === "combined" || v === "tax" || v === "cash");
   const timeline = profile.timeline ?? [];
   const addFact = (path: string, year: number) => {
     const f = timelineFields().find((x) => x.path === path);
@@ -213,14 +213,16 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <div className="card-head">
             <div>
               <h2>Your plan, year by year</h2>
-              <div className="sub">{planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net."} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView === "tax" ? "Gray columns are the pinned scenario." : ""}</div>
+              <div className="sub">{planView === "combined" ? "Each bar is the year's cash in: tax at the bottom, then exercise cost, then what you keep. The number is the net." : planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net."} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView !== "cash" ? "Gray columns are the pinned scenario." : ""}</div>
             </div>
-            <div className="plan-years"><Segmented options={[{ value: "tax", label: "Tax" }, { value: "cash", label: "Cash" }]} value={planView} onChange={setPlanView} /></div>
+            <div className="plan-years"><Segmented options={[{ value: "combined", label: "Combined" }, { value: "tax", label: "Tax" }, { value: "cash", label: "Cash" }]} value={planView} onChange={setPlanView} /></div>
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
-          {planView === "tax"
-            ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-            : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />}
+          {planView === "combined"
+            ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+            : planView === "tax"
+              ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+              : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />}
           <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
         </section>
         {hasIso && (
