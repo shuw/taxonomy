@@ -4,8 +4,8 @@ export type FieldType = "usd" | "pct" | "number" | "text" | "date" | "enum" | "y
 
 /**
  * One scalar the profile stores and the intake asks for. This registry is the single source
- * for the intake prompt, the review table labels, the unknown-path mapping, the assistant's
- * tool description and the timeline's field picker.
+ * for the intake prompt, the review table labels, the unknown-path mapping and the timeline's
+ * field picker.
  */
 export interface FieldDef {
   /** Profile dot path. */

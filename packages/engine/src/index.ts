@@ -19,7 +19,7 @@ export { parseProfile, editProfileText, migrateProfileText, isLegacyProfileText,
 export type { ProfileEdit, ProfilePath } from "./profile.ts";
 export { parseIntake, unfence } from "./intake/schema.ts";
 export type { IntakeDocument, IntakeGrant, IntakeHolding, IntakePerson, IntakePriorReturn, IntakeProblem, IntakeParse } from "./intake/schema.ts";
-export { reviewIntake, changesToEdits, toGrant, profilePathForIntake, settablePaths } from "./intake/apply.ts";
+export { reviewIntake, changesToEdits, toGrant, profilePathForIntake } from "./intake/apply.ts";
 export { FIELDS, fieldByPath, fieldByIntake, timelineFields, requiredFields } from "./fields.ts";
 export type { FieldDef, FieldType } from "./fields.ts";
 export type { IntakeChange, IntakeReview, IntakeSection } from "./intake/apply.ts";

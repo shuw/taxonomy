@@ -187,11 +187,6 @@ export function profilePathForIntake(path: string): ProfilePath | null {
   return f && f.review !== false ? toPath(f.path) : null;
 }
 
-/** Fields the assistant may set directly, as dot paths. */
-export function settablePaths(): string[] {
-  return FIELDS.filter((f) => f.review !== false && !f.path.startsWith("equity.")).map((f) => f.path);
-}
-
 function labelFor(path: string): string {
   return path.replace(/\[(\d+)\]/g, " #$1").replace(/\./g, " › ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 }

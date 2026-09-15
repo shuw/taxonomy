@@ -13,14 +13,13 @@ interface Props {
   onFocus: (year: number) => void;
   onExercise: (type: "iso" | "nso", year: number, shares: number) => void;
   edit: (edits: ProfileEdit[]) => void;
-  onOpenAssistant: () => void;
 }
 
 const TYPE_LABEL: Record<GrantType, string> = { iso: "ISO", nso: "NSO", rsu: "RSU" };
 const TYPE_OPTIONS = [{ value: "iso", label: "ISO" }, { value: "nso", label: "NSO / NQSO" }, { value: "rsu", label: "RSU" }] as const;
 const CADENCE_OPTIONS = [{ value: "monthly", label: "monthly" }, { value: "quarterly", label: "quarterly" }, { value: "annual", label: "annual" }] as const;
 
-export function EquitySection({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenAssistant }: Props) {
+export function EquitySection({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit }: Props) {
   const { companies, grants } = profile.equity;
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const setGrant = (i: number, patch: Partial<EquityGrant>) => set(["equity", "grants"], grants.map((g, j) => (j === i ? clean({ ...g, ...patch }) : g)));
@@ -44,11 +43,6 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
 
   return (
     <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={summary}>
-      <div className="assist-cta">
-        <button type="button" className="btn primary" onClick={onOpenAssistant}>Paste a screenshot or describe your grants</button>
-        <span className="muted small" style={{ margin: 0 }}>Or use "Fill from documents" above for the full picture.</span>
-      </div>
-
       {hasType("iso") && (
         <>
           <div className="subhead">Exercise ISOs</div>

@@ -31,14 +31,6 @@ shows how closely the engine reproduces it.
 The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live in
 `packages/engine/src/intake/` and are tested against a fixture.
 
-## Assistant
-
-The Assistant button opens a panel for quick edits from a single screenshot or a sentence. It
-calls the Anthropic API from the local dev server, so the machine running `bun run dev` needs
-credentials: `export ANTHROPIC_API_KEY=...` or `ant auth login`. Proposals appear as cards;
-nothing is written until you click Apply. Set `TAXONOMY_MODEL` to change the model (default
-`claude-opus-5`).
-
 ## Profile schema (version 3)
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,

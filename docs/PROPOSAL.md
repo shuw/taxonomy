@@ -100,10 +100,8 @@ Grants are typed (`iso`, `nso`, `rsu`) with a vesting schedule or explicit per-y
 engine expands schedules into per-year vests, tracks what is exercisable, and routes each type
 to the right place (AMT preference, ordinary income at exercise, ordinary income at vest).
 Because portals show this information as screenshots and tables rather than fields, the
-sidebar's primary path is an assistant: the server forwards the conversation (text and pasted
-images) to the Anthropic API with the profile schema and current YAML in the system prompt, and
-a single strict tool the model uses to propose edits. The client renders proposals as cards and
-only an approved card is written, through the same edit path the sidebar uses.
+primary way to fill a profile is the intake request in `INTAKE.md`: the user's own agent reads
+the documents and returns one structured document, which the app reviews and applies.
 
 ## Deliberate simplifications (v1)
 

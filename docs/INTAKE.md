@@ -9,8 +9,7 @@ change and where each number came from, and you accept it line by line.
 
 - **The agent you already trust has the access.** Gmail, Drive, a folder of PDFs, a Shareworks
   export: your agent can read them today. Taxonomy never needs credentials, never sees your
-  inbox, and never ships screenshots anywhere. The in-app assistant stays as a quick path for a
-  single screenshot, but it is no longer the way the profile gets built.
+  inbox, and never ships screenshots anywhere.
 - **Tax documents are the ground truth.** Portals and pay stubs are approximations; the
   return you filed is the real answer for last year. Form 8801 *is* the AMT credit carryforward.
   Form 3921 *is* the ISO exercise record with the FMV the IRS was told. Reading these once
@@ -288,8 +287,6 @@ future is what the levers are for).
    ledger.
 4. **Calibration.** Parameters for the prior year (2025), a `calibrate(profile)` that
    recomputes it and diffs against the return, and the card.
-5. **Unify the built-in assistant.** Its tool schema becomes the intake schema, so the two
-   paths produce identical documents and share the review table.
+5. (The built-in screenshot assistant was removed once this landed; one intake path.)
 
-Step 1 and 2 are the substance; 3 is a day; 4 is what makes it convincing; 5 removes a
-second source of truth.
+Step 1 and 2 are the substance; 3 is a day; 4 is what makes it convincing.

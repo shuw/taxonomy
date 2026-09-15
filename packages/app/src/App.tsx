@@ -12,7 +12,6 @@ import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
 import { Mark, Wordmark } from "./components/Mark.tsx";
-import { AssistantPanel } from "./components/AssistantPanel.tsx";
 import { IntakeModal } from "./components/IntakeModal.tsx";
 import { CalibrationCard } from "./components/CalibrationCard.tsx";
 
@@ -93,10 +92,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const [focusYear, setFocusYear] = useState(years[0]!);
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(false);
-  const select = (sel: Selection | null) => { setSelected(sel); if (sel) setAssistantOpen(false); };
-  const openAssistant = () => { setAssistantOpen(true); setSelected(null); };
+  const select = (sel: Selection | null) => setSelected(sel);
 
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
@@ -116,7 +113,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   };
 
   return (
-    <div className={"app" + (selected || assistantOpen ? " has-explain" : "")}>
+    <div className={"app" + (selected ? " has-explain" : "")}>
       <header className="topbar">
         <div className="brand"><Mark size={24} /><Wordmark /></div>
         {switcher}
@@ -127,14 +124,13 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <span className="spacer" />
         <ThemeToggle />
         <button type="button" className="btn" onClick={() => setIntakeOpen(true)}>Fill from documents</button>
-        <button type="button" className={"btn" + (assistantOpen ? " on" : "")} onClick={() => (assistantOpen ? setAssistantOpen(false) : openAssistant())}>Assistant</button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
           : <button type="button" className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}
       </header>
 
       <aside className="sidebar">
-        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenAssistant={openAssistant} onOpenIntake={() => setIntakeOpen(true)} />
+        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenIntake={() => setIntakeOpen(true)} />
       </aside>
 
       <main className="main">
@@ -173,11 +169,6 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         </aside>
       )}
       {intakeOpen && <IntakeModal mode="fill" profile={profile} onApply={edit} onClose={() => setIntakeOpen(false)} />}
-      {assistantOpen && !selected && (
-        <aside className="explain assistant-aside">
-          <AssistantPanel profile={profile} profileText={profileText} edit={edit} onClose={() => setAssistantOpen(false)} />
-        </aside>
-      )}
     </div>
   );
 }

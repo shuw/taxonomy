@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { relative, resolve } from "node:path";
 import { parse } from "yaml";
 import { editProfileText, migrateProfileText, parseProfile } from "@taxonomy/engine";
-import { describeAssistantError, runAssistant } from "./assistant.ts";
 import index from "./index.html";
 
 const root = resolve(import.meta.dir, "../..");
@@ -135,21 +134,6 @@ Bun.serve({
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         unlinkSync(fileFor(id));
         return Response.json({ ok: true });
-      },
-    },
-    "/api/assistant": {
-      POST: async (req) => {
-        const refused = sameOrigin(req);
-        if (refused) return refused;
-        const body = (await req.json()) as { profileText?: string; messages?: unknown };
-        if (typeof body.profileText !== "string") return bad("profileText is required");
-        try {
-          return Response.json(await runAssistant(body.profileText, body.messages));
-        } catch (e) {
-          const { status, message } = describeAssistantError(e);
-          if (status >= 500) console.error("assistant:", e);
-          return Response.json({ error: message }, { status });
-        }
       },
     },
   },

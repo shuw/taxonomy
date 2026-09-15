@@ -13,7 +13,6 @@ interface Props {
   onFocus: (year: number) => void;
   onExercise: (type: "iso" | "nso", year: number, shares: number) => void;
   edit: (edits: ProfileEdit[]) => void;
-  onOpenAssistant: () => void;
   onOpenIntake: () => void;
 }
 
@@ -24,7 +23,7 @@ export function sourceOf(profile: Profile, path: (string | number)[]): string | 
   return typeof s === "string" ? s : `${s.doc}${s.asOf ? ` (${s.asOf})` : ""}${s.note ? ` · ${s.note}` : ""}`;
 }
 
-export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenAssistant, onOpenIntake }: Props) {
+export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenIntake }: Props) {
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const src = (path: (string | number)[]) => sourceOf(profile, path);
   const self = profile.people.self;
@@ -73,7 +72,7 @@ export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus
           : <button type="button" className="link" onClick={() => set(["people", "spouse"], { salary: 0 })}>+ Add a spouse's income</button>}
       </Section>
 
-      <EquitySection profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={onFocus} onExercise={onExercise} edit={edit} onOpenAssistant={onOpenAssistant} />
+      <EquitySection profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={onFocus} onExercise={onExercise} edit={edit} />
 
       <Section id="income" title="Other income" color="var(--series-surtax)" summary={investment > 0 ? `${usdCompact(investment)} beyond salary` : "nothing beyond salary"}>
         <div className="row2">

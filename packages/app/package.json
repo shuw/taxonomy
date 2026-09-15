@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
     "@taxonomy/engine": "workspace:*",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
