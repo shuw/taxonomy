@@ -97,7 +97,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
               })}
               {totals[i]! > 0 && <text className="cap-label" x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{usdCompact(totals[i]!)}</text>}
               <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
-              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
+              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
             </g>
           );
         })}
@@ -182,7 +182,7 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
               <text className={"cap-label" + (r.net < 0 ? " neg" : "")} x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - (r.pinnedNet !== null ? 17 : 5)} textAnchor="middle">{r.net >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.net))}</text>
               {r.pinnedNet !== null && <text className="cap-label pinned" x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - 5} textAnchor="middle">pinned {r.pinnedNet >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.pinnedNet))}</text>}
               <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
-              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
+              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
             </g>
           );
         })}
