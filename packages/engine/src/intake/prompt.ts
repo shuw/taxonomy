@@ -8,15 +8,19 @@ export interface SectionInfo {
   title: string;
   what: string;
   documents: string;
+  /** Things to look for in connected drives and mail. */
+  search: string;
+  /** Answers the user can give in one word that resolve a required item. */
+  shortcuts?: string[];
 }
 
 export const INTAKE_SECTIONS: SectionInfo[] = [
-  { id: "basics", title: "Basics and pay", what: "Filing status, state, dependents, base salary and bonus per earner, pre-tax contributions, withholding so far. Usually answered in the app instead.", documents: "last return's header, a recent pay stub or offer letter, W-2 box 12" },
-  { id: "prior_return", title: "Last filed return", what: "The figures the model must reproduce, plus the carryforwards that enter this year: AMT credit, capital losses, unused charitable gifts.", documents: "Form 1040, Form 6251, Form 8801, Schedule D, Schedule A" },
-  { id: "income", title: "Investment and other income", what: "Interest, dividends (total and qualified), gains realized so far, K-1 or side income.", documents: "1099-INT, 1099-DIV, 1099-B or brokerage year-to-date" },
-  { id: "equity", title: "Equity", what: "Every grant with its type, strike, vesting and how much is vested, exercised and unexercised; the current share value; shares already owned with cost and AMT basis.", documents: "Shareworks, Carta, E*Trade, Schwab or Fidelity grant pages; the latest 409A notice; Form 3921 for ISO exercises" },
-  { id: "home", title: "Home and deductions", what: "The mortgage as a loan, property tax, state income tax, charitable giving by kind, medical.", documents: "Form 1098, county tax bill, donation receipts" },
-  { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours" },
+  { id: "basics", title: "Basics and pay", what: "Filing status, state, dependents, base salary and bonus per earner, pre-tax contributions, withholding so far. Usually answered in the app instead.", documents: "last return's header, a recent pay stub or offer letter, W-2 box 12", search: "pay stub, offer letter, W-2" },
+  { id: "prior_return", title: "Last filed return", what: "The figures the model must reproduce, plus the carryforwards that enter this year: AMT credit, capital losses, unused charitable gifts.", documents: "Form 1040, Form 6251, Form 8801, Schedule D, Schedule A", search: "\"Form 1040\" and the tax year, \"tax return\", TurboTax or accountant PDFs, \"Form 8801\", \"Form 6251\"", shortcuts: ["\"no AMT\" means no Form 6251 or 8801 was filed: the AMT block is omitted and the credit carryforward is 0", "\"standard deduction\" means no Schedule A: itemized is omitted", "\"no capital losses\" sets both carryforwards to 0"] },
+  { id: "income", title: "Investment and other income", what: "Interest, dividends (total and qualified), gains realized so far, K-1 or side income.", documents: "1099-INT, 1099-DIV, 1099-B or brokerage year-to-date", search: "1099-INT, 1099-DIV, 1099-B, \"consolidated 1099\", brokerage statements" },
+  { id: "equity", title: "Equity", what: "Every grant with its type, strike, vesting and how much is vested, exercised and unexercised; the current share value; shares already owned with cost and AMT basis.", documents: "Shareworks, Carta, E*Trade, Schwab or Fidelity grant pages; the latest 409A notice; Form 3921 for ISO exercises", search: "Shareworks, Carta, E*Trade, \"stock option agreement\", \"grant notice\", 409A, \"Form 3921\", \"exercise confirmation\"", shortcuts: ["\"never exercised\" sets exercised to 0 for every option grant", "\"nothing owned\" means holdings is an empty list"] },
+  { id: "home", title: "Home and deductions", what: "The mortgage as a loan, property tax, state income tax, charitable giving by kind, medical.", documents: "Form 1098, county tax bill, donation receipts", search: "\"Form 1098\", mortgage statement, property tax bill, donation receipts", shortcuts: ["\"no mortgage\" omits the mortgage block", "\"rent\" omits home entirely"] },
+  { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours", search: "nothing; ask me" },
 ];
 
 /** Render the scalar fields of a section as a YAML tree with a comment per line, from the registry. */
@@ -105,42 +109,65 @@ export interface PromptOptions {
 }
 
 /** The request the user hands to their agent. Agent-agnostic: instructions, the schema for the chosen sections, the current profile, and the output rules. */
+/** The values the profile already holds for the requested sections, as a short YAML the agent can read at a glance. */
+export function knownFacts(profile: Profile, sections: IntakeSection[]): string {
+  const facts: Record<string, unknown> = {
+    filer: { filingStatus: profile.filer.filingStatus, state: profile.filer.state, dependents: (profile.filer.dependents ?? []).length },
+    people: { self: { salary: profile.people.self.salary, bonus: profile.people.self.bonus }, spouse: profile.people.spouse ? { salary: profile.people.spouse.salary } : undefined },
+    planStartYear: profile.plan.startYear,
+  };
+  if (sections.includes("prior_return")) {
+    const r = [...(profile.returns ?? [])].sort((a, b) => b.year - a.year)[0];
+    facts.carryforwards = profile.carryforwards;
+    if (r) facts.lastReturnOnFile = { year: r.year, agi: r.reported.agi, totalTax: r.reported.totalTax };
+  }
+  if (sections.includes("income")) facts.income = profile.income;
+  if (sections.includes("equity")) facts.equity = {
+    companies: profile.equity.companies.map((c) => ({ name: c.name, sharePrice: c.sharePrice, asOf: c.sharePriceAsOf })),
+    grants: profile.equity.grants.map((g) => ({ name: g.name, type: g.type, granted: g.granted, vestedToDate: g.vestedToDate, exercisedToDate: g.exercisedToDate, strike: g.strike })),
+    holdings: (profile.equity.holdings ?? []).length,
+  };
+  if (sections.includes("home")) facts.home = { mortgage: profile.home?.mortgage, propertyTax: profile.home?.propertyTax, charitable: profile.deductions?.charitable };
+  if (sections.includes("assumptions")) facts.assumptions = profile.assumptions;
+  return stringifyProfile(facts as unknown as Profile).replace(/^#.*\n/gm, "").trim();
+}
+
+/** The request the user hands to their agent. Agent-agnostic: a working agreement first, the schema last. */
 export function intakePrompt(opts: PromptOptions): string {
   const sections = INTAKE_SECTIONS.filter((s) => opts.sections.includes(s.id));
-  const parts: string[] = [];
   const required = sections.map((s) => ({ s, items: requiredList(s.id) })).filter((x) => x.items.length);
-  parts.push(`# Taxonomy intake request
+  const shortcuts = sections.flatMap((s) => s.shortcuts ?? []);
+  const parts: string[] = [];
+  parts.push(`I'm setting up Taxonomy, a personal tax-planning tool, and I need you to pull some numbers out of my documents. Please read all of this before doing anything.
 
-I use Taxonomy, a personal tax-planning tool. It needs a structured snapshot of my situation, assembled from my documents. Work with me in two phases and return ONE YAML document at the end, in the exact shape shown below. The tool validates the result and shows me every number with its source before anything is saved.
+## How we'll work
 
-## Phase 1: gather, then ask me
+1. **Look first.** Search anything you can reach (connected Drive or mail, files I've uploaded, this conversation) for: ${sections.map((s) => s.search).join("; ")}. Read the relevant ones.
+2. **Then tell me where we stand, in one short message.** A few lines on what you found, then a numbered list of what you still need. For each item, say exactly what would resolve it: the form and line, the portal page to screenshot, or the number to type. If a document would be faster than a question, name the document. Never guess a required item.${shortcuts.length ? `\n   Shortcut answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
+3. **Repeat until nothing required is missing**, or I say I can't provide something.
+4. **Finish with one message** containing a two-line summary and then the YAML document in one \`\`\`yaml block. Nothing after the block. I'll paste that block into the tool, which shows me every number with its source before saving anything.
 
-1. Read everything you have access to that is relevant: my filed returns, W-2s and 1099s, pay stubs, equity portal pages or exports, Form 3921, Form 1098, 409A notices.
-2. Compare what you found against the required items below. For anything required that you could not find or could not read with confidence, ASK ME before producing the document. Batch your questions in one message. Be specific about what would resolve each one: name the form and line, the portal page, or the number you need me to type. Suggest which document I should upload when that is the quickest path.
-3. Keep asking until every required item is resolved, or I tell you I cannot provide it. Optional items you could not find are simply left out; do not ask about those unless one question covers several.
-4. Only then produce the document.
-
-## What to gather
+## What I need${opts.profile ? " (what the tool already has is at the bottom; don't ask about that)" : ""}
 
 ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.`).join("\n")}
 
-## Required before you answer
+Required, per section, before you finish:
 
 ${required.map(({ s, items }) => `**${s.title}**\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
 
-Everything else in the document shape is optional: fill it when a document shows it, leave it out when none does.
+Everything else in the shape below is optional: fill it when a document shows it, leave it out when none does.
 
-## Rules for the document
+## Rules for the numbers
 
-1. Copy numbers from documents or from my answers. Never estimate or fill from general knowledge. Optional values you could not find are left out and listed under \`unknown\`; required values must be resolved with me first, so \`unknown\` never holds a required item.
-2. For every number you report, add a \`sources\` entry keyed by its path naming the document and the line, box or page, or "answered by user" when I typed it, e.g. \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
-3. Prefer the filed return over a portal, the portal over a pay stub, and a pay stub over memory. When two documents disagree, ask me in phase 1; if I cannot resolve it, report the more authoritative one and note the other in \`questions\`.
-4. Money in whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
-5. Base salary means base pay only. Do not add RSU vests or option exercises to it; the tool adds those from the grants.
-6. For options, report granted, vested, exercised and unexercised as separate counts as the portal shows them. NQSO and NSO are the same type: use \`nso\`. Omit the whole \`spouse\` block when there is no spouse.
-7. \`questions\` is only for things that stayed open after we talked. Return the YAML document inside one \`\`\`yaml fence, and nothing else in that final message.${opts.onlyPaths?.length ? `\n8. This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}. Leave everything else out.` : ""}
+- Copy from documents or from my answers; never estimate or fill from general knowledge.
+- Every number gets a \`sources\` entry keyed by its path: the document and the line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
+- Filed return beats portal, portal beats pay stub, pay stub beats memory. If two documents disagree, ask me; if I can't settle it, report the more authoritative one and put the other in \`questions\`.
+- Whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
+- Base salary is base pay only. RSU vests and option exercises are added by the tool from the grants.
+- Options: report granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO and NSO are the same type: \`nso\`. Omit the \`spouse\` block if there is no spouse.
+- Optional items you couldn't find go under \`unknown\`; \`questions\` is only for what stayed open after we talked.${opts.onlyPaths?.length ? `\n- This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}.` : ""}
 
-## Document shape
+## The shape
 
 Use exactly these keys. Omit any key you cannot fill; do not write 0 for unknown.
 
@@ -152,17 +179,16 @@ sources:
   prior_return.agi: "2025 Form 1040 line 11 (file name)"
 unknown:
   - people.self.expectedBonus
-questions:
-  - ""
+questions: []
 \`\`\``);
 
   if (opts.profile) {
-    parts.push(`## What the tool has now
+    parts.push(`## What the tool already has
 
-Below is my current profile. I entered the basics (filing status, state, salaries, dependents) myself; do not ask about those, and do not report them unless the section above asks for them. For the sections above, report the full current state (not a diff); the tool will show me what changed. Values here that no document contradicts can be repeated as-is, with their source if you know it, or left out.
+I entered these myself or they came from an earlier pass. Do not ask about them and do not report them unless a section above asks for them. For the sections above, report the full current state (not a diff); the tool works out what changed.
 
 \`\`\`yaml
-${stringifyProfile(opts.profile).replace(/^# .*\n/gm, "").trim()}
+${knownFacts(opts.profile, opts.sections)}
 \`\`\``);
   }
 

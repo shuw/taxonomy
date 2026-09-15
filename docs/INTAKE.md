@@ -186,6 +186,14 @@ bonus, pre-tax contributions and the first plan year are a short form at the top
 new-profile dialog (and fields in the sidebar afterward). The request defaults to the four
 document-backed sections and tells the agent not to re-ask what the profile already holds.
 
+On the agent's side the request reads as a working agreement, not a spec: search connected
+drives and mail for named documents first, report what was found and list what is still
+needed in one message (with the form and line, or the document to upload, per item), accept
+one-word shortcut answers ("no AMT", "never exercised", "rent"), and finish with a two-line
+summary above a single YAML block. The tool accepts the whole reply pasted, not just the
+block. What the profile already holds is sent as a compact summary of the requested sections,
+never the raw file.
+
 The request is two-phase. The agent first reads what it can, then asks the user, in one
 batched message, for anything *required* it could not find: naming the form and line, the
 portal page, or the number to type, and suggesting which document to upload. Only when every

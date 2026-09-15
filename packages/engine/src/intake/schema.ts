@@ -350,8 +350,8 @@ function normalizeFiling(s: string): FilingStatus | undefined {
   return map[s];
 }
 
-/** Strip a ``` fence (and an optional language tag) around the document. */
+/** The document inside the first ``` fence in the text (prose around it is ignored), or the text itself. */
 export function unfence(text: string): string {
-  const m = text.trim().match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n```\s*$/);
+  const m = text.match(/```[a-zA-Z]*[ \t]*\n([\s\S]*?)\n[ \t]*```/);
   return m ? m[1]! : text;
 }

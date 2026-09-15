@@ -34,9 +34,12 @@ describe("intake parsing", () => {
     expect(r.doc).toBeNull();
     expect(r.problems.map((p) => p.path)).toEqual(expect.arrayContaining(["equity.grants[0].type", "equity.grants[1].strike", "home.mortgage"]));
   });
-  test("unfence strips a code fence", () => {
+  test("unfence finds the document inside a chatty reply", () => {
     expect(unfence("```yaml\na: 1\n```")).toBe("a: 1");
     expect(unfence("a: 1")).toBe("a: 1");
+    expect(unfence("Here is what I found.\n\n```yaml\ntaxonomy_intake: 1\nincome:\n  interest: 5\n```\n\nLet me know if anything is off.")).toBe("taxonomy_intake: 1\nincome:\n  interest: 5");
+    const r = parseIntake("Summary line one.\nSummary line two.\n```yaml\ntaxonomy_intake: 1\nincome: { interest: 7 }\n```");
+    expect(r.doc?.income?.interest).toBe(7);
   });
 });
 
@@ -101,18 +104,22 @@ describe("intake review and apply", () => {
 describe("intake prompt", () => {
   test("includes the chosen sections, the rules, and the current profile", () => {
     const text = intakePrompt({ sections: ["basics", "equity"], profile });
-    expect(text).toContain("do not ask about those");
+    expect(text).toContain("Do not ask about them");
     expect(text).toContain("taxonomy_intake: 1");
     expect(text).toContain("baseSalary:");
     expect(text).toContain("unexercised:");
     expect(text).not.toContain("prior_return:");
-    expect(text).toContain("Never estimate");
-    expect(text).toContain("Phase 1: gather, then ask me");
-    expect(text).toContain("## Required before you answer");
+    expect(text).toContain("never estimate");
+    expect(text).toContain("## How we'll work");
+    expect(text).toContain("Required, per section");
     expect(text).toContain("basics.filingStatus");
     expect(text).toContain("equity.sharePrice.value");
+    expect(text).toContain("never exercised");
+    expect(text).toContain("## What the tool already has");
+    expect(text).not.toContain("scenarios:");
     expect(text).not.toContain("prior_return.agi (1040 line 11)");
     expect(text).toContain("sharePrice: 18");
+    expect(text).toContain("granted: 40000");
     expect(text).toContain("1040 line 11");
     expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(6);
   });

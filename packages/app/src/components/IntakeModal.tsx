@@ -178,7 +178,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
             </div>
           )}
           {parsed && parsed.doc && parsed.warnings.length > 0 && <div className="muted small">Read with small corrections: {parsed.warnings.map((w) => `${w.path} (${w.message})`).join("; ")}.</div>}
-          {!review && <p className="muted small">{create ? "Optional now: you can create the profile and paste this later from the sidebar." : "The changes will show up here for you to approve."}</p>}
+          {!review && <p className="muted small">In Claude, use the copy button on the final code block; pasting the whole reply works too. {create ? "Optional now: you can create the profile and paste later from the sidebar." : "The changes show up here for you to approve."}</p>}
         </div>
       </div>
 
