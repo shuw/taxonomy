@@ -44,7 +44,8 @@ function combinedSeries(plan: PlanResult): Series[] {
   ];
 }
 export const CombinedStrip = (p: StripProps) => (
-  <ColumnStrip {...p} series={combinedSeries(p.plan)} height={230} totalLabel="Net cash" capLabel={(y) => { const n = y.lines.netCash?.value ?? 0; return `${n < 0 ? "−" : "+"}${usdCompact(Math.abs(n))}`; }}
+  <ColumnStrip {...p} series={combinedSeries(p.plan)} height={240} totalLabel="Net cash" capLabel={(y) => { const n = y.lines.netCash?.value ?? 0; return `${n < 0 ? "−" : "+"}${usdCompact(Math.abs(n))}`; }}
+    capLines={(y) => { const n = y.lines.netCash?.value ?? 0; return [{ text: n < 0 ? `−${usdCompact(-n)} short` : `${usdCompact(n)} kept`, className: n < 0 ? "neg" : "kept" }, { text: `${usdCompact(y.lines.totalTax?.value ?? 0)} tax`, className: "tax" }]; }}
     marker={(y) => { const n = y.lines.netCash?.value ?? 0; return n < 0 ? { value: y.lines.cashIn?.value ?? 0, label: "cash in" } : null; }} />
 );
 export const CreditStrip = (p: StripProps) => <ColumnStrip {...p} series={CREDIT_SERIES} height={170} />;
@@ -60,11 +61,11 @@ function topRounded(x: number, y: number, w: number, h: number, r: number): stri
   return `M${x},${y + h} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + w - rr} Q${x + w},${y} ${x + w},${y + rr} V${y + h} Z`;
 }
 
-function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLabel = "Total", capLabel, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null }) {
+function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLabel = "Total", capLabel, capLines, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; capLines?: (y: PlanResult["years"][number]) => { text: string; className: string }[]; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null }) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
-  const m = { top: 24, right: 12, bottom: 28, left: 46 };
+  const m = { top: capLines ? 36 : 24, right: 12, bottom: 28, left: 46 };
   const band = Math.min(MAX_BAND, (width - m.left - m.right) / years.length);
   const BAR = barWidth(band);
   const totals = years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0));
@@ -116,7 +117,8 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
                   : <rect key={s.sr.id} x={barX} y={yTop} width={BAR} height={h} fill={fill} />;
               })}
               {(() => { const mk = marker?.(y); return mk ? <g><line x1={barX - 6} x2={barX + BAR + 6} y1={yOf(mk.value)} y2={yOf(mk.value)} stroke="var(--bad)" strokeWidth={2} /><text className="cap-label neg" x={barX + BAR + 8} y={yOf(mk.value) + 4}>{mk.label}</text></g> : null; })()}
-              {totals[i]! > 0 && <text className={"cap-label" + (capLabel?.(y).startsWith("−") ? " neg" : "")} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{capLabel ? capLabel(y) : usdCompact(totals[i]!)}</text>}
+              {totals[i]! > 0 && !capLines && <text className={"cap-label" + (capLabel?.(y).startsWith("−") ? " neg" : "")} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{capLabel ? capLabel(y) : usdCompact(totals[i]!)}</text>}
+              {totals[i]! > 0 && capLines && capLines(y).map((l, k, all) => <text key={k} className={"cap-label " + l.className} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5 - (all.length - 1 - k) * 13} textAnchor="middle">{l.text}</text>)}
               <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
               <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
             </g>

@@ -607,3 +607,5 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ledger.compare th:not(:first-child), .ledger.compare td:not(:first-child) { text-align: right; white-space: nowrap; }
 .ledger.compare td:first-child { max-width: 46ch; }
 .legend .sw.hatch { background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface) 2px 3px); }
+.cap-label.kept { fill: var(--series-kept); }
+.cap-label.tax { fill: var(--ink-2); font-weight: 500; }
