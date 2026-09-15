@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useWidth } from "../useWidth.ts";
 import type { AmtCrossover, SweepPoint } from "@taxonomy/engine";
 import { niceTicks, shares, usd, usdCompact } from "../format.ts";
+import { AxisTicks, TooltipRow } from "./charts.tsx";
 
 interface Props { sweep: SweepPoint[]; crossover: AmtCrossover; current: number; onChange: (shares: number) => void; }
 
@@ -48,12 +49,7 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
         }}
         onClick={() => { if (hp) onChange(hp.shares); }}
         style={{ cursor: "pointer" }}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line className="grid" x1={m.left} x2={width - m.right} y1={yOf(t)} y2={yOf(t)} />
-            <text className="axis-label" x={m.left - 6} y={yOf(t) + 4} textAnchor="end">{usdCompact(t)}</text>
-          </g>
-        ))}
+        <AxisTicks ticks={ticks} yOf={yOf} left={m.left} right={width - m.right} />
         {area && <path d={area} fill="var(--series-amt)" opacity={0.1} />}
         <path d={line} fill="none" stroke="var(--series-amt)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {crossover.sharesBeforeAmt < crossover.available && (
@@ -71,8 +67,8 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
       {hp && (
         <div className="tooltip" style={hp.shares > maxShares * 0.6 ? { right: width - xOf(hp.shares) + 14, top: m.top } : { left: xOf(hp.shares) + 14, top: m.top }}>
           <div className="row"><strong>{shares(hp.shares)} shares</strong></div>
-          <div className="row"><span>AMT this year</span><span>{usd(hp.amt)}</span></div>
-          <div className="row"><span>Tax this year</span><span>{usd(hp.totalTax)}</span></div>
+          <TooltipRow label="AMT this year" value={usd(hp.amt)} />
+          <TooltipRow label="Tax this year" value={usd(hp.totalTax)} />
           <div className="row muted"><span>click to set</span></div>
         </div>
       )}

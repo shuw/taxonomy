@@ -1,5 +1,21 @@
 import { parse } from "yaml";
+import { FIELDS } from "../fields.ts";
+import { getPath } from "../timeline.ts";
 import type { FilingStatus, Owner } from "../types.ts";
+
+/** Set a dotted path on a plain object, creating the objects between. */
+function setAt(target: Record<string, unknown>, path: string, value: unknown): void {
+  const segs = path.split(".");
+  let node = target;
+  for (const seg of segs.slice(0, -1)) {
+    if (seg === "__proto__" || seg === "constructor") return;
+    const next = node[seg];
+    if (!next || typeof next !== "object") node[seg] = {};
+    node = node[seg] as Record<string, unknown>;
+  }
+  const last = segs[segs.length - 1]!;
+  if (last !== "__proto__" && last !== "constructor") node[last] = value;
+}
 
 /**
  * The intake document: what an agent hands back after reading the user's documents.
@@ -178,17 +194,6 @@ export function parseIntake(text: string): IntakeParse {
     if (r !== undefined && r > 1) { warnings.push({ path, message: `read ${r} as a percentage` }); return r / 100; }
     return r;
   };
-  const person = (path: string, v: unknown): IntakePerson | undefined => {
-    const o = obj(path, v);
-    if (!o) return undefined;
-    return {
-      name: str(`${path}.name`, o.name),
-      baseSalary: num(`${path}.baseSalary`, o.baseSalary, { min: 0 }),
-      expectedBonus: num(`${path}.expectedBonus`, o.expectedBonus, { min: 0 }),
-      pretaxContributions: num(`${path}.pretaxContributions`, o.pretaxContributions, { min: 0 }),
-      withholdingToDate: num(`${path}.withholdingToDate`, o.withholdingToDate, { min: 0 }),
-    };
-  };
 
   const doc: IntakeDocument = { taxonomy_intake: 1, as_of: date("as_of", d.as_of) };
 
@@ -204,71 +209,17 @@ export function parseIntake(text: string): IntakeParse {
     return num(path, raw, { min: 0 });
   };
   const basics = obj("basics", d.basics);
-  if (basics) {
-    const fsRaw = str("basics.filingStatus", basics.filingStatus)?.toLowerCase();
-    const fs = fsRaw === undefined ? undefined : normalizeFiling(fsRaw);
-    if (fsRaw !== undefined && !fs) problems.push({ path: "basics.filingStatus", message: `must be one of ${FILING.join(", ")}` });
-    doc.basics = { filingStatus: fs, state: str("basics.state", basics.state)?.toUpperCase(), dependents: dependents("basics.dependents", basics.dependents), planStartYear: num("basics.planStartYear", basics.planStartYear, { min: 2025, max: 2100 }) };
-  }
+  if (basics) doc.basics = { dependents: dependents("basics.dependents", basics.dependents), planStartYear: num("basics.planStartYear", basics.planStartYear, { min: 2025, max: 2100 }) };
   const payRaw = obj("pay", d.pay);
   if (payRaw) doc.pay = { dependents: dependents("pay.dependents", payRaw.dependents) };
-  const people = obj("people", d.people);
-  if (people) doc.people = { self: person("people.self", people.self), spouse: person("people.spouse", people.spouse) };
 
   const pr = obj("prior_return", d.prior_return);
-  if (pr) {
-    const year = num("prior_return.year", pr.year, { min: 2018, max: 2100 });
-    if (year === undefined) problems.push({ path: "prior_return.year", message: "is required" });
-    const amt = obj("prior_return.amt", pr.amt);
-    const clc = obj("prior_return.capitalLossCarryforward", pr.capitalLossCarryforward);
-    const it = obj("prior_return.itemized", pr.itemized);
-    const inp = obj("prior_return.inputs", pr.inputs);
-    const fsRaw = str("prior_return.filingStatus", pr.filingStatus)?.toLowerCase();
-    doc.prior_return = {
-      year: year ?? 0,
-      filingStatus: fsRaw ? normalizeFiling(fsRaw) : undefined,
-      agi: num("prior_return.agi", pr.agi),
-      taxableIncome: num("prior_return.taxableIncome", pr.taxableIncome),
-      regularTax: num("prior_return.regularTax", pr.regularTax),
-      totalTax: num("prior_return.totalTax", pr.totalTax),
-      niit: num("prior_return.niit", pr.niit),
-      additionalMedicare: num("prior_return.additionalMedicare", pr.additionalMedicare),
-      amt: amt ? { amti: num("prior_return.amt.amti", amt.amti), exemption: num("prior_return.amt.exemption", amt.exemption), tentativeMinimumTax: num("prior_return.amt.tentativeMinimumTax", amt.tentativeMinimumTax), amt: num("prior_return.amt.amt", amt.amt), creditUsed: num("prior_return.amt.creditUsed", amt.creditUsed) } : undefined,
-      amtCreditCarryforward: num("prior_return.amtCreditCarryforward", pr.amtCreditCarryforward, { min: 0 }),
-      capitalLossCarryforward: clc ? { shortTerm: num("prior_return.capitalLossCarryforward.shortTerm", clc.shortTerm, { min: 0 }), longTerm: num("prior_return.capitalLossCarryforward.longTerm", clc.longTerm, { min: 0 }) } : undefined,
-      charitableCarryforward: num("prior_return.charitableCarryforward", pr.charitableCarryforward, { min: 0 }),
-      itemized: it ? { salt: num("prior_return.itemized.salt", it.salt), mortgageInterest: num("prior_return.itemized.mortgageInterest", it.mortgageInterest), charitable: num("prior_return.itemized.charitable", it.charitable), other: num("prior_return.itemized.other", it.other) } : undefined,
-      inputs: inp ? {
-        wages: num("prior_return.inputs.wages", inp.wages), interest: num("prior_return.inputs.interest", inp.interest),
-        ordinaryDividends: num("prior_return.inputs.ordinaryDividends", inp.ordinaryDividends), qualifiedDividends: num("prior_return.inputs.qualifiedDividends", inp.qualifiedDividends),
-        shortTermGains: num("prior_return.inputs.shortTermGains", inp.shortTermGains), longTermGains: num("prior_return.inputs.longTermGains", inp.longTermGains),
-        otherIncome: num("prior_return.inputs.otherIncome", inp.otherIncome), isoBargainElement: num("prior_return.inputs.isoBargainElement", inp.isoBargainElement),
-        amtCreditCarriedIn: num("prior_return.inputs.amtCreditCarriedIn", inp.amtCreditCarriedIn),
-        medicareWages: num("prior_return.inputs.medicareWages", inp.medicareWages),
-      } : undefined,
-    };
-  }
-
-  const income = obj("income", d.income);
-  if (income) {
-    const div = obj("income.dividends", income.dividends);
-    const g = obj("income.realizedGains", income.realizedGains);
-    doc.income = {
-      interest: num("income.interest", income.interest),
-      dividends: div ? { ordinary: num("income.dividends.ordinary", div.ordinary), qualified: num("income.dividends.qualified", div.qualified) } : undefined,
-      realizedGains: g ? { shortTerm: num("income.realizedGains.shortTerm", g.shortTerm), longTerm: num("income.realizedGains.longTerm", g.longTerm) } : undefined,
-      other: num("income.other", income.other),
-    };
-  }
+  if (pr && num("prior_return.year", pr.year, { min: 2018, max: 2100 }) === undefined) problems.push({ path: "prior_return.year", message: "is required" });
 
   const eq = obj("equity", d.equity);
   if (eq) {
-    let sharePrice: number | { value: number; asOf?: string } | undefined;
-    if (typeof eq.sharePrice === "object" && eq.sharePrice !== null) {
-      const sp = eq.sharePrice as Record<string, unknown>;
-      const value = num("equity.sharePrice.value", sp.value, { min: 0 });
-      sharePrice = value === undefined ? undefined : { value, asOf: date("equity.sharePrice.asOf", sp.asOf) };
-    } else sharePrice = num("equity.sharePrice", eq.sharePrice, { min: 0 });
+    // A bare number for the share price means { value }.
+    if (typeof eq.sharePrice === "number" || typeof eq.sharePrice === "string") eq.sharePrice = { value: eq.sharePrice };
     const grants: IntakeGrant[] = [];
     if (eq.grants !== undefined) {
       if (!Array.isArray(eq.grants)) problems.push({ path: "equity.grants", message: "must be a list" });
@@ -330,37 +281,37 @@ export function parseIntake(text: string): IntakeParse {
         });
       });
     }
-    doc.equity = { company: str("equity.company", eq.company), sharePrice, grants: eq.grants === undefined ? undefined : grants, holdings: eq.holdings === undefined ? undefined : holdings };
+    doc.equity = { grants: eq.grants === undefined ? undefined : grants, holdings: eq.holdings === undefined ? undefined : holdings };
   }
 
   const home = obj("home", d.home);
-  if (home) {
-    const m = obj("home.mortgage", home.mortgage);
-    doc.home = {
-      mortgage: m ? {
-        balance: num("home.mortgage.balance", m.balance, { min: 0 }) ?? 0,
-        rate: rate("home.mortgage.rate", m.rate) ?? 0,
-        originated: date("home.mortgage.originated", m.originated) ?? "",
-        originalAmount: num("home.mortgage.originalAmount", m.originalAmount, { min: 0 }),
-        termYears: num("home.mortgage.termYears", m.termYears, { min: 1 }),
-      } : undefined,
-      propertyTax: num("home.propertyTax", home.propertyTax, { min: 0 }),
-    };
-    if (m && (m.balance === undefined || m.rate === undefined || m.originated === undefined)) problems.push({ path: "home.mortgage", message: "needs balance, rate and originated" });
-  }
+  const m = home ? obj("home.mortgage", home.mortgage) : undefined;
+  if (m && (m.balance === undefined || m.rate === undefined || m.originated === undefined)) problems.push({ path: "home.mortgage", message: "needs balance, rate and originated" });
 
-  const ded = obj("deductions", d.deductions);
-  if (ded) {
-    const ch = obj("deductions.charitable", ded.charitable);
-    doc.deductions = {
-      stateIncomeTax: num("deductions.stateIncomeTax", ded.stateIncomeTax, { min: 0 }),
-      charitable: ch ? { cash: num("deductions.charitable.cash", ch.cash, { min: 0 }), appreciatedStock: num("deductions.charitable.appreciatedStock", ch.appreciatedStock, { min: 0 }), daf: num("deductions.charitable.daf", ch.daf, { min: 0 }) } : undefined,
-      medical: num("deductions.medical", ded.medical, { min: 0 }),
-    };
+  // Every scalar the registry knows is read by its intake path and coerced by its type; sections above only handle what is not a plain scalar.
+  const out = doc as unknown as Record<string, unknown>;
+  const handledAbove = new Set(["filer.dependents"]);
+  for (const f of FIELDS) {
+    if (!f.intake || handledAbove.has(f.path)) continue;
+    const raw = getPath(d, f.intake);
+    if (raw === undefined || raw === null) continue;
+    let v: unknown;
+    switch (f.type) {
+      case "usd": case "number": v = num(f.intake, raw, f.path.startsWith("returns.") || f.path.startsWith("income.") ? {} : { min: 0 }); break;
+      case "pct": v = rate(f.intake, raw); break;
+      case "date": v = date(f.intake, raw); break;
+      case "year": v = num(f.intake, raw, { min: 2018, max: 2100 }); break;
+      case "bool": v = typeof raw === "boolean" ? raw : typeof raw === "string" ? /^(true|yes|on)$/i.test(raw) : undefined; break;
+      case "enum": {
+        const sv = str(f.intake, raw)?.toLowerCase();
+        v = sv === undefined ? undefined : f.path.endsWith("filingStatus") ? normalizeFiling(sv) : f.enum?.includes(sv) ? sv : undefined;
+        if (sv !== undefined && v === undefined) problems.push({ path: f.intake, message: `must be one of ${(f.path.endsWith("filingStatus") ? FILING : f.enum ?? []).join(", ")}` });
+        break;
+      }
+      default: v = str(f.intake, raw); if (f.path === "filer.state" && typeof v === "string") v = v.toUpperCase();
+    }
+    if (v !== undefined) setAt(out, f.intake, v);
   }
-
-  const as = obj("assumptions", d.assumptions);
-  if (as) doc.assumptions = { fmvGrowth: rate("assumptions.fmvGrowth", as.fmvGrowth), wageGrowth: rate("assumptions.wageGrowth", as.wageGrowth), inflation: rate("assumptions.inflation", as.inflation) };
 
   const sources = obj("sources", d.sources);
   if (sources) doc.sources = Object.fromEntries(Object.entries(sources).filter(([, v]) => typeof v === "string") as [string, string][]);

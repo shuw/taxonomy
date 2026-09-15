@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useWidth } from "../useWidth.ts";
 import type { PlanResult } from "@taxonomy/engine";
-import { fmtDelta, niceTicks, usd, usdCompact } from "../format.ts";
+import { fmtDelta, usd, usdCompact } from "../format.ts";
+import { AxisTicks, ChartTooltip, Legend, TooltipRow, columnLayout } from "./charts.tsx";
 
 interface Series { id: string; label: string; color: string; value: (y: PlanResult["years"][number]) => number; /** Draw with a hatch over the color instead of a solid fill. */ hatch?: boolean; }
 
@@ -66,16 +67,10 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
   const m = { top: capLines ? 36 : 24, right: 12, bottom: 28, left: 46 };
-  const band = Math.min(MAX_BAND, (width - m.left - m.right) / years.length);
-  const BAR = barWidth(band);
   const totals = years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0));
   const pinnedTotals = pinned ? pinned.years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0)) : null;
-  const max = Math.max(...totals, ...(pinnedTotals ?? []));
-  const ticks = max < 1 ? [0] : niceTicks(max);
-  const top = Math.max(1, ticks[ticks.length - 1] ?? max);
-  const plotH = height - m.top - m.bottom;
-  const yOf = (v: number) => m.top + plotH - (v / top) * plotH;
-  const baseY = m.top + plotH;
+  const { band, ticks, plotH, yOf, baseY } = columnLayout(width, height, years.length, Math.max(...totals, ...(pinnedTotals ?? [])), m, MAX_BAND);
+  const BAR = barWidth(band);
 
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
@@ -83,12 +78,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
         <defs>
           <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--series-kept)" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--surface)" strokeWidth="2" /></pattern>
         </defs>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line className="grid" x1={m.left} x2={width - m.right} y1={yOf(t)} y2={yOf(t)} />
-            <text className="axis-label" x={m.left - 6} y={yOf(t) + 4} textAnchor="end">{usdCompact(t)}</text>
-          </g>
-        ))}
+        <AxisTicks ticks={ticks} yOf={yOf} left={m.left} right={width - m.right} />
         {years.map((y, i) => {
           const cx = m.left + band * i + band / 2;
           const hasPin = pinnedTotals !== null;
@@ -127,26 +117,17 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
       </svg>
       {hover !== null && (
-        <div className="tooltip" style={hover >= years.length - 2
-          ? { right: width - (m.left + band * hover) + 6, top: m.top }
-          : { left: m.left + band * (hover + 1) - 6, top: m.top }}>
+        <ChartTooltip index={hover} count={years.length} width={width} band={band} left={m.left} top={m.top}>
           <div className="row"><strong>{years[hover]!.year}</strong></div>
-          {series.map((sr) => (
-            <div className="row" key={sr.id}><span><span className="sw" style={{ background: sr.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{sr.label}</span><span>{usd(sr.value(years[hover]!))}</span></div>
-          ))}
-          {series.length > 1 && !capLabel && <div className="row total"><span>{totalLabel}</span><span>{usd(totals[hover]!)}</span></div>}
-          {capLabel && <div className="row total"><span>{totalLabel}</span><span>{fmtDelta(years[hover]!.lines.netCash?.value ?? 0) || "$0"}</span></div>}
-          {capLabel && <div className="row muted"><span>Cash in</span><span>{usd(years[hover]!.lines.cashIn?.value ?? 0)}</span></div>}
-          {pinnedTotals && !capLabel && <div className="row muted"><span>vs pinned</span><span>{fmtDelta(totals[hover]! - pinnedTotals[hover]!) || "same"}</span></div>}
-          {pinnedTotals && capLabel && <div className="row muted"><span>vs pinned</span><span>{fmtDelta((years[hover]!.lines.netCash?.value ?? 0) - (pinned!.years[hover]?.lines.netCash?.value ?? 0)) || "same"}</span></div>}
-        </div>
+          {series.map((sr) => <TooltipRow key={sr.id} label={sr.label} color={sr.color} value={usd(sr.value(years[hover]!))} />)}
+          {series.length > 1 && !capLabel && <TooltipRow className="total" label={totalLabel} value={usd(totals[hover]!)} />}
+          {capLabel && <TooltipRow className="total" label={totalLabel} value={fmtDelta(years[hover]!.lines.netCash?.value ?? 0) || "$0"} />}
+          {capLabel && <TooltipRow className="muted" label="Cash in" value={usd(years[hover]!.lines.cashIn?.value ?? 0)} />}
+          {pinnedTotals && !capLabel && <TooltipRow className="muted" label="vs pinned" value={fmtDelta(totals[hover]! - pinnedTotals[hover]!) || "same"} />}
+          {pinnedTotals && capLabel && <TooltipRow className="muted" label="vs pinned" value={fmtDelta((years[hover]!.lines.netCash?.value ?? 0) - (pinned!.years[hover]?.lines.netCash?.value ?? 0)) || "same"} />}
+        </ChartTooltip>
       )}
-      {(series.length > 1 || pinned) && (
-        <div className="legend">
-          {series.length > 1 && series.map((sr) => <span key={sr.id}><span className={"sw" + (sr.hatch ? " hatch" : "")} style={{ background: sr.color }} />{sr.label}</span>)}
-          {pinned && <span><span className="sw" style={{ background: "var(--series-pinned)" }} />Pinned scenario</span>}
-        </div>
-      )}
+      {(series.length > 1 || pinned) && <Legend items={[...(series.length > 1 ? series : []), ...(pinned ? [{ id: "pinned", label: "Pinned scenario", color: "var(--series-pinned)" }] : [])]} />}
     </div>
   );
 }
@@ -158,8 +139,6 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
   const years = plan.years;
   const height = 230;
   const m = { top: 24, right: 12, bottom: 28, left: 46 };
-  const band = Math.min(MAX_BAND, (width - m.left - m.right) / years.length);
-  const bar = Math.round(Math.min(40, Math.max(18, band * 0.22)));
   const v = (y: PlanResult["years"][number], id: string) => y.lines[id]?.value ?? 0;
   const rows = years.map((y) => ({
     wages: y.inputs.salarySelf + y.inputs.salarySpouse,
@@ -170,12 +149,8 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
     agi: v(y, "agi"),
     pinnedNet: pinned ? (pinned.years.find((p) => p.year === y.year)?.lines.netCash?.value ?? null) : null,
   }));
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.wages + r.proceeds, r.exercise + r.tax)));
-  const ticks = niceTicks(max);
-  const top = Math.max(1, ticks[ticks.length - 1] ?? max);
-  const plotH = height - m.top - m.bottom;
-  const yOf = (x: number) => m.top + plotH - (x / top) * plotH;
-  const baseY = m.top + plotH;
+  const { band, ticks, plotH, yOf, baseY } = columnLayout(width, height, years.length, Math.max(1, ...rows.map((r) => Math.max(r.wages + r.proceeds, r.exercise + r.tax))), m, MAX_BAND);
+  const bar = Math.round(Math.min(40, Math.max(18, band * 0.22)));
   const IN = [{ key: "wages", label: "Salary and bonus", color: "var(--series-regular)" }, { key: "proceeds", label: "Shares sold", color: "var(--series-surtax)" }] as const;
   const OUT = [{ key: "exercise", label: "Exercise cost", color: "var(--series-violet)" }, { key: "tax", label: "Tax", color: "var(--series-amt)" }] as const;
   const stack = (x: number, parts: readonly { key: "wages" | "proceeds" | "exercise" | "tax"; color: string }[], r: (typeof rows)[number]) => {
@@ -191,12 +166,7 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="Cash by year">
-        {ticks.map((t) => (
-          <g key={t}>
-            <line className="grid" x1={m.left} x2={width - m.right} y1={yOf(t)} y2={yOf(t)} />
-            <text className="axis-label" x={m.left - 6} y={yOf(t) + 4} textAnchor="end">{usdCompact(t)}</text>
-          </g>
-        ))}
+        <AxisTicks ticks={ticks} yOf={yOf} left={m.left} right={width - m.right} />
         {years.map((y, i) => {
           const r = rows[i]!;
           const cx = m.left + band * i + band / 2;
@@ -215,18 +185,16 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
       </svg>
       {hover !== null && (() => { const r = rows[hover]!; return (
-        <div className="tooltip" style={hover >= years.length - 2 ? { right: width - (m.left + band * hover) + 6, top: m.top } : { left: m.left + band * (hover + 1) - 6, top: m.top }}>
+        <ChartTooltip index={hover} count={years.length} width={width} band={band} left={m.left} top={m.top}>
           <div className="row"><strong>{years[hover]!.year}</strong></div>
-          {IN.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>{usd(r[p.key])}</span></div>)}
-          {OUT.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>−{usd(r[p.key])}</span></div>)}
-          <div className="row total"><span>Net cash</span><span>{fmtDelta(r.net) || "$0"}</span></div>
-          {r.pinnedNet !== null && <div className="row muted"><span>vs pinned</span><span>{fmtDelta(r.net - r.pinnedNet) || "same"}</span></div>}
-          <div className="row muted"><span>Income for tax (AGI)</span><span>{usd(r.agi)}</span></div>
-        </div>
+          {IN.map((p) => <TooltipRow key={p.key} label={p.label} color={p.color} value={usd(r[p.key])} />)}
+          {OUT.map((p) => <TooltipRow key={p.key} label={p.label} color={p.color} value={`−${usd(r[p.key])}`} />)}
+          <TooltipRow className="total" label="Net cash" value={fmtDelta(r.net) || "$0"} />
+          {r.pinnedNet !== null && <TooltipRow className="muted" label="vs pinned" value={fmtDelta(r.net - r.pinnedNet) || "same"} />}
+          <TooltipRow className="muted" label="Income for tax (AGI)" value={usd(r.agi)} />
+        </ChartTooltip>
       ); })()}
-      <div className="legend">
-        {[...IN, ...OUT].map((p) => <span key={p.key}><span className="sw" style={{ background: p.color }} />{p.label}</span>)}
-      </div>
+      <Legend items={[...IN, ...OUT].map((p) => ({ id: p.key, label: p.label, color: p.color }))} />
     </div>
   );
 }

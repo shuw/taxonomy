@@ -38,12 +38,11 @@ Sources key on ids, so reordering or renaming never orphans anything. Events car
 
 `packages/engine/src/fields.ts` lists every scalar the profile stores and the intake asks for:
 profile path, intake path, label, type, section, and the form and line it comes from. The
-intake prompt template, the review table, the unknown-path mapping and the timeline's + menu
-read from it. The intake *parser* (`intake/schema.ts`) does not: each section's fields are read
-by hand there. So a new scalar costs a registry entry, a line in the parser (and its `Intake*`
-type), an input in the information dialog, and, if the profile path is not one-to-one with the
-intake path, a case in `intake/apply.ts`. Structured things (grants, holdings, the mortgage, a
-return) are hand-written in all three places.
+intake prompt template, the intake parser, the review table, the unknown-path mapping and the
+timeline's + menu all read from it, so a new scalar costs a registry entry, a key in the
+`Intake*` type, and an input in the information dialog. Structured things (grants, holdings,
+the mortgage, a return's shape) and the few special scalars (dependents as birth years, the
+share price as a bare number) are hand-written in the parser and in `intake/apply.ts`.
 
 ## How a year is computed
 
