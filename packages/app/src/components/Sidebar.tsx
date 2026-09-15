@@ -37,9 +37,8 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
 
       <EquityKnobs profile={profile} levers={levers} edit={edit} onOpenFacts={() => onOpenFacts("equity")} />
 
-      <Section id="assumptions" title="Assumptions" color="var(--muted)" defaultOpen summary={`shares ${a.fmvGrowth >= 0 ? "+" : ""}${pct(a.fmvGrowth)}/yr · wages +${pct(a.wageGrowth)}/yr · CPI ${pct(a.inflation)}${a.bracketRateDelta ? ` · rates ${a.bracketRateDelta > 0 ? "+" : ""}${pct(a.bracketRateDelta)}` : ""}`}>
-        <div className="row3">
-          <Field label="Share value growth" hint="/yr"><PercentInput value={a.fmvGrowth} onChange={(n) => set(["assumptions", "fmvGrowth"], n)} /></Field>
+      <Section id="assumptions" title="Assumptions" color="var(--muted)" defaultOpen summary={`wages +${pct(a.wageGrowth)}/yr · CPI ${pct(a.inflation)}${a.bracketRateDelta ? ` · rates ${a.bracketRateDelta > 0 ? "+" : ""}${pct(a.bracketRateDelta)}` : ""}`}>
+        <div className="row2">
           <Field label="Wage growth" hint="/yr"><PercentInput value={a.wageGrowth} onChange={(n) => set(["assumptions", "wageGrowth"], n)} /></Field>
           <Field label="Inflation" hint="indexes brackets"><PercentInput value={a.inflation} onChange={(n) => set(["assumptions", "inflation"], n)} /></Field>
         </div>
