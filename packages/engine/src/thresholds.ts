@@ -20,7 +20,7 @@ const withIso = (levers: Levers, year: number, shares: number): Partial<Levers> 
 export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number): AmtCrossover {
   const levers = resolveLevers(profile, leverOverrides);
   const available = sharesExercisable(profile, levers, "iso", year);
-  const amtAt = (shares: number): number => runPlan(profile, withIso(levers, year, shares)).years.find((y) => y.year === year)!.lines.amt!.value;
+  const amtAt = (shares: number): number => runPlan(profile, withIso(levers, year, shares)).years.find((y) => y.year === year)?.lines.amt?.value ?? 0;
   let lo = 0;
   let hi = available;
   if (amtAt(hi) <= 0) lo = hi;
@@ -51,7 +51,8 @@ export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Lever
   for (let i = 0; i <= steps; i++) {
     const shares = Math.round((available * i) / steps);
     const res = runPlan(profile, withIso(levers, year, shares));
-    const y = res.years.find((r) => r.year === year)!;
+    const y = res.years.find((r) => r.year === year);
+    if (!y) return [];
     points.push({ shares, amt: y.lines.amt!.value, totalTax: y.lines.totalTax!.value, planTotalTax: res.totals.totalTax, amtCreditCarryforwardEnd: res.totals.amtCreditCarryforwardEnd });
   }
   return points;

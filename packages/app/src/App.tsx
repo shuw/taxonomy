@@ -126,7 +126,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const hasIso = profile.equity.grants.some((g) => g.type === "iso");
   const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
   const selectedExercise = events.find((e) => e.id === selectedEvent && e.kind === "exercise" && e.type === "iso");
-  const sweepYear = selectedExercise?.year ?? focusYear;
+  const inPlan = (y: number | undefined) => y !== undefined && years.includes(y);
+  const sweepYear = inPlan(selectedExercise?.year) ? selectedExercise!.year : inPlan(focusYear) ? focusYear : years[0]!;
   const sweep = useMemo(() => sweepIsoExercise(profile, levers, sweepYear, 40), [profile, levers, sweepYear]);
   const sweepCrossover = crossovers.find((c) => c.year === sweepYear) ?? crossovers[0]!;
 
