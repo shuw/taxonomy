@@ -187,19 +187,19 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       {review && (
         <>
           <div className="review-summary">
-            <strong>{review.changes.filter((c) => c.status !== "same").length} changes</strong>
+            <strong>{review.changes.filter((c) => c.status !== "same").length} {create ? "values found" : "changes"}</strong>
             {sameCount > 0 && <button type="button" className="link" onClick={() => setShowSame((v) => !v)}>{showSame ? "hide" : "show"} {sameCount} unchanged</button>}
             {review.asOf && <span className="muted">as of {review.asOf}</span>}
           </div>
           {review.questions.length > 0 && (
             <div className="questions">
-              <div className="subhead">Your agent asked</div>
+              <div className="subhead">Still open after your agent asked</div>
               <ul>{review.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
             </div>
           )}
           <div className="table-wrap">
             <table className="review">
-              <thead><tr><th></th><th>Field</th><th>Now</th><th>Proposed</th><th>Source</th></tr></thead>
+              <thead><tr><th></th><th>Field</th><th>{create ? "Default" : "Now"}</th><th>{create ? "From your documents" : "Proposed"}</th><th>Source</th></tr></thead>
               <tbody>
                 {grouped.map((g) => [
                   <tr key={g.section.id} className="group"><td colSpan={5}>{g.section.title}</td></tr>,
@@ -234,7 +234,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
         <span className="spacer" />
         {create && !review && <button type="button" className="btn" disabled={!canFinish || busy} onClick={() => void onFinish([])}>{busy ? "Creating…" : "Create now, paste later"}</button>}
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped) || (create && !review)} onClick={() => void onFinish(edits())}>
-          {busy ? "Creating…" : create ? `Create with ${changeCount} change${changeCount === 1 ? "" : "s"}` : `Apply ${changeCount} change${changeCount === 1 ? "" : "s"}`}
+          {busy ? "Creating…" : create ? `Create profile with ${changeCount} value${changeCount === 1 ? "" : "s"}` : `Apply ${changeCount} change${changeCount === 1 ? "" : "s"}`}
         </button>
       </div>
     </div>

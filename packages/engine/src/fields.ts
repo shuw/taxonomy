@@ -22,6 +22,8 @@ export interface FieldDef {
   review?: boolean;
   /** Offered in the timeline picker. */
   timeline?: boolean;
+  /** The agent must resolve this with the user before answering, when its section is requested. */
+  required?: boolean;
 }
 
 const basics = (f: Omit<FieldDef, "section">): FieldDef => ({ section: "basics", ...f });
@@ -29,7 +31,7 @@ const person = (who: "self" | "spouse"): FieldDef[] => {
   const L = who === "self" ? "Your" : "Spouse";
   return [
     basics({ path: `people.${who}.name`, intake: `people.${who}.name`, label: `${L} name`, type: "text" }),
-    basics({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay only; RSU vests and option exercises are added by the tool", timeline: true }),
+    basics({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay only; RSU vests and option exercises are added by the tool", timeline: true, required: who === "self" }),
     basics({ path: `people.${who}.bonus`, intake: `people.${who}.expectedBonus`, label: `${L} expected bonus`, type: "usd", timeline: true }),
     basics({ path: `people.${who}.pretaxContributions`, intake: `people.${who}.pretaxContributions`, label: `${L} pre-tax contributions`, type: "usd", hint: "401(k), HSA and similar for the year", timeline: true }),
     basics({ path: `people.${who}.withholdingToDate`, intake: `people.${who}.withholdingToDate`, label: `${L} withholding to date`, type: "usd", hint: "federal income tax withheld so far this year" }),
@@ -37,22 +39,22 @@ const person = (who: "self" | "spouse"): FieldDef[] => {
 };
 
 export const FIELDS: FieldDef[] = [
-  basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], timeline: true }),
-  basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code", timeline: true }),
+  basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], timeline: true, required: true }),
+  basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code", timeline: true, required: true }),
   basics({ path: "plan.startYear", intake: "basics.planStartYear", label: "First plan year", type: "year", hint: "first year on screen; usually the current year" }),
   ...person("self"),
   ...person("spouse"),
 
-  { path: "carryforwards.amtCredit", intake: "prior_return.amtCreditCarryforward", label: "AMT credit carryforward", section: "prior_return", type: "usd", hint: "Form 8801 line 26: credit available for the next year" },
+  { path: "carryforwards.amtCredit", intake: "prior_return.amtCreditCarryforward", label: "AMT credit carryforward", section: "prior_return", type: "usd", hint: "Form 8801 line 26: credit available for the next year; 0 if no Form 8801 was filed", required: true },
   { path: "carryforwards.capitalLoss.shortTerm", intake: "prior_return.capitalLossCarryforward.shortTerm", label: "Short-term capital loss carryforward", section: "prior_return", type: "usd", hint: "Schedule D carryover worksheet" },
   { path: "carryforwards.capitalLoss.longTerm", intake: "prior_return.capitalLossCarryforward.longTerm", label: "Long-term capital loss carryforward", section: "prior_return", type: "usd", hint: "Schedule D carryover worksheet" },
   { path: "carryforwards.charitable", intake: "prior_return.charitableCarryforward", label: "Charitable carryforward", section: "prior_return", type: "usd", hint: "gifts not yet deducted because of AGI limits" },
-  { path: "returns.year", intake: "prior_return.year", label: "Return year", section: "prior_return", type: "year", review: false },
+  { path: "returns.year", intake: "prior_return.year", label: "Return year", section: "prior_return", type: "year", review: false, required: true },
   { path: "returns.filingStatus", intake: "prior_return.filingStatus", label: "Filing status that year", section: "prior_return", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], review: false },
-  { path: "returns.reported.agi", intake: "prior_return.agi", label: "AGI", section: "prior_return", type: "usd", hint: "1040 line 11", review: false },
+  { path: "returns.reported.agi", intake: "prior_return.agi", label: "AGI", section: "prior_return", type: "usd", hint: "1040 line 11", review: false, required: true },
   { path: "returns.reported.taxableIncome", intake: "prior_return.taxableIncome", label: "Taxable income", section: "prior_return", type: "usd", hint: "1040 line 15", review: false },
   { path: "returns.reported.regularTax", intake: "prior_return.regularTax", label: "Regular tax", section: "prior_return", type: "usd", hint: "1040 line 16", review: false },
-  { path: "returns.reported.totalTax", intake: "prior_return.totalTax", label: "Total tax", section: "prior_return", type: "usd", hint: "1040 line 24", review: false },
+  { path: "returns.reported.totalTax", intake: "prior_return.totalTax", label: "Total tax", section: "prior_return", type: "usd", hint: "1040 line 24", review: false, required: true },
   { path: "returns.reported.niit", intake: "prior_return.niit", label: "NIIT", section: "prior_return", type: "usd", hint: "Form 8960 line 17, if any", review: false },
   { path: "returns.reported.amti", intake: "prior_return.amt.amti", label: "AMTI", section: "prior_return", type: "usd", hint: "Form 6251 line 4; omit the amt block if no 6251 was filed", review: false },
   { path: "returns.reported.amtExemption", intake: "prior_return.amt.exemption", label: "AMT exemption", section: "prior_return", type: "usd", hint: "Form 6251 line 5", review: false },
@@ -63,7 +65,7 @@ export const FIELDS: FieldDef[] = [
   { path: "returns.inputs.itemized.mortgageInterest", intake: "prior_return.itemized.mortgageInterest", label: "Mortgage interest deducted", section: "prior_return", type: "usd", hint: "Schedule A line 8a", review: false },
   { path: "returns.inputs.itemized.charitable", intake: "prior_return.itemized.charitable", label: "Charitable deducted", section: "prior_return", type: "usd", hint: "Schedule A line 14", review: false },
   { path: "returns.inputs.itemized.other", intake: "prior_return.itemized.other", label: "Other itemized", section: "prior_return", type: "usd", review: false },
-  { path: "returns.inputs.wages", intake: "prior_return.inputs.wages", label: "Wages that year", section: "prior_return", type: "usd", hint: "1040 line 1a", review: false },
+  { path: "returns.inputs.wages", intake: "prior_return.inputs.wages", label: "Wages that year", section: "prior_return", type: "usd", hint: "1040 line 1a", review: false, required: true },
   { path: "returns.inputs.interest", intake: "prior_return.inputs.interest", label: "Interest that year", section: "prior_return", type: "usd", hint: "1040 line 2b", review: false },
   { path: "returns.inputs.ordinaryDividends", intake: "prior_return.inputs.ordinaryDividends", label: "Dividends that year", section: "prior_return", type: "usd", hint: "1040 line 3b", review: false },
   { path: "returns.inputs.qualifiedDividends", intake: "prior_return.inputs.qualifiedDividends", label: "Qualified dividends that year", section: "prior_return", type: "usd", hint: "1040 line 3a", review: false },
@@ -81,7 +83,7 @@ export const FIELDS: FieldDef[] = [
   { path: "income.otherOrdinary", intake: "income.other", label: "Other ordinary income", section: "income", type: "usd", hint: "K-1, rental, side income", timeline: true },
 
   { path: "equity.companies.0.name", intake: "equity.company", label: "Company", section: "equity", type: "text" },
-  { path: "equity.companies.0.sharePrice", intake: "equity.sharePrice.value", label: "Share value now", section: "equity", type: "usd", hint: "per share; 409A for private companies, market price otherwise" },
+  { path: "equity.companies.0.sharePrice", intake: "equity.sharePrice.value", label: "Share value now", section: "equity", type: "usd", hint: "per share; 409A for private companies, market price otherwise", required: true },
   { path: "equity.companies.0.sharePriceAsOf", intake: "equity.sharePrice.asOf", label: "Share value date", section: "equity", type: "date" },
 
   { path: "home.mortgage.balance", intake: "home.mortgage.balance", label: "Mortgage balance", section: "home", type: "usd", hint: "outstanding principal now (Form 1098 box 2 is the balance at Jan 1)", review: false },
@@ -105,6 +107,7 @@ export const FIELDS: FieldDef[] = [
 export const fieldByPath = (path: string): FieldDef | undefined => FIELDS.find((f) => f.path === path);
 export const fieldByIntake = (intake: string): FieldDef | undefined => FIELDS.find((f) => (f.intake ?? f.path) === intake);
 export const timelineFields = (): FieldDef[] => FIELDS.filter((f) => f.timeline);
+export const requiredFields = (section: IntakeSection): FieldDef[] => FIELDS.filter((f) => f.section === section && f.required);
 
 /** Example value for a field in the prompt template. */
 export function exampleValue(f: FieldDef): string {

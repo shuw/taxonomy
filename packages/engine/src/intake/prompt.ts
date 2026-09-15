@@ -1,4 +1,4 @@
-import { exampleValue, FIELDS, type FieldDef } from "../fields.ts";
+import { exampleValue, FIELDS, requiredFields, type FieldDef } from "../fields.ts";
 import { stringifyProfile } from "../profile.ts";
 import type { Profile } from "../types.ts";
 import type { IntakeSection } from "./apply.ts";
@@ -78,6 +78,15 @@ const STRUCTURED: Partial<Record<IntakeSection, string>> = {
       amtBasis: 0              # per share, FMV at exercise for ISO shares (Form 3921 box 4)`,
 };
 
+const REQUIRED_STRUCTURED: Partial<Record<IntakeSection, string[]>> = {
+  equity: ["every grant: name, type, granted, strike (options), and either a vesting schedule or vested/exercised/unexercised counts", "for shares already owned: quantity, acquisition date, cost basis (and AMT basis for ISO shares, from Form 3921)"],
+  home: ["if there is a mortgage: balance, rate and origination date"],
+};
+
+function requiredList(section: IntakeSection): string[] {
+  return [...requiredFields(section).map((f) => `${f.intake ?? f.path}${f.hint ? ` (${f.hint})` : ""}`), ...(REQUIRED_STRUCTURED[section] ?? [])];
+}
+
 function template(section: IntakeSection): string {
   const scalars = scalarTemplate(section);
   const extra = STRUCTURED[section];
@@ -96,23 +105,37 @@ export interface PromptOptions {
 export function intakePrompt(opts: PromptOptions): string {
   const sections = INTAKE_SECTIONS.filter((s) => opts.sections.includes(s.id));
   const parts: string[] = [];
+  const required = sections.map((s) => ({ s, items: requiredList(s.id) })).filter((x) => x.items.length);
   parts.push(`# Taxonomy intake request
 
-I use Taxonomy, a personal tax-planning tool. It needs a structured snapshot of my situation, assembled from my documents. Please gather the data below and return ONE YAML document in the exact shape shown. Read carefully: the tool validates the result and shows me every number with its source before anything is saved.
+I use Taxonomy, a personal tax-planning tool. It needs a structured snapshot of my situation, assembled from my documents. Work with me in two phases and return ONE YAML document at the end, in the exact shape shown below. The tool validates the result and shows me every number with its source before anything is saved.
+
+## Phase 1: gather, then ask me
+
+1. Read everything you have access to that is relevant: my filed returns, W-2s and 1099s, pay stubs, equity portal pages or exports, Form 3921, Form 1098, 409A notices.
+2. Compare what you found against the required items below. For anything required that you could not find or could not read with confidence, ASK ME before producing the document. Batch your questions in one message. Be specific about what would resolve each one: name the form and line, the portal page, or the number you need me to type. Suggest which document I should upload when that is the quickest path.
+3. Keep asking until every required item is resolved, or I tell you I cannot provide it. Optional items you could not find are simply left out; do not ask about those unless one question covers several.
+4. Only then produce the document.
 
 ## What to gather
 
 ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.`).join("\n")}
 
-## Rules
+## Required before you answer
 
-1. Copy numbers from documents. Never estimate or fill from general knowledge. If a value is not in anything you can read, leave the key out and list its path under \`unknown\`.
-2. For every number you do report, add a \`sources\` entry keyed by its path naming the document and the line, box or page, e.g. \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
-3. Prefer the filed return over a portal, the portal over a pay stub, and a pay stub over memory. When two documents disagree, report the more authoritative one and mention the other in \`questions\`.
+${required.map(({ s, items }) => `**${s.title}**\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
+
+Everything else in the document shape is optional: fill it when a document shows it, leave it out when none does.
+
+## Rules for the document
+
+1. Copy numbers from documents or from my answers. Never estimate or fill from general knowledge. Optional values you could not find are left out and listed under \`unknown\`; required values must be resolved with me first, so \`unknown\` never holds a required item.
+2. For every number you report, add a \`sources\` entry keyed by its path naming the document and the line, box or page, or "answered by user" when I typed it, e.g. \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
+3. Prefer the filed return over a portal, the portal over a pay stub, and a pay stub over memory. When two documents disagree, ask me in phase 1; if I cannot resolve it, report the more authoritative one and note the other in \`questions\`.
 4. Money in whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
 5. Base salary means base pay only. Do not add RSU vests or option exercises to it; the tool adds those from the grants.
 6. For options, report granted, vested, exercised and unexercised as separate counts as the portal shows them. NQSO and NSO are the same type: use \`nso\`. Omit the whole \`spouse\` block when there is no spouse.
-7. Put any question for me in \`questions\`, not in prose. Return only the YAML document, inside one \`\`\`yaml fence, and nothing else.${opts.onlyPaths?.length ? `\n8. This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}. Leave everything else out.` : ""}
+7. \`questions\` is only for things that stayed open after we talked. Return the YAML document inside one \`\`\`yaml fence, and nothing else in that final message.${opts.onlyPaths?.length ? `\n8. This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}. Leave everything else out.` : ""}
 
 ## Document shape
 

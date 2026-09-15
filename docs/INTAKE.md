@@ -182,6 +182,14 @@ questions:
   - "Shareworks shows 12,500 ISO shares exercised in 2025 but no Form 3921 was found. Was the FMV at exercise $16.50?"
 ```
 
+The request is two-phase. The agent first reads what it can, then asks the user, in one
+batched message, for anything *required* it could not find: naming the form and line, the
+portal page, or the number to type, and suggesting which document to upload. Only when every
+required item is resolved (or the user says they cannot provide it) does it produce the
+document. Required items come from the field registry (`required: true`) plus the structured
+essentials (a grant's counts and strike, a mortgage's balance, rate and origination). Optional
+items are simply left out and listed under `unknown`; `questions` holds only what stayed open.
+
 Rules the agent is given:
 
 - Copy numbers from documents; never estimate. Anything not found goes in `unknown`.

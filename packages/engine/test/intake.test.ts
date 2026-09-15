@@ -106,6 +106,11 @@ describe("intake prompt", () => {
     expect(text).toContain("unexercised:");
     expect(text).not.toContain("prior_return:");
     expect(text).toContain("Never estimate");
+    expect(text).toContain("Phase 1: gather, then ask me");
+    expect(text).toContain("## Required before you answer");
+    expect(text).toContain("basics.filingStatus");
+    expect(text).toContain("equity.sharePrice.value");
+    expect(text).not.toContain("prior_return.agi (1040 line 11)");
     expect(text).toContain("sharePrice: 18");
     expect(text).toContain("1040 line 11");
     expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(6);
