@@ -1,11 +1,24 @@
-import { usePersisted } from "../persist.ts";
 import { companyOf, grantFmv, grantsMissingVesting, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd, usdCompact } from "../format.ts";
+import { usePersisted } from "../persist.ts";
+import { sourceOf } from "../sources.ts";
 import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
 import { Section } from "./Section.tsx";
-import { sourceOf } from "./Sidebar.tsx";
 
-interface Props {
+const TYPE_LABEL: Record<GrantType, string> = { iso: "ISO", nso: "NSO", rsu: "RSU" };
+const TYPE_OPTIONS = [{ value: "iso", label: "ISO" }, { value: "nso", label: "NSO / NQSO" }, { value: "rsu", label: "RSU" }] as const;
+const CADENCE_OPTIONS = [{ value: "monthly", label: "monthly" }, { value: "quarterly", label: "quarterly" }, { value: "annual", label: "annual" }] as const;
+
+const hasType = (profile: Profile, t: GrantType) => profile.equity.grants.some((g) => g.type === t);
+
+export function equitySummary(profile: Profile, levers: Levers): string {
+  const { companies, grants } = profile.equity;
+  if (grants.length === 0) return "no grants yet";
+  const exercisedIso = Object.values(levers.exercises.iso).reduce((s, n) => s + n, 0);
+  return [hasType(profile, "iso") && `${shares(exercisedIso)} ISO exercised`, hasType(profile, "rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType(profile, "nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
+}
+
+interface LeversProps {
   profile: Profile;
   levers: Levers;
   crossovers: AmtCrossover[];
@@ -14,24 +27,86 @@ interface Props {
   onFocus: (year: number) => void;
   onExercise: (type: "iso" | "nso", year: number, shares: number) => void;
   edit: (edits: ProfileEdit[]) => void;
+  onOpenFacts: () => void;
 }
 
-const TYPE_LABEL: Record<GrantType, string> = { iso: "ISO", nso: "NSO", rsu: "RSU" };
-const TYPE_OPTIONS = [{ value: "iso", label: "ISO" }, { value: "nso", label: "NSO / NQSO" }, { value: "rsu", label: "RSU" }] as const;
-const CADENCE_OPTIONS = [{ value: "monthly", label: "monthly" }, { value: "quarterly", label: "quarterly" }, { value: "annual", label: "annual" }] as const;
+/** The sidebar's equity block: share prices to play with, and the exercise levers by year. */
+export function EquityLevers({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenFacts }: LeversProps) {
+  const { companies, grants } = profile.equity;
+  const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
+  const setCompany = (i: number, patch: Partial<Company>) => set(["equity", "companies"], companies.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const missing = grantsMissingVesting(profile);
+  const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0];
+  const nsoAvailable = sharesExercisable(profile, levers, "nso", focusYear);
+  const any = hasType(profile, "iso") || hasType(profile, "nso") || hasType(profile, "rsu");
 
-export function EquitySection({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit }: Props) {
+  return (
+    <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={equitySummary(profile, levers)}>
+      {companies.map((c, i) => (
+        <div className="company" key={c.id}>
+          <div className="company-line">
+            <span className="company-name">{c.name}</span>
+            <span className="company-price"><MoneyInput value={c.sharePrice} onChange={(n) => setCompany(i, { sharePrice: n })} decimals={2} suffix="/sh" /></span>
+          </div>
+          <div className="company-sub muted">grows {pct(c.growth ?? profile.assumptions.fmvGrowth)}/yr{c.liquidityYear ? ` · liquidity ${c.liquidityYear}` : ""}</div>
+        </div>
+      ))}
+      {grants.length === 0 && <p className="muted small">No grants yet. Add them under Facts, or fill from documents.</p>}
+      {missing.length > 0 && (
+        <div className="notice">
+          {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule, so nothing more of them vests here. <button type="button" className="link" onClick={onOpenFacts}>Fix in Facts</button>
+        </div>
+      )}
+
+      {any && (
+        <>
+          <div className="subhead">By year <span className="muted">· pick a year, then move its levers</span></div>
+          <div className="year-strip">
+            {years.map((y) => {
+              const iso = levers.exercises.iso[y] ?? 0;
+              const nso = levers.exercises.nso[y] ?? 0;
+              const rsu = hasType(profile, "rsu") ? rsuVesting(profile, y).shares : 0;
+              const parts = [iso > 0 && <span key="i" className="yc-iso">{shares(iso)} ISO</span>, nso > 0 && <span key="n" className="yc-nso">{shares(nso)} NSO</span>, rsu > 0 && <span key="r" className="yc-rsu">{shares(rsu)} RSU</span>].filter(Boolean);
+              return (
+                <button type="button" key={y} className={"year-chip" + (y === focusYear ? " on" : "")} onClick={() => onFocus(y)}>
+                  <span className="yc-year">{y}</span>
+                  {parts.length ? parts : <span className="yc-val">—</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="lever focus">
+            <div className="year">{focusYear}</div>
+            {hasType(profile, "iso") && focusCrossover && (
+              <LeverRow label="ISO" hint="spread goes to AMT" available={focusCrossover.available} value={Math.min(levers.exercises.iso[focusYear] ?? 0, focusCrossover.available)}
+                mark={focusCrossover.available > 0 && focusCrossover.sharesBeforeAmt < focusCrossover.available ? focusCrossover.sharesBeforeAmt : null}
+                over={focusCrossover.overCrossover} sharesBeforeAmt={focusCrossover.sharesBeforeAmt} spread={nextShareSpread(profile, "iso", focusYear)} onChange={(n) => onExercise("iso", focusYear, n)} />
+            )}
+            {hasType(profile, "nso") && (
+              <LeverRow label="NSO" hint="spread is wage income" available={nsoAvailable} value={Math.min(levers.exercises.nso[focusYear] ?? 0, nsoAvailable)} mark={null} over={false} sharesBeforeAmt={0}
+                spread={nextShareSpread(profile, "nso", focusYear)} onChange={(n) => onExercise("nso", focusYear, n)} />
+            )}
+            {hasType(profile, "rsu") && (() => { const v = rsuVesting(profile, focusYear); return (
+              <div className="lever-row">
+                <div className="head"><span className="badge rsu">RSU</span><span className="lever-hint muted">wages the year units settle</span></div>
+                <div className="foot"><span>{v.shares ? `${shares(v.shares)} units settle · ${usdCompact(v.income)} of wages` : "nothing settles this year"}</span></div>
+              </div>
+            ); })()}
+          </div>
+        </>
+      )}
+      <button type="button" className="link" onClick={onOpenFacts}>Grants, schedules and holdings →</button>
+    </Section>
+  );
+}
+
+/** The Facts pane: companies, grants and holdings in full. */
+export function EquityFacts({ profile, years, edit }: { profile: Profile; years: number[]; edit: (edits: ProfileEdit[]) => void }) {
   const { companies, grants } = profile.equity;
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const setGrant = (i: number, patch: Partial<EquityGrant>) => set(["equity", "grants"], grants.map((g, j) => (j === i ? clean({ ...g, ...patch }) : g)));
   const setCompany = (i: number, patch: Partial<Company>) => set(["equity", "companies"], companies.map((c, j) => (j === i ? { ...c, ...patch } : c)));
-  const hasType = (t: GrantType) => grants.some((g) => g.type === t);
-  const exercisedIso = Object.values(levers.exercises.iso).reduce((s, n) => s + n, 0);
   const missing = grantsMissingVesting(profile);
-  const summary = grants.length === 0
-    ? "no grants yet"
-    : [hasType("iso") && `${shares(exercisedIso)} ISO exercised`, hasType("rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType("nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
-
   const addCompany = () => set(["equity", "companies"], [...companies, { id: newId("c", companies.map((c) => c.id)), name: `Company ${companies.length + 1}`, sharePrice: 10 }]);
   const addGrant = (type: GrantType) => {
     const id = newId("g", grants.map((g) => g.id));
@@ -42,11 +117,10 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
     edits.push({ path: ["equity", "grants"], value: [...grants, g] });
     edit(edits);
   };
-  const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0];
-  const nsoAvailable = sharesExercisable(profile, levers, "nso", focusYear);
 
   return (
-    <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={summary}>
+    <>
+      <div className="subhead">Companies</div>
       {companies.map((c, i) => (
         <CompanyRow key={c.id} company={c} profile={profile} years={years}
           hasDoubleTrigger={grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && (g.company ?? companies[0]?.id) === c.id)}
@@ -61,44 +135,6 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
         </div>
       )}
 
-      {(hasType("iso") || hasType("nso") || hasType("rsu")) && (
-        <>
-          <div className="subhead">By year <span className="muted">· pick a year, then move its levers</span></div>
-          <div className="year-strip">
-            {years.map((y) => {
-              const iso = levers.exercises.iso[y] ?? 0;
-              const nso = levers.exercises.nso[y] ?? 0;
-              const rsu = hasType("rsu") ? rsuVesting(profile, y).shares : 0;
-              const parts = [iso > 0 && <span key="i" className="yc-iso">{shares(iso)} ISO</span>, nso > 0 && <span key="n" className="yc-nso">{shares(nso)} NSO</span>, rsu > 0 && <span key="r" className="yc-rsu">{shares(rsu)} RSU</span>].filter(Boolean);
-              return (
-                <button type="button" key={y} className={"year-chip" + (y === focusYear ? " on" : "")} onClick={() => onFocus(y)}>
-                  <span className="yc-year">{y}</span>
-                  {parts.length ? parts : <span className="yc-val">—</span>}
-                </button>
-              );
-            })}
-          </div>
-          <div className="lever focus">
-            <div className="year">{focusYear}</div>
-            {hasType("iso") && focusCrossover && (
-              <LeverRow label="ISO" hint="spread goes to AMT" available={focusCrossover.available} value={Math.min(levers.exercises.iso[focusYear] ?? 0, focusCrossover.available)}
-                mark={focusCrossover.available > 0 && focusCrossover.sharesBeforeAmt < focusCrossover.available ? focusCrossover.sharesBeforeAmt : null}
-                over={focusCrossover.overCrossover} sharesBeforeAmt={focusCrossover.sharesBeforeAmt} spread={nextShareSpread(profile, "iso", focusYear)} onChange={(n) => onExercise("iso", focusYear, n)} />
-            )}
-            {hasType("nso") && (
-              <LeverRow label="NSO" hint="spread is wage income" available={nsoAvailable} value={Math.min(levers.exercises.nso[focusYear] ?? 0, nsoAvailable)} mark={null} over={false} sharesBeforeAmt={0}
-                spread={nextShareSpread(profile, "nso", focusYear)} onChange={(n) => onExercise("nso", focusYear, n)} />
-            )}
-            {hasType("rsu") && (() => { const v = rsuVesting(profile, focusYear); return (
-              <div className="lever-row">
-                <div className="head"><span className="badge rsu">RSU</span><span className="lever-hint muted">wages the year units settle</span></div>
-                <div className="foot"><span>{v.shares ? `${shares(v.shares)} units settle · ${usdCompact(v.income)} of wages` : "nothing settles this year"}</span></div>
-              </div>
-            ); })()}
-          </div>
-        </>
-      )}
-
       <div className="subhead">Grants</div>
       {grants.map((g, i) => <GrantRow key={g.id} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
       <div className="add-grant">
@@ -106,8 +142,8 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
       </div>
 
       {(profile.equity.holdings?.length ?? 0) > 0 && (
-        <details className="fold">
-          <summary>Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}</summary>
+        <>
+          <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}</div>
           <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
           <div className="vest-rows">
             {profile.equity.holdings!.map((h) => (
@@ -118,56 +154,43 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
               </div>
             ))}
           </div>
-        </details>
+        </>
       )}
-    </Section>
+    </>
   );
 }
 
 function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removable, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; removable: boolean; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
-  const [open, setOpen] = usePersisted<boolean>(`open.company.${c.id}`, false, (v): v is boolean => typeof v === "boolean");
   const source = sourceOf(profile, ["companies", c.id, "sharePrice"]);
   const pathEntries = Object.entries(c.pricePath ?? {}).map(([y, p]) => [Number(y), p] as const).sort((a, b) => a[0] - b[0]);
   const updatePath = (list: (readonly [number, number])[]) => onChange({ pricePath: list.length ? Object.fromEntries(list) : undefined });
-  const sub = [
-    c.sharePriceAsOf && `as of ${c.sharePriceAsOf}`,
-    `grows ${pct(c.growth ?? profile.assumptions.fmvGrowth)}/yr`,
-    pathEntries.length > 0 && pathEntries.map(([y, p]) => `${usd(p)} in ${y}`).join(", "),
-    hasDoubleTrigger && `liquidity ${c.liquidityYear ?? "not in plan"}`,
-  ].filter(Boolean).join(" · ");
   return (
-    <div className={"company" + (open ? " open" : "")}>
+    <div className="company open">
       <div className="company-line">
         <input className="grant-name" value={c.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Company name" />
         <span className="company-price"><MoneyInput value={c.sharePrice} onChange={(n) => onChange({ sharePrice: n })} decimals={2} suffix="/sh" /></span>
         {source && <span className="src" title={source}>source</span>}
-        <button type="button" className="link" onClick={() => setOpen((o) => !o)}>{open ? "less" : "more"}</button>
+        {removable && <button type="button" className="link danger" onClick={onRemove}>Remove</button>}
       </div>
-      {!open && <div className="company-sub muted">{sub}</div>}
-      {open && (
-        <div className="company-more">
-          <div className="row2">
-            <Field label="Price as of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => onChange({ sharePriceAsOf: e.target.value || undefined })} /></span></Field>
-            <Field label="Growth" hint={c.growth === undefined ? `default ${pct(profile.assumptions.fmvGrowth)}` : "/yr"}><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => onChange({ growth: n })} /></Field>
-          </div>
+      <div className="company-more">
+        <div className="row3">
+          <Field label="Price as of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => onChange({ sharePriceAsOf: e.target.value || undefined })} /></span></Field>
+          <Field label="Growth" hint={c.growth === undefined ? `default ${pct(profile.assumptions.fmvGrowth)}` : "/yr"}><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => onChange({ growth: n })} /></Field>
           {hasDoubleTrigger && (
-            <Field label="Liquidity event" hint="the year double-trigger RSUs settle; blank means none in the plan" wide>
+            <Field label="Liquidity event" hint="settles double-trigger RSUs">
               <Select options={[{ value: "", label: "none in the plan" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} value={c.liquidityYear ? String(c.liquidityYear) : ""} onChange={(v) => onChange({ liquidityYear: v ? Number(v) : undefined })} />
             </Field>
           )}
-          {pathEntries.map(([y, p], i) => (
-            <div className="row3" key={i}>
-              <Field label="Known price in"><NumberInput value={y} onChange={(n) => updatePath(pathEntries.map((e, j) => (j === i ? [Math.round(n), e[1]] as const : e)))} grouping={false} /></Field>
-              <Field label="Per share"><MoneyInput value={p} onChange={(n) => updatePath(pathEntries.map((e, j) => (j === i ? [e[0], n] as const : e)))} decimals={2} /></Field>
-              <button type="button" className="link danger" style={{ alignSelf: "end", paddingBottom: 8 }} onClick={() => updatePath(pathEntries.filter((_, j) => j !== i))}>Remove</button>
-            </div>
-          ))}
-          <div className="add-grant">
-            <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
-            {removable && <button type="button" className="link danger" onClick={onRemove}>Remove company</button>}
-          </div>
         </div>
-      )}
+        {pathEntries.map(([y, p], i) => (
+          <div className="row3" key={i}>
+            <Field label="Known price in"><NumberInput value={y} onChange={(n) => updatePath(pathEntries.map((e, j) => (j === i ? [Math.round(n), e[1]] as const : e)))} grouping={false} /></Field>
+            <Field label="Per share"><MoneyInput value={p} onChange={(n) => updatePath(pathEntries.map((e, j) => (j === i ? [e[0], n] as const : e)))} decimals={2} /></Field>
+            <button type="button" className="link danger" style={{ alignSelf: "end", paddingBottom: 8 }} onClick={() => updatePath(pathEntries.filter((_, j) => j !== i))}>Remove</button>
+          </div>
+        ))}
+        <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
+      </div>
     </div>
   );
 }

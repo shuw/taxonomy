@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
+import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
 import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
@@ -105,7 +106,11 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [intakeOpen, setIntakeOpenState] = useState(() => location.hash === "#intake");
-  const setIntakeOpen = (v: boolean) => { setIntakeOpenState(v); setHash(v ? "intake" : null); };
+  const [factsTab, setFactsTabState] = useState<FactTab | null>(() => { const m = /^#facts(?:\/(\w+))?$/.exec(location.hash); return m ? (isFactTab(m[1]) ? m[1] : "you") : null; });
+  const [lastFactsTab, setLastFactsTab] = usePersisted<FactTab>("factsTab", "you", isFactTab);
+  const openFacts = (tab?: FactTab) => { const t = tab ?? lastFactsTab; setFactsTabState(t); setLastFactsTab(t); setHash(`facts/${t}`); };
+  const closeFacts = () => { setFactsTabState(null); setHash(null); };
+  const setIntakeOpen = (v: boolean) => { setIntakeOpenState(v); if (v) setFactsTabState(null); setHash(v ? "intake" : null); };
   const select = (sel: Selection | null) => setSelected(sel);
 
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
@@ -136,14 +141,14 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
         <ThemeToggle />
-        <button type="button" className="btn" onClick={() => setIntakeOpen(true)}>Fill from documents</button>
+        <button type="button" className="btn" onClick={() => openFacts()}>Facts</button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
           : <button type="button" className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}
       </header>
 
       <aside className="sidebar">
-        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenIntake={() => setIntakeOpen(true)} />
+        <Sidebar profile={profile} levers={levers} crossovers={crossovers} years={years} focusYear={focusYear} onFocus={setFocusYear} onExercise={setExercise} edit={edit} onOpenFacts={openFacts} />
       </aside>
 
       <main className="main">
@@ -182,6 +187,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={select} onClose={() => setSelected(null)} />
         </aside>
       )}
+      {factsTab && <FactsModal profile={profile} years={years} tab={factsTab} onTab={openFacts} edit={edit} onClose={closeFacts} onOpenIntake={() => setIntakeOpen(true)} />}
       {intakeOpen && <IntakeModal mode="fill" profile={profile} onApply={edit} onClose={() => setIntakeOpen(false)} />}
     </div>
   );
