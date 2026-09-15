@@ -27,14 +27,15 @@ export interface FieldDef {
 }
 
 const basics = (f: Omit<FieldDef, "section">): FieldDef => ({ section: "basics", ...f });
+const pay = (f: Omit<FieldDef, "section">): FieldDef => ({ section: "pay", ...f });
 const person = (who: "self" | "spouse"): FieldDef[] => {
   const L = who === "self" ? "Your" : "Spouse";
   return [
-    basics({ path: `people.${who}.name`, intake: `people.${who}.name`, label: `${L} name`, type: "text" }),
-    basics({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay only; RSU vests and option exercises are added by the tool", timeline: true, required: who === "self" }),
-    basics({ path: `people.${who}.bonus`, intake: `people.${who}.expectedBonus`, label: `${L} expected bonus`, type: "usd", timeline: true }),
-    basics({ path: `people.${who}.pretaxContributions`, intake: `people.${who}.pretaxContributions`, label: `${L} pre-tax contributions`, type: "usd", hint: "401(k), HSA and similar for the year", timeline: true }),
-    basics({ path: `people.${who}.withholdingToDate`, intake: `people.${who}.withholdingToDate`, label: `${L} withholding to date`, type: "usd", hint: "federal income tax withheld so far this year" }),
+    pay({ path: `people.${who}.name`, intake: `people.${who}.name`, label: `${L} name`, type: "text" }),
+    pay({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay from the latest pay stub or offer letter; not W-2 box 1, which includes equity income", timeline: true, required: who === "self" }),
+    pay({ path: `people.${who}.bonus`, intake: `people.${who}.expectedBonus`, label: `${L} expected bonus`, type: "usd", hint: "target bonus for the year if the offer letter or pay stub shows it", timeline: true }),
+    pay({ path: `people.${who}.pretaxContributions`, intake: `people.${who}.pretaxContributions`, label: `${L} pre-tax contributions`, type: "usd", hint: "401(k), HSA and similar for the year; W-2 box 12 codes D and W, or pay stub YTD annualized", timeline: true }),
+    pay({ path: `people.${who}.withholdingToDate`, intake: `people.${who}.withholdingToDate`, label: `${L} withholding to date`, type: "usd", hint: "federal income tax withheld so far this year, from the pay stub" }),
   ];
 };
 
@@ -42,6 +43,7 @@ export const FIELDS: FieldDef[] = [
   basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], timeline: true, required: true }),
   basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code", timeline: true, required: true }),
   basics({ path: "plan.startYear", intake: "basics.planStartYear", label: "First plan year", type: "year", hint: "first year on screen; usually the current year" }),
+  pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", hint: "count of dependents claimed on the last return" }),
   ...person("self"),
   ...person("spouse"),
 

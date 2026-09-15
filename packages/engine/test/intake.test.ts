@@ -130,8 +130,8 @@ questions:
 
 describe("intake prompt", () => {
   test("includes the chosen sections, the rules, and the current profile", () => {
-    const text = intakePrompt({ sections: ["basics", "equity"], profile });
-    expect(text).toContain("Do not ask about them");
+    const text = intakePrompt({ sections: ["pay", "equity"], profile });
+    expect(text).toContain("do not ask about those");
     expect(text).toContain("taxonomy_intake: 1");
     expect(text).toContain("baseSalary:");
     expect(text).toContain("unexercised:");
@@ -139,16 +139,17 @@ describe("intake prompt", () => {
     expect(text).toContain("never estimate");
     expect(text).toContain("## How we'll work");
     expect(text).toContain("Required, per section");
-    expect(text).toContain("basics.filingStatus");
+    expect(text).toContain("people.self.baseSalary");
     expect(text).toContain("equity.sharePrice.value");
     expect(text).toContain("never exercised");
     expect(text).toContain("## What the tool already has");
+    expect(text).toContain("no bonus");
     expect(text).not.toContain("scenarios:");
     expect(text).not.toContain("prior_return.agi (1040 line 11)");
     expect(text).toContain("sharePrice: 18");
     expect(text).toContain("granted: 40000");
     expect(text).toContain("1040 line 11");
-    expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(6);
+    expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(7);
   });
   test("a follow-up restricts to the listed paths", () => {
     const text = intakePrompt({ sections: ["basics"], onlyPaths: ["people.self.expectedBonus"] });

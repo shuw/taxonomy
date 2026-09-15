@@ -181,10 +181,11 @@ questions:
   - "Shareworks shows 12,500 ISO shares exercised in 2025 but no Form 3921 was found. Was the FMV at exercise $16.50?"
 ```
 
-Basics are asked in the app, not of the agent: filing status, state, dependents, salaries,
-bonus, pre-tax contributions and the first plan year are a short form at the top of the
-new-profile dialog (and fields in the sidebar afterward). The request defaults to the four
-document-backed sections and tells the agent not to re-ask what the profile already holds.
+Only filing status, state and the first plan year are asked in the app (a three-field form at
+the top of the new-profile dialog). Pay and household (salary, bonus, pre-tax contributions,
+withholding, dependents) come from pay stubs, W-2s and the return header, so they are a
+document section like the rest. The request defaults to the five document-backed sections and
+tells the agent not to re-ask filing status and state.
 
 On the agent's side the request reads as a working agreement, not a spec: search connected
 drives and mail for named documents first, report what was found and list what is still

@@ -5,7 +5,7 @@ import { getPath } from "../timeline.ts";
 import type { Company, EquityGrant, FollowUp, Holding, PriorReturn, Profile } from "../types.ts";
 import type { IntakeDocument, IntakeGrant, IntakeQuestion } from "./schema.ts";
 
-export type IntakeSection = "basics" | "prior_return" | "income" | "equity" | "home" | "assumptions";
+export type IntakeSection = "basics" | "pay" | "prior_return" | "income" | "equity" | "home" | "assumptions";
 
 export interface IntakeChange {
   /** Stable id for selection. */
@@ -57,6 +57,12 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
     const proposed = getPath(doc, f.intake);
     if (proposed === undefined) continue;
     if (f.path.startsWith("equity.companies.0.") && profile.equity.companies.length === 0) continue; // handled by the companies row
+    if (f.path === "filer.dependents") {
+      const n = typeof proposed === "number" ? Math.max(0, Math.round(proposed)) : 0;
+      const cur = profile.filer.dependents?.length ?? 0;
+      add({ section: f.section, label: f.label, path: ["filer", "dependents"], current: profile.filer.dependents === undefined ? undefined : cur, proposed: n === cur ? cur : n, source: src(f.intake), format: "number", sourceKey: f.path });
+      continue;
+    }
     add({ section: f.section, label: f.label, path: toPath(f.path), current: getPath(profile, f.path), proposed, source: src(f.intake), format: f.type, sourceKey: f.path });
   }
 
@@ -169,7 +175,11 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
     edits.push({ path: ["returns"], value: returns });
   }
   for (const c of changes) {
-    if (c.format !== "grant" && c.format !== "priorReturn") edits.push({ path: c.path, value: c.proposed });
+    if (c.id === "filer.dependents") {
+      const n = typeof c.proposed === "number" ? c.proposed : 0;
+      const existing = profile.filer.dependents ?? [];
+      edits.push({ path: ["filer", "dependents"], value: existing.length >= n ? existing.slice(0, n) : [...existing, ...Array.from({ length: n - existing.length }, () => ({}))] });
+    } else if (c.format !== "grant" && c.format !== "priorReturn") edits.push({ path: c.path, value: c.proposed });
     if (c.source) edits.push({ path: ["sources", c.sourceKey], value: c.source });
   }
   // A spouse needs a salary to exist; create the object when any spouse field arrives.

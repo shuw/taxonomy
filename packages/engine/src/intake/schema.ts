@@ -15,6 +15,7 @@ export interface IntakeDocument {
     dependents?: number;
     planStartYear?: number;
   };
+  pay?: { dependents?: number };
   people?: { self?: IntakePerson; spouse?: IntakePerson };
   prior_return?: IntakePriorReturn;
   income?: {
@@ -191,6 +192,8 @@ export function parseIntake(text: string): IntakeParse {
     if (fsRaw !== undefined && !fs) problems.push({ path: "basics.filingStatus", message: `must be one of ${FILING.join(", ")}` });
     doc.basics = { filingStatus: fs, state: str("basics.state", basics.state)?.toUpperCase(), dependents: num("basics.dependents", basics.dependents, { min: 0 }), planStartYear: num("basics.planStartYear", basics.planStartYear, { min: 2025, max: 2100 }) };
   }
+  const payRaw = obj("pay", d.pay);
+  if (payRaw) doc.pay = { dependents: num("pay.dependents", payRaw.dependents, { min: 0 }) };
   const people = obj("people", d.people);
   if (people) doc.people = { self: person("people.self", people.self), spouse: person("people.spouse", people.spouse) };
 
@@ -354,7 +357,7 @@ export function parseIntake(text: string): IntakeParse {
       : [];
   }
 
-  const known = new Set(["taxonomy_intake", "as_of", "basics", "people", "prior_return", "income", "equity", "home", "deductions", "assumptions", "sources", "unknown", "questions"]);
+  const known = new Set(["taxonomy_intake", "as_of", "basics", "pay", "people", "prior_return", "income", "equity", "home", "deductions", "assumptions", "sources", "unknown", "questions"]);
   for (const k of Object.keys(d)) if (!known.has(k)) warnings.push({ path: k, message: "not a known section; ignored" });
 
   return { doc: problems.length ? null : doc, problems, warnings };

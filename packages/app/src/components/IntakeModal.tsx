@@ -1,38 +1,32 @@
 import { useMemo, useState } from "react";
 import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
-import { FILING_OPTIONS, Field, MoneyInput, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { FILING_OPTIONS, Field, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
 interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
 type Props = FillProps | CreateProps;
 
-/** The facts a person knows without looking anything up. */
+/** The facts a person knows without looking anything up; pay and household come from documents. */
 interface Basics {
   name: string;
   filingStatus: FilingStatus;
   state: string;
-  salary: number;
-  bonus: number;
-  pretax: number;
-  spouseSalary: number;
-  dependents: string;
   startYear: number;
 }
 
 const thisYear = () => Math.max(2026, new Date().getFullYear());
 
 function profileTextFrom(b: Basics): string {
-  const dependents = b.dependents.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}));
   return stringifyProfile({
     version: 3, name: b.name.trim() || "New profile",
-    filer: { filingStatus: b.filingStatus, state: b.state, dependents },
+    filer: { filingStatus: b.filingStatus, state: b.state, dependents: [] },
     plan: { startYear: b.startYear, years: 6 },
     assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
     people: {
-      self: { salary: b.salary, bonus: b.bonus || undefined, pretaxContributions: b.pretax || undefined },
-      spouse: b.filingStatus === "mfj" || b.filingStatus === "mfs" ? { salary: b.spouseSalary } : undefined,
+      self: { salary: 0 },
+      spouse: b.filingStatus === "mfj" || b.filingStatus === "mfs" ? { salary: 0 } : undefined,
     },
     income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
     timeline: [], scenarios: { default: { exercises: { iso: {}, nso: {} } } }, activeScenario: "default",
@@ -41,7 +35,7 @@ function profileTextFrom(b: Basics): string {
 
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
-  const [basics, setBasics] = useState<Basics>({ name: "Me", filingStatus: "single", state: "WA", salary: 0, bonus: 0, pretax: 0, spouseSalary: 0, dependents: "", startYear: thisYear() });
+  const [basics, setBasics] = useState<Basics>({ name: "Me", filingStatus: "single", state: "WA", startYear: thisYear() });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
@@ -71,7 +65,7 @@ export function IntakeModal(props: Props) {
         <header className="modal-head">
           <div>
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "Answer what you know by heart. Your agent reads the rest from your documents; you approve every number." : "Your agent reads the documents; you approve every number."}</div>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Three facts from you; your agent reads the rest from your documents." : "Your agent reads the documents; you approve every number."}</div>
           </div>
           {create && !onClose && <ThemeToggle />}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
@@ -83,13 +77,6 @@ export function IntakeModal(props: Props) {
               <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
               <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={basics.filingStatus} onChange={(v) => set("filingStatus", v)} /></Field>
               <Field label="State"><Select options={STATE_OPTIONS} value={basics.state} onChange={(v) => set("state", v)} /></Field>
-              <Field label="Dependents" hint="birth years, if any"><span className="input-wrap"><input value={basics.dependents} onChange={(e) => set("dependents", e.target.value)} placeholder="e.g. 2019, 2022" /></span></Field>
-              <Field label="Your base salary" hint="320k works"><MoneyInput value={basics.salary} onChange={(n) => set("salary", n)} placeholder="0" /></Field>
-              {married
-                ? <Field label="Spouse base salary"><MoneyInput value={basics.spouseSalary} onChange={(n) => set("spouseSalary", n)} placeholder="0" /></Field>
-                : <Field label="Expected bonus"><MoneyInput value={basics.bonus} onChange={(n) => set("bonus", n)} /></Field>}
-              {married && <Field label="Expected bonus"><MoneyInput value={basics.bonus} onChange={(n) => set("bonus", n)} /></Field>}
-              <Field label="Pre-tax contributions" hint="401(k), HSA"><MoneyInput value={basics.pretax} onChange={(n) => set("pretax", n)} /></Field>
               <Field label="First plan year"><NumberInput value={basics.startYear} onChange={(n) => set("startYear", Math.max(2026, Math.round(n)))} min={2026} grouping={false} /></Field>
             </div>
           </div>
@@ -154,7 +141,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       <div className="two-col">
         <div className="col">
           <div className="col-title"><span className="step-no">1</span> {create ? "Then copy this into your agent" : "Copy this into your agent"}</div>
-          <p className="muted small">It asks for what lives in documents: last year's return, 1099s, your equity portal, Form 3921, Form 1098. Any agent that can see those works: Claude with your Drive or mail, a CLI agent pointed at a folder, ChatGPT with uploads.</p>
+          <p className="muted small">It asks for what lives in documents: your pay stub, last year's return, 1099s, your equity portal, Form 3921, Form 1098. Any agent that can see those works: Claude with your Drive or mail, a CLI agent pointed at a folder, ChatGPT with uploads.</p>
           <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
           <div className="modal-actions">
             <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
