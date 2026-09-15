@@ -25,8 +25,8 @@ export function FollowUps({ profile, edit }: { profile: Profile; edit: (edits: P
   const confirm = open.filter((f) => f.kind !== "missing");
   return (
     <section className="card followups">
-      <h2>{missing.length ? "A few things to fill in" : "Worth a second look"}</h2>
-      <div className="sub">{missing.length ? "Your documents didn't say. Answer here and the picture updates." : "Your agent used its judgment on these. The numbers are already in; check them in the sidebar and tick each one off."}</div>
+      <h2>{missing.length ? "A few things to fill in" : confirm.length ? "Worth a second look" : "Probably missing"}</h2>
+      <div className="sub">{missing.length ? "Your documents didn't say. Answer here and the picture updates." : confirm.length ? "Your agent used its judgment on these. The numbers are already in; check them in the sidebar and tick each one off." : "Compared with your last return, these look left out. One click fills each in with last year's figure; dismiss the ones that no longer apply."}</div>
       {missing.length > 0 && <ul className="missing">{missing.map((f) => <MissingRow key={f.id} f={f} profile={profile} onAnswer={(edits) => resolve(f.id, edits)} />)}</ul>}
       {confirm.length > 0 && (
         <ul>
@@ -42,7 +42,7 @@ export function FollowUps({ profile, edit }: { profile: Profile; edit: (edits: P
       )}
       {gaps.length > 0 && (
         <>
-          <div className="subhead" style={{ marginTop: open.length ? 12 : 0 }}>Probably missing</div>
+          {open.length > 0 && <div className="subhead" style={{ marginTop: 12 }}>Probably missing</div>}
           <ul className="gaps">
             {gaps.map((g) => (
               <li key={g.id} className="gap-row">

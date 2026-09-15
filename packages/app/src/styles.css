@@ -375,7 +375,6 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .inline-form { display: flex; align-items: center; gap: 4px; }
 .inline-form .input-wrap { width: 160px; }
 .timeline-row .grant-name { font-weight: 400; font-size: 13px; }
-.price-path { display: flex; flex-direction: column; gap: 6px; }
 .choose-copy { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); gap: 18px; align-items: start; }
 @media (max-width: 900px) { .choose-copy { grid-template-columns: 1fr; } }
 .section-list.one-col { grid-template-columns: 1fr; }
@@ -438,3 +437,31 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .gap-actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .switch { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; font-size: 13px; line-height: 1.45; }
 .switch input { margin-top: 3px; accent-color: var(--accent); }
+
+/* Compact equity ------------------------------------------------------------------- */
+.year-strip { display: flex; gap: 4px; margin: 2px 0 6px; }
+.year-chip { position: relative; flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--surface-2); border-radius: 9px; padding: 5px 4px 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px; overflow: hidden; }
+.year-chip.on { border-color: var(--accent); background: var(--focus); }
+.yc-year { font: 700 12px/1.2 var(--display); }
+.yc-val { font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yc-mark { position: absolute; bottom: 0; width: 2px; height: 5px; background: var(--series-amt); transform: translateX(-1px); }
+.company { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.company-line { display: flex; align-items: center; gap: 8px; }
+.company-line .grant-name { flex: 1; min-width: 0; }
+.company-price { width: 150px; }
+.company-price .input-wrap { background: var(--surface); }
+.company-sub { font-size: 12.5px; }
+.company-more { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; }
+.company-more .input-wrap { background: var(--surface); }
+.grant { padding: 0; gap: 0; overflow: hidden; }
+.grant.warn { box-shadow: inset 3px 0 0 var(--series-amt); }
+.grant-line { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: none; border: 0; text-align: left; cursor: pointer; }
+.grant-line:hover { background: var(--surface-3); }
+.grant-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.grant-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grant-summary { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grant-line .badge { flex: none; }
+.grant-line .chev { flex: none; color: var(--muted); transition: transform .15s ease; }
+.grant.open .grant-line .chev { transform: rotate(180deg); }
+.grant-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 12px; }
+.fold summary { cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
