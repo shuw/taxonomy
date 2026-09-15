@@ -17,7 +17,7 @@ export interface IntakeChange {
   proposed: unknown;
   source?: string;
   status: "new" | "changed" | "same";
-  format: "usd" | "number" | "pct" | "text" | "date" | "year" | "enum" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn" | "companies";
+  format: "usd" | "number" | "pct" | "text" | "date" | "year" | "enum" | "bool" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn" | "companies";
   note?: string;
   /** Key under `sources` when applied (grants and holdings use ids). */
   sourceKey: string;

@@ -150,6 +150,21 @@ export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus
           <Field label="Inflation" hint="indexes brackets"><PercentInput value={a.inflation} onChange={(n) => set(["assumptions", "inflation"], n)} /></Field>
         </div>
         <Field label="Bracket rate shift" hint="added to every rate; put it on the timeline to start in a later year" wide><PercentInput value={a.bracketRateDelta ?? 0} onChange={(n) => set(["assumptions", "bracketRateDelta"], n || undefined)} /></Field>
+        {profile.filer.state === "WA" && (
+          <>
+            <div className="subhead">Washington</div>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains excise tax</strong> · 7% on long-term gains over about $285k. Law since 2022.</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>2.9% surtax</strong> · on gains over $1M. Law since 2025.</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waHighEarnerTax?.enabled === true} onChange={(e) => set(["assumptions", "state", "waHighEarnerTax"], e.target.checked ? { enabled: true, rate: a.state?.waHighEarnerTax?.rate ?? 0.099, threshold: a.state?.waHighEarnerTax?.threshold ?? 1_000_000 } : { ...(a.state?.waHighEarnerTax ?? { rate: 0.099, threshold: 1_000_000 }), enabled: false })} /><span><strong>Proposed high-earner income tax</strong> · not law. Set it to the bill you are watching.</span></label>
+            {a.state?.waHighEarnerTax?.enabled && (
+              <div className="row2">
+                <Field label="Rate"><PercentInput value={a.state.waHighEarnerTax.rate} onChange={(n) => set(["assumptions", "state", "waHighEarnerTax", "rate"], n)} /></Field>
+                <Field label="On AGI over"><MoneyInput value={a.state.waHighEarnerTax.threshold} onChange={(n) => set(["assumptions", "state", "waHighEarnerTax", "threshold"], n)} /></Field>
+              </div>
+            )}
+            <p className="muted small">Any of these can start in a later year from "Changes over time".</p>
+          </>
+        )}
       </Section>
     </div>
   );
@@ -160,7 +175,9 @@ const labelOf = (path: string) => timelineFields().find((f) => f.path === path)?
 function TimelineRow({ entry, years, onChange, onRemove }: { entry: TimelineEntry; years: number[]; onChange: (e: TimelineEntry) => void; onRemove: () => void }) {
   const fields = timelineFields();
   const f: FieldDef | undefined = fields.find((x) => x.path === entry.path);
-  const valueInput = f?.type === "enum"
+  const valueInput = f?.type === "bool"
+    ? <Select options={[{ value: "true", label: "on" }, { value: "false", label: "off" }]} value={String(entry.value === true)} onChange={(v) => onChange({ ...entry, value: v === "true" })} />
+    : f?.type === "enum"
     ? <Select options={(f.enum ?? []).map((v) => ({ value: v, label: v }))} value={String(entry.value)} onChange={(v) => onChange({ ...entry, value: v })} />
     : f?.type === "pct"
       ? <PercentInput value={Number(entry.value) || 0} onChange={(n) => onChange({ ...entry, value: n })} />
@@ -171,7 +188,7 @@ function TimelineRow({ entry, years, onChange, onRemove }: { entry: TimelineEntr
     <div className="grant timeline-row">
       <div className="row3">
         <Field label="From"><Select options={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(entry.year)} onChange={(y) => onChange({ ...entry, year: Number(y) })} /></Field>
-        <Field label="What changes"><Select options={fields.map((x) => ({ value: x.path, label: x.label }))} value={entry.path} onChange={(p) => onChange({ ...entry, path: p, value: fields.find((x) => x.path === p)?.type === "enum" ? fields.find((x) => x.path === p)!.enum![0] : 0 })} /></Field>
+        <Field label="What changes"><Select options={fields.map((x) => ({ value: x.path, label: x.label }))} value={entry.path} onChange={(p) => { const t = fields.find((x) => x.path === p)?.type; onChange({ ...entry, path: p, value: t === "enum" ? fields.find((x) => x.path === p)!.enum![0] : t === "bool" ? true : 0 }); }} /></Field>
         <Field label="To">{valueInput}</Field>
       </div>
       <div className="grant-head">

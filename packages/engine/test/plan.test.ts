@@ -91,6 +91,21 @@ describe("mortgage, carryforwards and calibration", () => {
   });
 });
 
+describe("Washington switches", () => {
+  test("capital gains tax and surtax can be turned off; the proposed high-earner tax can be turned on", () => {
+    const gains = { ...profile, income: { ...profile.income, longTermGains: 2_000_000 } };
+    const on = runPlan(gains).years[0]!;
+    expect(on.lines.stateCapitalGainsTax!.value).toBeGreaterThan(0.07 * 1_700_000);
+    const noSurtax = runPlan({ ...gains, assumptions: { ...gains.assumptions, state: { waCapitalGainsSurtax: false } } }).years[0]!;
+    expect(noSurtax.lines.stateCapitalGainsTax!.value).toBeCloseTo(on.lines.stateCapitalGainsTax!.value - 0.029 * (2_000_000 - 285_000 - 1_000_000), 0);
+    const off = runPlan({ ...gains, assumptions: { ...gains.assumptions, state: { waCapitalGainsTax: false } } }).years[0]!;
+    expect(off.lines.stateTax!.value).toBe(0);
+    const he = runPlan({ ...profile, assumptions: { ...profile.assumptions, state: { waHighEarnerTax: { enabled: true, rate: 0.099, threshold: 250_000 } } } }).years[0]!;
+    expect(he.lines.stateHighEarnerTax!.value).toBeCloseTo(0.099 * (he.lines.agi!.value - 250_000));
+    expect(he.lines.stateTax!.value).toBeCloseTo(he.lines.stateHighEarnerTax!.value);
+  });
+});
+
 describe("counts read mid-year", () => {
   test("portal counts as of a date do not double count that year's vests", () => {
     // 48 monthly vests from 2024-10-02, 12-month cliff; 24 vested as of 2026-10-01 per the portal.

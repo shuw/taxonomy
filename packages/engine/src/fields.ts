@@ -1,6 +1,6 @@
 import type { IntakeSection } from "./intake/apply.ts";
 
-export type FieldType = "usd" | "pct" | "number" | "text" | "date" | "enum" | "year";
+export type FieldType = "usd" | "pct" | "number" | "text" | "date" | "enum" | "year" | "bool";
 
 /**
  * One scalar the profile stores and the intake asks for. This registry is the single source
@@ -106,6 +106,11 @@ export const FIELDS: FieldDef[] = [
   { path: "assumptions.wageGrowth", intake: "assumptions.wageGrowth", label: "Wage growth", section: "assumptions", type: "pct", timeline: true },
   { path: "assumptions.inflation", intake: "assumptions.inflation", label: "Inflation", section: "assumptions", type: "pct", timeline: true },
   { path: "assumptions.bracketRateDelta", label: "Bracket rate shift", section: "assumptions", type: "pct", hint: "added to every ordinary bracket rate", timeline: true },
+  { path: "assumptions.state.waCapitalGainsTax", label: "WA capital gains tax (on/off)", section: "assumptions", type: "bool", timeline: true },
+  { path: "assumptions.state.waCapitalGainsSurtax", label: "WA 2.9% surtax over $1M (on/off)", section: "assumptions", type: "bool", timeline: true },
+  { path: "assumptions.state.waHighEarnerTax.enabled", label: "WA proposed high-earner tax (on/off)", section: "assumptions", type: "bool", timeline: true },
+  { path: "assumptions.state.waHighEarnerTax.rate", label: "WA proposed high-earner tax rate", section: "assumptions", type: "pct", timeline: true },
+  { path: "assumptions.state.waHighEarnerTax.threshold", label: "WA proposed high-earner tax threshold", section: "assumptions", type: "usd", timeline: true },
 ];
 
 export const fieldByPath = (path: string): FieldDef | undefined => FIELDS.find((f) => f.path === path);
@@ -117,6 +122,7 @@ export const requiredFields = (section: IntakeSection): FieldDef[] => FIELDS.fil
 export function exampleValue(f: FieldDef): string {
   switch (f.type) {
     case "usd": case "number": return "0";
+    case "bool": return "false";
     case "pct": return "0.0";
     case "year": return String(new Date().getFullYear());
     case "date": return `${new Date().getFullYear()}-01-01`;

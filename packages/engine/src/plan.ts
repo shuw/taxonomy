@@ -92,7 +92,7 @@ export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   const ledger = new Ledger();
   const params = federalParams(inputs.year, profile.assumptions.inflation, inputs.bracketRateDelta);
   computeFederal(inputs, params, ledger);
-  stateModule(inputs.state).compute(inputs, ledger, profile.assumptions.inflation);
+  stateModule(inputs.state).compute(inputs, ledger, { inflation: profile.assumptions.inflation, policy: profile.assumptions.state ?? {}, agi: ledger.get("agi") });
   const total = ledger.put("totalTax", "Total tax", ledger.get("federalTotal") + ledger.get("stateTax"), "Federal + state.", ["federalTotal", "stateTax"]);
   const agi = ledger.get("agi");
   ledger.put("effectiveRate", "Effective rate", agi > 0 ? total / agi : 0, `Total tax as a share of AGI (${usd(agi)}). ISO bargain element is not in AGI, so an exercise year can look expensive by this measure.`, ["totalTax", "agi"], "rate");

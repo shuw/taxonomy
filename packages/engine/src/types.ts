@@ -210,6 +210,17 @@ export interface Assumptions {
   fmvGrowth: number;
   /** Added to every ordinary bracket rate (0.02 raises 37% to 39%). Put it on the timeline to model a future law change. */
   bracketRateDelta?: number;
+  /** State-level switches: enacted taxes you may want to turn off to see their effect, and proposals you may want to turn on. */
+  state?: StatePolicy;
+}
+
+export interface StatePolicy {
+  /** Washington capital gains excise tax, 7% on long-term gains over the deduction (enacted 2021). Default on. */
+  waCapitalGainsTax?: boolean;
+  /** Washington's additional 2.9% on gains over $1M (SB 5813, 2025). Default on. */
+  waCapitalGainsSurtax?: boolean;
+  /** A proposed Washington income tax on high earners. Not law; off by default. Set the rate and threshold to the proposal you are tracking. */
+  waHighEarnerTax?: { enabled: boolean; rate: number; threshold: number };
 }
 
 export type Source = string | { doc: string; asOf?: string; note?: string };
