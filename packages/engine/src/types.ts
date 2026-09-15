@@ -367,6 +367,8 @@ export interface YearInputs {
   /** Shares sold this year. */
   sharesSold: number;
   saleProceeds: number;
+  /** Cash paid to exercise options this year: shares × strike. */
+  exerciseCost: number;
   /** ISO shares sold before the holding periods: the spread at exercise, taxed as ordinary income (not wages for Medicare). */
   isoDisqualifyingIncome: number;
   /** Added to AMTI for ISO shares sold: the AMT gain is smaller than the regular gain because the AMT basis is higher. Negative. */

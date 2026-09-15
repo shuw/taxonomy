@@ -139,6 +139,11 @@ export function exerciseSpread(profile: Profile, levers: Levers, type: "iso" | "
   return exerciseDraws(profile, levers, type, year).reduce((s, d) => s + d.shares * Math.max(0, d.fmv - (d.grant.strike ?? 0)), 0);
 }
 
+/** Cash to exercise this year's draws of a type: shares × strike. */
+export function exerciseCost(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): number {
+  return exerciseDraws(profile, levers, type, year).reduce((s, d) => s + d.shares * (d.grant.strike ?? 0), 0);
+}
+
 /** Shares of a type actually exercised this year after availability caps, across companies. */
 export function sharesExercised(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): number {
   return exerciseDraws(profile, levers, type, year).reduce((s, d) => s + d.shares, 0);

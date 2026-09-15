@@ -56,6 +56,7 @@ export function calibrate(profile: Profile): Calibration | null {
     pretaxContributions: 0,
     sharesSold: 0,
     saleProceeds: 0,
+    exerciseCost: 0,
     isoDisqualifyingIncome: 0,
     amtCapitalAdjustment: 0,
     otherOrdinary: inp.otherIncome ?? 0,

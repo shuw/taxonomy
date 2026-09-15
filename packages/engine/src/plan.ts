@@ -1,5 +1,5 @@
 import { computeFederal } from "./federal.ts";
-import { exerciseSpread, rsuVesting, sharesExercised } from "./equity.ts";
+import { exerciseCost, exerciseSpread, rsuVesting, sharesExercised } from "./equity.ts";
 import { Ledger, pct, usd } from "./ledger.ts";
 import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
@@ -109,6 +109,7 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     rsuIncome: rsu.income,
     sharesSold: 0,
     saleProceeds: 0,
+    exerciseCost: exerciseCost(profile, levers, "iso", year) + exerciseCost(profile, levers, "nso", year),
     isoDisqualifyingIncome: 0,
     amtCapitalAdjustment: 0,
     amtCreditCarryforwardIn: carries.amtCredit,
@@ -134,6 +135,11 @@ export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   const total = ledger.put("totalTax", "Total tax", ledger.get("federalTotal") + ledger.get("stateTax"), "Federal + state.", ["federalTotal", "stateTax"]);
   const agi = ledger.get("agi");
   ledger.put("effectiveRate", "Effective rate", agi > 0 ? total / agi : 0, `Total tax as a share of AGI (${usd(agi)}). ISO bargain element is not in AGI, so an exercise year can look expensive by this measure.`, ["totalTax", "agi"], "rate");
+  // Cash: what arrives and what leaves, before living costs. Equity income is not cash until sold.
+  const cashIn = ledger.put("cashIn", "Cash in", inputs.salarySelf + inputs.salarySpouse + inputs.saleProceeds, "Salary and bonus received, plus proceeds of shares sold. RSU vests and option spreads are income but not cash.", ["salarySelf", ...(inputs.salarySpouse > 0 ? ["salarySpouse"] : []), "sharesSold"]);
+  ledger.put("exerciseCost", "Exercise cost", inputs.exerciseCost, inputs.exerciseCost > 0 ? "Shares exercised × strike, paid to the company." : "No options exercised this year.", ["isoSharesExercised"]);
+  const cashOut = ledger.put("cashOut", "Cash out", inputs.exerciseCost + total, "Exercise cost + total tax.", ["exerciseCost", "totalTax"]);
+  ledger.put("netCash", "Net cash", cashIn - cashOut, "Cash in - cash out, before living costs and withholding timing. Negative means the year needs money from savings or a sale.", ["cashIn", "cashOut"]);
   return { year: inputs.year, inputs, lines: ledger.lines, order: ledger.order };
 }
 

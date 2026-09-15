@@ -124,3 +124,80 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
     </div>
   );
 }
+
+/** Cash by year: what arrives (wages, sale proceeds) against what leaves (exercise cost, tax), with the net on top. */
+export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focusYear: number; onFocus: (y: number) => void }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const years = plan.years;
+  const height = 230;
+  const m = { top: 24, right: 12, bottom: 28, left: 46 };
+  const band = Math.min(MAX_BAND, (width - m.left - m.right) / years.length);
+  const bar = Math.round(Math.min(40, Math.max(18, band * 0.22)));
+  const v = (y: PlanResult["years"][number], id: string) => y.lines[id]?.value ?? 0;
+  const rows = years.map((y) => ({
+    wages: y.inputs.salarySelf + y.inputs.salarySpouse,
+    proceeds: y.inputs.saleProceeds,
+    exercise: v(y, "exerciseCost"),
+    tax: v(y, "totalTax"),
+    net: v(y, "netCash"),
+    agi: v(y, "agi"),
+  }));
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.wages + r.proceeds, r.exercise + r.tax)));
+  const ticks = niceTicks(max);
+  const top = Math.max(1, ticks[ticks.length - 1] ?? max);
+  const plotH = height - m.top - m.bottom;
+  const yOf = (x: number) => m.top + plotH - (x / top) * plotH;
+  const baseY = m.top + plotH;
+  const IN = [{ key: "wages", label: "Salary and bonus", color: "var(--series-regular)" }, { key: "proceeds", label: "Shares sold", color: "var(--series-surtax)" }] as const;
+  const OUT = [{ key: "exercise", label: "Exercise cost", color: "var(--series-violet)" }, { key: "tax", label: "Tax", color: "var(--series-amt)" }] as const;
+  const stack = (x: number, parts: readonly { key: keyof (typeof rows)[number]; color: string }[], r: (typeof rows)[number]) => {
+    let acc = 0;
+    return parts.map((p, j) => {
+      const val = r[p.key];
+      const y1 = yOf(acc + val), y0 = yOf(acc);
+      acc += val;
+      const h = Math.max(0, y0 - y1 - (j < parts.length - 1 && val > 0 ? GAP : 0));
+      return val > 0 ? <rect key={p.key} x={x} y={y1 + (j < parts.length - 1 ? GAP : 0)} width={bar} height={h} fill={p.color} rx={3} /> : null;
+    });
+  };
+  return (
+    <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="Cash by year">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line className="grid" x1={m.left} x2={width - m.right} y1={yOf(t)} y2={yOf(t)} />
+            <text className="axis-label" x={m.left - 6} y={yOf(t) + 4} textAnchor="end">{usdCompact(t)}</text>
+          </g>
+        ))}
+        {years.map((y, i) => {
+          const r = rows[i]!;
+          const cx = m.left + band * i + band / 2;
+          const inX = cx - bar - 3, outX = cx + 3;
+          return (
+            <g key={y.year}>
+              {stack(inX, IN, r)}
+              {stack(outX, OUT, r)}
+              <text className={"cap-label" + (r.net < 0 ? " neg" : "")} x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - 5} textAnchor="middle">{r.net >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.net))}</text>
+              <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
+              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
+            </g>
+          );
+        })}
+        <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
+      </svg>
+      {hover !== null && (() => { const r = rows[hover]!; return (
+        <div className="tooltip" style={hover >= years.length - 2 ? { right: width - (m.left + band * hover) + 6, top: m.top } : { left: m.left + band * (hover + 1) - 6, top: m.top }}>
+          <div className="row"><strong>{years[hover]!.year}</strong></div>
+          {IN.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>{usd(r[p.key])}</span></div>)}
+          {OUT.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>−{usd(r[p.key])}</span></div>)}
+          <div className="row total"><span>Net cash</span><span>{fmtDelta(r.net) || "$0"}</span></div>
+          <div className="row muted"><span>Income for tax (AGI)</span><span>{usd(r.agi)}</span></div>
+        </div>
+      ); })()}
+      <div className="legend">
+        {[...IN, ...OUT].map((p) => <span key={p.key}><span className="sw" style={{ background: p.color }} />{p.label}</span>)}
+      </div>
+    </div>
+  );
+}

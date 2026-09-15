@@ -12,7 +12,7 @@ import { Sidebar } from "./components/Sidebar.tsx";
 import { ScenarioBar } from "./components/ScenarioBar.tsx";
 import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { ProfileSwitcher } from "./components/ProfileSwitcher.tsx";
-import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
+import { TaxStrip, CreditStrip, CashStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
 import { LedgerTable } from "./components/LedgerTable.tsx";
 import { ExplainPanel } from "./components/ExplainPanel.tsx";
@@ -214,6 +214,11 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           </div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
           <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
+        </section>
+        <section className="card">
+          <h2>Cash by year</h2>
+          <div className="sub">What arrives against what leaves, before living costs. Left bar in, right bar out; the number is the net.</div>
+          <CashStrip plan={plan} focusYear={focusYear} onFocus={setFocusYear} />
         </section>
         {hasIso && (
           <div className="two-up">

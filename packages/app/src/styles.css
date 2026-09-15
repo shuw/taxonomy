@@ -592,3 +592,4 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .sweep-reading { margin: 8px 0 0; max-width: 70ch; }
 .facts-pane > .link, .facts-pane .add-grant { align-self: flex-start; }
 .company-line .link.danger { margin-left: auto; padding: 0; }
+.cap-label.neg { fill: var(--bad); }
