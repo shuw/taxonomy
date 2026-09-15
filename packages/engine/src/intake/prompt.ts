@@ -1,3 +1,4 @@
+import { exampleValue, FIELDS, type FieldDef } from "../fields.ts";
 import { stringifyProfile } from "../profile.ts";
 import type { Profile } from "../types.ts";
 import type { IntakeSection } from "./apply.ts";
@@ -18,72 +19,37 @@ export const INTAKE_SECTIONS: SectionInfo[] = [
   { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours" },
 ];
 
-const TEMPLATES: Record<IntakeSection, string> = {
-  basics: `basics:
-  filingStatus: mfj            # single | mfj | mfs | hoh
-  state: WA                    # two-letter code
-  dependents: 0
-  planStartYear: 2026          # first year on screen; usually the current year
-people:
-  self:
-    name: ""
-    baseSalary: 0              # annual base pay only; RSU vests and option exercises are added by the tool
-    expectedBonus: 0
-    pretaxContributions: 0     # 401(k), HSA and similar for the year
-    withholdingToDate: 0       # federal income tax withheld so far this year
-  spouse:                      # omit entirely if none
-    name: ""
-    baseSalary: 0
-    expectedBonus: 0
-    pretaxContributions: 0
-    withholdingToDate: 0`,
-  prior_return: `prior_return:
-  year: 2025
-  filingStatus: mfj
-  agi: 0                       # 1040 line 11
-  taxableIncome: 0             # 1040 line 15
-  regularTax: 0                # 1040 line 16
-  totalTax: 0                  # 1040 line 24
-  niit: 0                      # Form 8960 line 17, if any
-  amt:                         # Form 6251; omit if no AMT form was filed
-    amti: 0                    # line 4
-    exemption: 0               # line 5
-    tentativeMinimumTax: 0     # line 9
-    amt: 0                     # line 11
-    creditUsed: 0              # Form 8801 line 25 (credit used that year)
-  amtCreditCarryforward: 0     # Form 8801 line 26: credit available for the next year
-  capitalLossCarryforward:     # Schedule D carryover worksheet
-    shortTerm: 0
-    longTerm: 0
-  charitableCarryforward: 0    # gifts not yet deducted because of AGI limits
-  itemized:                    # Schedule A, if itemized
-    salt: 0                    # line 5e
-    mortgageInterest: 0        # line 8a
-    charitable: 0              # line 14
-    other: 0
-  inputs:                      # what went into that return, so the tool can recompute it
-    wages: 0                   # 1040 line 1a
-    interest: 0                # line 2b
-    ordinaryDividends: 0       # line 3b
-    qualifiedDividends: 0      # line 3a
-    shortTermGains: 0          # Schedule D line 7
-    longTermGains: 0           # Schedule D line 15
-    otherIncome: 0             # Schedule 1 total
-    isoBargainElement: 0       # Form 6251 line 2i
-    amtCreditCarriedIn: 0      # Form 8801 line 1 (credit available at the start of that year)`,
-  income: `income:
-  interest: 0                  # 1099-INT box 1, expected for the year
-  dividends:
-    ordinary: 0                # 1099-DIV box 1a (total)
-    qualified: 0               # 1099-DIV box 1b
-  realizedGains:
-    shortTerm: 0               # year to date
-    longTerm: 0
-  other: 0                     # K-1, rental, side income`,
-  equity: `equity:
-  company: ""
-  sharePrice: { value: 0, asOf: 2026-01-01, basis: 409A }   # per share; 409A for private companies, market price otherwise
-  grants:
+/** Render the scalar fields of a section as a YAML tree with a comment per line, from the registry. */
+function scalarTemplate(section: IntakeSection): string {
+  type Node = { children: Map<string, Node>; field?: FieldDef };
+  const root: Node = { children: new Map() };
+  for (const f of FIELDS.filter((f) => f.section === section && f.intake)) {
+    let node = root;
+    for (const seg of f.intake!.split(".")) {
+      if (!node.children.has(seg)) node.children.set(seg, { children: new Map() });
+      node = node.children.get(seg)!;
+    }
+    node.field = f;
+  }
+  const lines: string[] = [];
+  const walk = (node: Node, indent: number) => {
+    for (const [key, child] of node.children) {
+      const pad = "  ".repeat(indent);
+      if (child.field) {
+        const text = `${pad}${key}: ${exampleValue(child.field)}`;
+        lines.push(child.field.hint ? `${text.padEnd(32)} # ${child.field.hint}` : text);
+      } else {
+        lines.push(`${pad}${key}:`);
+        walk(child, indent + 1);
+      }
+    }
+  };
+  walk(root, 0);
+  return lines.join("\n");
+}
+
+const STRUCTURED: Partial<Record<IntakeSection, string>> = {
+  equity: `  grants:
     - name: ""                 # short label, e.g. "2023 ISO grant"
       type: iso                # iso | nso | rsu   (NQSO means nso)
       owner: self              # self | spouse
@@ -98,8 +64,8 @@ people:
       # ...or explicit vest events when the portal shows a table:
       # vesting:
       #   - { date: 2026-03-15, shares: 500 }
-      vested: 0                # vested to date
-      exercised: 0             # options only
+      vested: 0                # vested to date, including anything since exercised
+      exercised: 0             # options only, to date
       unexercised: 0           # options only: vested-unexercised + unvested
       expires: 2033-02-01
   holdings:                    # shares already owned, one lot per acquisition
@@ -110,26 +76,13 @@ people:
       via: iso_exercise        # iso_exercise | nso_exercise | rsu_vest | espp | purchase | other
       costBasis: 0             # per share, regular basis
       amtBasis: 0              # per share, FMV at exercise for ISO shares (Form 3921 box 4)`,
-  home: `home:
-  mortgage:                    # omit if none
-    balance: 0                 # outstanding principal now (Form 1098 box 2 is the balance at Jan 1)
-    rate: 0.0575               # annual, as a fraction
-    originated: 2022-08-01     # Form 1098 box 3
-    originalAmount: 0
-    termYears: 30
-  propertyTax: 0               # Form 1098 box 10 or the county bill
-deductions:
-  stateIncomeTax: 0            # 0 in states without one
-  charitable:
-    cash: 0                    # expected for the year
-    appreciatedStock: 0        # fair market value of securities given
-    daf: 0                     # donor-advised fund contributions
-  medical: 0`,
-  assumptions: `assumptions:
-  fmvGrowth: 0.15              # annual share value growth, as a fraction
-  wageGrowth: 0.03
-  inflation: 0.025`,
 };
+
+function template(section: IntakeSection): string {
+  const scalars = scalarTemplate(section);
+  const extra = STRUCTURED[section];
+  return extra ? `${scalars}\n${extra}` : scalars;
+}
 
 export interface PromptOptions {
   sections: IntakeSection[];
@@ -158,7 +111,7 @@ ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.
 3. Prefer the filed return over a portal, the portal over a pay stub, and a pay stub over memory. When two documents disagree, report the more authoritative one and mention the other in \`questions\`.
 4. Money in whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
 5. Base salary means base pay only. Do not add RSU vests or option exercises to it; the tool adds those from the grants.
-6. For options, report granted, vested, exercised and unexercised as separate counts as the portal shows them. NQSO and NSO are the same type: use \`nso\`.
+6. For options, report granted, vested, exercised and unexercised as separate counts as the portal shows them. NQSO and NSO are the same type: use \`nso\`. Omit the whole \`spouse\` block when there is no spouse.
 7. Put any question for me in \`questions\`, not in prose. Return only the YAML document, inside one \`\`\`yaml fence, and nothing else.${opts.onlyPaths?.length ? `\n8. This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}. Leave everything else out.` : ""}
 
 ## Document shape
@@ -168,7 +121,7 @@ Use exactly these keys. Omit any key you cannot fill; do not write 0 for unknown
 \`\`\`yaml
 taxonomy_intake: 1
 as_of: ${new Date().toISOString().slice(0, 10)}
-${sections.map((s) => TEMPLATES[s.id]).join("\n")}
+${sections.map((s) => template(s.id)).join("\n")}
 sources:
   prior_return.agi: "2025 Form 1040 line 11 (file name)"
 unknown:

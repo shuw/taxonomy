@@ -219,20 +219,21 @@ of those is also a lever we planned anyway.
 One modal, three panels that read left to right, opened from a "Fill from documents" button
 in the top bar and in the empty state of any sidebar section.
 
-**1. What to gather.** A checklist of the six sections above, each with a one-line description
+**1. What to gather, and the request.** One screen: a checklist of the six sections on the
+left, the generated request on the right, updating as sections are toggled. A checklist of the six sections above, each with a one-line description
 and the documents it needs, with the ones that matter most for this profile pre-selected
 (everything on first run; only the gaps on a re-run). A short note under the list: "Have these
 handy or give your agent access: last year's return (1040, 6251, 8801), W-2 and 1099s, a
 Shareworks or Carta grant export, Form 3921 if you exercised ISOs, Form 1098."
 
-**2. The request.** The generated prompt in a read-only box: the instructions, the schema for
+The request is the generated prompt in a read-only box: the instructions, the schema for
 the selected sections with field descriptions, the current profile (so re-runs come back
 complete), and the rules above. Buttons: Copy, Download as `.md` (for agents that take files),
 and a smaller "Copy schema only" for people who want to write the YAML themselves. The prompt
 is around two thousand words for the full set; each section can be copied on its own if the
 user wants to gather piecemeal.
 
-**3. The result.** A paste box that validates as you paste: a green check with a count of
+**2. The result.** A paste box that validates as you paste: a green check with a count of
 fields found, or the specific problems (with the offending line quoted) if the document does
 not parse. Below it, the review table, grouped by section:
 
@@ -260,7 +261,7 @@ screen trustworthy six months later.
 
 ## Status
 
-Built as of 2026-09-14: the schema and parser (`intake/schema.ts`), the prompt
+Built as of 2026-09-14 (schema version 3; see DATA-MODEL.md): the schema and parser (`intake/schema.ts`), the prompt
 (`intake/prompt.ts`), the review and apply mapping (`intake/apply.ts`), the modal, source chips,
 and the calibration card. The profile schema is at version 2 with people, carryforwards, prior
 return, holdings, mortgage-as-loan and charitable by kind. Not yet: the sales lever that

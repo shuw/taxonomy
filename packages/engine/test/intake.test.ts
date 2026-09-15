@@ -51,24 +51,25 @@ describe("intake review and apply", () => {
     expect(byId["people.spouse.salary"]!.status).toBe("new");
     expect(byId["carryforwards.amtCredit"]!.proposed).toBe(18_960);
     expect(byId["carryforwards.amtCredit"]!.source).toContain("8801");
-    expect(byId["equity.sharePrice"]!.note).toContain("409A");
+    expect(byId["equity.companies.0.sharePrice"]!.proposed).toBe(21);
     expect(byId["income.interest"]!.status).toBe("changed");
     expect(byId["assumptions.fmvGrowth"]!.status).toBe("same");
-    expect(byId["equity.grants.0"]!.format).toBe("grant");
-    expect(byId["equity.grants.2"]!.status).toBe("new");
-    expect(byId["priorReturn"]!.status).toBe("new");
+    expect(byId["grants.g1"]!.format).toBe("grant");
+    expect(byId["grants.g1"]!.status).toBe("changed");
+    expect(byId["grants.g3"]!.status).toBe("new");
+    expect(byId["returns.2025"]!.status).toBe("new");
     expect(review.unknown.map((u) => u.path)).toContain("people.self.expectedBonus");
     expect(review.questions).toHaveLength(1);
   });
   test("grants convert with unexercised as shares and vested net of exercised", () => {
-    const iso = toGrant(doc.equity!.grants![0]!);
-    expect(iso).toMatchObject({ type: "iso", shares: 47_500, vested: 40_000, strike: 2, granted: 60_000 });
+    const iso = toGrant(doc.equity!.grants![0]!, "g1", "c1");
+    expect(iso).toMatchObject({ id: "g1", type: "iso", granted: 60_000, vestedToDate: 52_500, exercisedToDate: 12_500, strike: 2, company: "c1" });
     expect(iso.schedule?.cadence).toBe("monthly");
-    const nso = toGrant(doc.equity!.grants![1]!);
-    expect(nso).toMatchObject({ type: "nso", shares: 12_000, vested: 3_000 });
+    const nso = toGrant(doc.equity!.grants![1]!, "g3");
+    expect(nso).toMatchObject({ type: "nso", granted: 12_000, vestedToDate: 3_000 });
     expect(nso.vesting).toEqual({ 2026: 3_000, 2027: 3_000 });
-    const rsu = toGrant(doc.equity!.grants![2]!);
-    expect(rsu).toMatchObject({ type: "rsu", shares: 8_000, vested: 3_500 });
+    const rsu = toGrant(doc.equity!.grants![2]!, "g2");
+    expect(rsu).toMatchObject({ type: "rsu", granted: 8_000, vestedToDate: 3_500 });
     expect(rsu.strike).toBeUndefined();
   });
   test("accepted changes become edits that produce a valid, richer profile", () => {
@@ -81,11 +82,14 @@ describe("intake review and apply", () => {
     expect(p.carryforwards?.amtCredit).toBe(18_960);
     expect(p.carryforwards?.capitalLoss?.longTerm).toBe(3_200);
     expect(p.equity.grants.map((g) => g.type)).toEqual(["iso", "rsu", "nso"]);
-    expect(p.equity.grants[0]!.shares).toBe(47_500);
+    expect(p.equity.grants[0]!.granted).toBe(60_000);
+    expect(p.equity.grants[0]!.exercisedToDate).toBe(12_500);
     expect(p.equity.holdings?.[0]?.amtBasis).toBe(16.5);
     expect(p.home?.mortgage?.balance).toBe(812_000);
     expect(p.sources?.["people.self.salary"]).toContain("pay stub");
-    expect(p.priorReturn?.reported.totalTax).toBe(87_201);
+    expect(p.sources?.["grants.g1"]).toContain("Shareworks");
+    expect(p.returns?.[0]?.reported.totalTax).toBe(87_201);
+    expect(p.equity.companies[0]!.sharePrice).toBe(21);
     const plan = runPlan(p);
     expect(plan.years[0]!.lines.mortgageInterest!.value).toBeGreaterThan(0);
     expect(plan.years[0]!.lines.amtCreditCarryforwardIn!.value).toBe(18_960);
@@ -103,6 +107,7 @@ describe("intake prompt", () => {
     expect(text).not.toContain("prior_return:");
     expect(text).toContain("Never estimate");
     expect(text).toContain("sharePrice: 18");
+    expect(text).toContain("1040 line 11");
     expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(6);
   });
   test("a follow-up restricts to the listed paths", () => {

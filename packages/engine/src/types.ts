@@ -13,6 +13,11 @@ export interface Person {
   withholdingToDate?: number;
 }
 
+export interface Dependent {
+  name?: string;
+  birthYear?: number;
+}
+
 export interface Income {
   otherOrdinary?: number;
   interest?: number;
@@ -32,7 +37,7 @@ export interface Carryforwards {
   charitable?: number;
 }
 
-/** The last filed return: inputs as reported, and the results to reproduce. */
+/** A filed return: inputs as reported, and the results to reproduce. */
 export interface PriorReturn {
   year: number;
   filingStatus?: FilingStatus;
@@ -65,6 +70,19 @@ export interface PriorReturn {
   };
 }
 
+/** An issuer of equity: an employer, or any stock you hold. */
+export interface Company {
+  id: string;
+  name: string;
+  /** Per-share value (409A or market) at plan.startYear. */
+  sharePrice: number;
+  sharePriceAsOf?: string;
+  /** Annual growth for this company; defaults to assumptions.fmvGrowth. */
+  growth?: number;
+  /** Known or assumed prices in specific years (an IPO, a tender). Later years grow from the last point. */
+  pricePath?: Record<number, number>;
+}
+
 export type GrantType = "iso" | "nso" | "rsu";
 
 /** A vesting schedule the engine expands into per-year vest counts. */
@@ -78,21 +96,26 @@ export interface VestingSchedule {
   cadence?: "monthly" | "quarterly" | "annual";
 }
 
+/**
+ * A grant is described by the same three counts every portal shows: granted, vested to date,
+ * exercised to date. What is exercisable, and what still vests, is derived.
+ */
 export interface EquityGrant {
+  id: string;
   name: string;
   type: GrantType;
+  /** Company id; defaults to the first company. */
+  company?: string;
   owner?: Owner;
   grantDate?: string;
-  /** Shares originally granted, for the record. */
-  granted?: number;
-  /** Shares still in play: for options, unexercised (vested or not); for RSUs, all units. */
-  shares: number;
+  /** Shares or units originally granted. */
+  granted: number;
+  /** Shares vested by the start of the plan (for RSUs: already delivered and taxed). Overrides the schedule for the past. */
+  vestedToDate?: number;
+  /** Option shares exercised before the plan; gone from this grant (their shares live in holdings). */
+  exercisedToDate?: number;
   /** Exercise price per share. Options only. */
   strike?: number;
-  /** Per-share value at plan.startYear; defaults to equity.sharePrice. */
-  fmv?: number;
-  /** Shares already vested at the start of the plan (options: vested and still unexercised). Overrides the schedule for the past. */
-  vested?: number;
   /** Shares vesting in each plan year, when you would rather state it than derive it. */
   vesting?: Record<number, number>;
   /** Derive per-year vesting from a schedule instead. */
@@ -102,7 +125,9 @@ export interface EquityGrant {
 
 /** Shares already owned, kept for the sales lever. */
 export interface Holding {
+  id: string;
   lot: string;
+  company?: string;
   owner?: Owner;
   quantity: number;
   acquired: string;
@@ -114,10 +139,7 @@ export interface Holding {
 }
 
 export interface Equity {
-  company?: string;
-  /** Per-share value (409A or market) at plan.startYear; grows by assumptions.fmvGrowth. */
-  sharePrice: number;
-  sharePriceAsOf?: string;
+  companies: Company[];
   grants: EquityGrant[];
   holdings?: Holding[];
 }
@@ -135,6 +157,8 @@ export interface Mortgage {
 
 export interface Home {
   mortgage?: Mortgage;
+  /** Direct interest figure, used only when no mortgage is given. */
+  mortgageInterest?: number;
   propertyTax?: number;
 }
 
@@ -150,8 +174,6 @@ export interface Deductions {
   stateIncomeTax?: number;
   charitable?: Charitable;
   medical?: number;
-  /** Direct mortgage interest figure, used only when no home.mortgage is given. */
-  mortgageInterest?: number;
 }
 
 /** Everything the user turns. Keyed by year where it varies. */
@@ -160,42 +182,61 @@ export interface Levers {
   exercises: { iso: Record<number, number>; nso: Record<number, number> };
 }
 
+/** A dated change to any profile value, in force from that year on. */
+export interface TimelineEntry {
+  year: number;
+  /** Dot path into the profile, e.g. "people.self.salary" or "filer.filingStatus". */
+  path: string;
+  value: unknown;
+  note?: string;
+}
+
+export interface Assumptions {
+  /** Annual CPI assumption used to index bracket edges, exemptions and caps past the last published year. */
+  inflation: number;
+  /** Annual growth applied to salaries. */
+  wageGrowth: number;
+  /** Default annual growth for company share values. */
+  fmvGrowth: number;
+  /** Added to every ordinary bracket rate (0.02 raises 37% to 39%). Put it on the timeline to model a future law change. */
+  bracketRateDelta?: number;
+}
+
+export type Source = string | { doc: string; asOf?: string; note?: string };
+
 /** The human-edited profile file (data/profiles/<id>.yaml). */
 export interface Profile {
-  version: 2;
+  version: 3;
   /** Display name; the file name is the id. */
   name?: string;
   filer: {
     filingStatus: FilingStatus;
     state: string; // two-letter code; "WA" is the only one modeled so far
-    dependents?: number;
+    dependents?: Dependent[];
   };
   plan: {
     startYear: number;
     years: number;
   };
-  assumptions: {
-    /** Annual CPI assumption used to index bracket edges, exemptions and caps past the last published year. */
-    inflation: number;
-    /** Annual growth applied to salaries. */
-    wageGrowth: number;
-    /** Annual growth applied to the company share value. */
-    fmvGrowth: number;
-  };
+  assumptions: Assumptions;
   people: { self: Person; spouse?: Person };
   income: Income;
   carryforwards?: Carryforwards;
-  priorReturn?: PriorReturn;
+  /** Filed returns, newest used for calibration. */
+  returns?: PriorReturn[];
   equity: Equity;
   home?: Home;
   deductions?: Deductions;
-  /** Default lever positions. The UI starts here. */
-  levers?: Partial<Levers>;
-  /** Where numbers came from, keyed by profile path ("people.self.salary": "pay stub 2026-08-31"). */
-  sources?: Record<string, string>;
+  /** Dated changes to the facts above. */
+  timeline?: TimelineEntry[];
+  /** Named lever settings. */
+  scenarios?: Record<string, Levers>;
+  activeScenario?: string;
+  /** Where numbers came from, keyed by profile path ("people.self.salary"); grants and holdings by id ("grants.g1"). */
+  sources?: Record<string, Source>;
 }
 
-/** Fully resolved inputs for one tax year, after profile defaults, growth and levers are applied. */
+/** Fully resolved inputs for one tax year, after profile defaults, growth, the timeline and levers are applied. */
 export interface YearInputs {
   year: number;
   filingStatus: FilingStatus;
@@ -212,7 +253,7 @@ export interface YearInputs {
   longTermGains: number;
   shortTermGains: number;
   capitalLossCarryIn: { shortTerm: number; longTerm: number };
-  /** Interest actually paid this year on home.mortgage, or the direct deductions figure. */
+  /** Interest actually paid this year on home.mortgage, or the direct figure. */
   mortgageInterestPaid: number;
   /** Share of that interest attributable to debt under the acquisition-debt cap (0..1). */
   mortgageCapFraction: number;
@@ -232,6 +273,8 @@ export interface YearInputs {
   /** RSU shares vesting this year x FMV: ordinary wage income. */
   rsuIncome: number;
   amtCreditCarryforwardIn: number;
+  /** Added to every ordinary bracket rate this year. */
+  bracketRateDelta: number;
 }
 
 /** One number on screen, with the reason it is what it is. */

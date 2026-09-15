@@ -37,8 +37,12 @@ const COMPARED: [keyof PriorReturn["reported"], string][] = [
  * Wages on a return are already W-2 box 1, so pre-tax contributions, RSU and NSO income are
  * folded in and not separated; itemized amounts are taken as reported.
  */
+export function latestReturn(profile: Profile): PriorReturn | undefined {
+  return [...(profile.returns ?? [])].sort((a, b) => b.year - a.year)[0];
+}
+
 export function calibrate(profile: Profile): Calibration | null {
-  const pr = profile.priorReturn;
+  const pr = latestReturn(profile);
   if (!pr) return null;
   const inp = pr.inputs;
   const ordinaryDividends = inp.ordinaryDividends ?? inp.qualifiedDividends ?? 0;
@@ -71,6 +75,7 @@ export function calibrate(profile: Profile): Calibration | null {
     rsuSharesVested: 0,
     rsuIncome: 0,
     amtCreditCarryforwardIn: inp.amtCreditCarriedIn ?? 0,
+    bracketRateDelta: 0,
   };
   const ledger = new Ledger();
   computeFederal(inputs, federalParams(pr.year, profile.assumptions.inflation), ledger);

@@ -1,11 +1,14 @@
+import { newId } from "../equity.ts";
+import { fieldByIntake, FIELDS } from "../fields.ts";
 import type { ProfileEdit, ProfilePath } from "../profile.ts";
-import type { EquityGrant, Holding, PriorReturn, Profile } from "../types.ts";
+import { getPath } from "../timeline.ts";
+import type { Company, EquityGrant, Holding, PriorReturn, Profile } from "../types.ts";
 import type { IntakeDocument, IntakeGrant } from "./schema.ts";
 
 export type IntakeSection = "basics" | "prior_return" | "income" | "equity" | "home" | "assumptions";
 
 export interface IntakeChange {
-  /** Stable id for selection, equal to the profile path joined with dots. */
+  /** Stable id for selection. */
   id: string;
   section: IntakeSection;
   label: string;
@@ -14,8 +17,10 @@ export interface IntakeChange {
   proposed: unknown;
   source?: string;
   status: "new" | "changed" | "same";
-  format: "usd" | "number" | "pct" | "text" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn";
+  format: "usd" | "number" | "pct" | "text" | "date" | "year" | "enum" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn" | "companies";
   note?: string;
+  /** Key under `sources` when applied (grants and holdings use ids). */
+  sourceKey: string;
 }
 
 export interface IntakeReview {
@@ -26,54 +31,37 @@ export interface IntakeReview {
   asOf?: string;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(strip(a)) === JSON.stringify(strip(b));
 const strip = (v: unknown): unknown => {
   if (Array.isArray(v)) return v.map(strip);
   if (v && typeof v === "object") return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== undefined).map(([k, x]) => [k, strip(x)]));
   return v;
 };
-const pathId = (path: ProfilePath) => path.join(".");
+const same = (a: unknown, b: unknown) => JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+const toPath = (dot: string): ProfilePath => dot.split(".").map((s) => (/^\d+$/.test(s) ? Number(s) : s));
 
 /** Compare an intake document to the current profile and list what would change. */
 export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeReview {
   const changes: IntakeChange[] = [];
   const src = (key: string) => doc.sources?.[key];
-  const add = (section: IntakeSection, label: string, path: ProfilePath, current: unknown, proposed: unknown, format: IntakeChange["format"], sourceKey?: string, note?: string) => {
-    if (proposed === undefined) return;
-    const status: IntakeChange["status"] = current === undefined || current === null ? "new" : same(current, proposed) ? "same" : "changed";
-    changes.push({ id: pathId(path), section, label, path, current, proposed, source: src(sourceKey ?? pathId(path)), status, format, note });
+  const add = (c: Omit<IntakeChange, "status" | "id"> & { id?: string }) => {
+    if (c.proposed === undefined) return;
+    const status: IntakeChange["status"] = c.current === undefined || c.current === null ? "new" : same(c.current, c.proposed) ? "same" : "changed";
+    changes.push({ ...c, id: c.id ?? c.path.join("."), status });
   };
 
-  // Basics and people ---------------------------------------------------------
-  const b = doc.basics;
-  if (b) {
-    add("basics", "Filing status", ["filer", "filingStatus"], profile.filer.filingStatus, b.filingStatus, "text", "basics.filingStatus");
-    add("basics", "State", ["filer", "state"], profile.filer.state, b.state, "text", "basics.state");
-    add("basics", "Dependents", ["filer", "dependents"], profile.filer.dependents, b.dependents, "number", "basics.dependents");
-    add("basics", "First plan year", ["plan", "startYear"], profile.plan.startYear, b.planStartYear, "number", "basics.planStartYear");
-  }
-  for (const who of ["self", "spouse"] as const) {
-    const p = doc.people?.[who];
-    if (!p) continue;
-    const cur = profile.people[who];
-    const label = who === "self" ? "Your" : "Spouse";
-    add("basics", `${label} name`, ["people", who, "name"], cur?.name, p.name, "text", `people.${who}.name`);
-    add("basics", `${label} base salary`, ["people", who, "salary"], cur?.salary, p.baseSalary, "usd", `people.${who}.baseSalary`);
-    add("basics", `${label} expected bonus`, ["people", who, "bonus"], cur?.bonus, p.expectedBonus, "usd", `people.${who}.expectedBonus`);
-    add("basics", `${label} pre-tax contributions`, ["people", who, "pretaxContributions"], cur?.pretaxContributions, p.pretaxContributions, "usd", `people.${who}.pretaxContributions`);
-    add("basics", `${label} withholding to date`, ["people", who, "withholdingToDate"], cur?.withholdingToDate, p.withholdingToDate, "usd", `people.${who}.withholdingToDate`);
+  // Scalars, from the registry -----------------------------------------------
+  for (const f of FIELDS) {
+    if (f.review === false || !f.intake) continue;
+    const proposed = getPath(doc, f.intake);
+    if (proposed === undefined) continue;
+    if (f.path.startsWith("equity.companies.0.") && profile.equity.companies.length === 0) continue; // handled by the companies row
+    add({ section: f.section, label: f.label, path: toPath(f.path), current: getPath(profile, f.path), proposed, source: src(f.intake), format: f.type, sourceKey: f.path });
   }
 
-  // Prior return and carryforwards ---------------------------------------------------
+  // Prior return as one row -----------------------------------------------------
   const pr = doc.prior_return;
   if (pr) {
-    add("prior_return", "AMT credit carryforward", ["carryforwards", "amtCredit"], profile.carryforwards?.amtCredit, pr.amtCreditCarryforward, "usd", "prior_return.amtCreditCarryforward");
-    if (pr.capitalLossCarryforward) {
-      add("prior_return", "Short-term capital loss carryforward", ["carryforwards", "capitalLoss", "shortTerm"], profile.carryforwards?.capitalLoss?.shortTerm, pr.capitalLossCarryforward.shortTerm, "usd", "prior_return.capitalLossCarryforward.shortTerm");
-      add("prior_return", "Long-term capital loss carryforward", ["carryforwards", "capitalLoss", "longTerm"], profile.carryforwards?.capitalLoss?.longTerm, pr.capitalLossCarryforward.longTerm, "usd", "prior_return.capitalLossCarryforward.longTerm");
-    }
-    add("prior_return", "Charitable carryforward", ["carryforwards", "charitable"], profile.carryforwards?.charitable, pr.charitableCarryforward, "usd", "prior_return.charitableCarryforward");
-    const proposed: PriorReturn = {
+    const proposed = strip({
       year: pr.year,
       filingStatus: pr.filingStatus,
       inputs: {
@@ -85,82 +73,63 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
         agi: pr.agi, taxableIncome: pr.taxableIncome, regularTax: pr.regularTax, amti: pr.amt?.amti, amtExemption: pr.amt?.exemption,
         tentativeMinimumTax: pr.amt?.tentativeMinimumTax, amt: pr.amt?.amt, amtCreditUsed: pr.amt?.creditUsed, niit: pr.niit, totalTax: pr.totalTax,
       },
-    };
-    add("prior_return", `${pr.year} return, for calibration`, ["priorReturn"], profile.priorReturn, strip(proposed), "priorReturn", "prior_return");
+    }) as PriorReturn;
+    const existing = (profile.returns ?? []).find((r) => r.year === pr.year);
+    add({ section: "prior_return", label: `${pr.year} return, for calibration`, path: ["returns"], id: `returns.${pr.year}`, current: existing, proposed, format: "priorReturn", source: src("prior_return"), sourceKey: `returns.${pr.year}` });
   }
 
-  // Income -----------------------------------------------------------------------
-  const inc = doc.income;
-  if (inc) {
-    add("income", "Interest", ["income", "interest"], profile.income.interest, inc.interest, "usd");
-    add("income", "Total dividends", ["income", "ordinaryDividends"], profile.income.ordinaryDividends, inc.dividends?.ordinary, "usd", "income.dividends.ordinary");
-    add("income", "Qualified dividends", ["income", "qualifiedDividends"], profile.income.qualifiedDividends, inc.dividends?.qualified, "usd", "income.dividends.qualified");
-    add("income", "Short-term gains realized", ["income", "shortTermGains"], profile.income.shortTermGains, inc.realizedGains?.shortTerm, "usd", "income.realizedGains.shortTerm");
-    add("income", "Long-term gains realized", ["income", "longTermGains"], profile.income.longTermGains, inc.realizedGains?.longTerm, "usd", "income.realizedGains.longTerm");
-    add("income", "Other ordinary income", ["income", "otherOrdinary"], profile.income.otherOrdinary, inc.other, "usd", "income.other");
-  }
-
-  // Equity -----------------------------------------------------------------------
+  // Equity ------------------------------------------------------------------------
   const eq = doc.equity;
   if (eq) {
-    add("equity", "Company", ["equity", "company"], profile.equity.company, eq.company, "text");
-    const sp = typeof eq.sharePrice === "number" ? eq.sharePrice : eq.sharePrice?.value;
-    add("equity", "Share value now", ["equity", "sharePrice"], profile.equity.sharePrice, sp, "usd", "equity.sharePrice", typeof eq.sharePrice === "object" && eq.sharePrice?.asOf ? `as of ${eq.sharePrice.asOf}${eq.sharePrice.basis ? `, ${eq.sharePrice.basis}` : ""}` : undefined);
-    if (typeof eq.sharePrice === "object" && eq.sharePrice?.asOf) add("equity", "Share value date", ["equity", "sharePriceAsOf"], profile.equity.sharePriceAsOf, eq.sharePrice.asOf, "text", "equity.sharePrice.asOf");
+    if (profile.equity.companies.length === 0 && (eq.company !== undefined || eq.sharePrice !== undefined)) {
+      const sp = typeof eq.sharePrice === "number" ? eq.sharePrice : eq.sharePrice?.value;
+      const company = strip({ id: "c1", name: eq.company ?? "Company", sharePrice: sp ?? 0, sharePriceAsOf: typeof eq.sharePrice === "object" ? eq.sharePrice?.asOf : undefined }) as Company;
+      add({ section: "equity", label: "Company", path: ["equity", "companies"], current: undefined, proposed: [company], format: "companies", source: src("equity.sharePrice"), sourceKey: "companies.c1.sharePrice" });
+    }
     if (eq.grants) {
-      const existing = new Map(profile.equity.grants.map((g, i) => [g.name, { grant: g, index: i }]));
+      const byName = new Map(profile.equity.grants.map((g, i) => [g.name, { grant: g, index: i }]));
+      const taken = profile.equity.grants.map((g) => g.id);
       let added = 0;
       eq.grants.forEach((g, i) => {
-        const proposed = toGrant(g);
-        const hit = existing.get(g.name);
+        const hit = byName.get(g.name);
+        const id = hit?.grant.id ?? newId("g", taken);
+        if (!hit) taken.push(id);
+        const proposed = toGrant(g, id, hit?.grant.company ?? profile.equity.companies[0]?.id ?? "c1");
         const index = hit ? hit.index : profile.equity.grants.length + added++;
-        add("equity", `Grant: ${g.name}`, ["equity", "grants", index], hit?.grant, proposed, "grant", `equity.grants[${i}]`);
+        add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}` });
       });
     }
     if (eq.holdings) {
-      const proposed: Holding[] = eq.holdings.map((h) => strip({ lot: h.lot, owner: h.owner, quantity: h.quantity, acquired: h.acquired, via: h.via, costBasis: h.costBasis, amtBasis: h.amtBasis }) as Holding);
-      add("equity", `Holdings (${proposed.length} lot${proposed.length === 1 ? "" : "s"})`, ["equity", "holdings"], profile.equity.holdings?.length ? profile.equity.holdings : undefined, proposed, "holdings");
+      const taken: string[] = [];
+      const proposed: Holding[] = eq.holdings.map((h) => {
+        const id = newId("h", taken);
+        taken.push(id);
+        return strip({ id, lot: h.lot, owner: h.owner, quantity: h.quantity, acquired: h.acquired, via: h.via, costBasis: h.costBasis, amtBasis: h.amtBasis }) as Holding;
+      });
+      const current = profile.equity.holdings?.length ? profile.equity.holdings : undefined;
+      const unchanged = current && same(current.map(({ id: _id, ...h }) => h), proposed.map(({ id: _id, ...h }) => h));
+      add({ section: "equity", label: `Holdings (${proposed.length} lot${proposed.length === 1 ? "" : "s"})`, path: ["equity", "holdings"], current, proposed: unchanged ? current : proposed, format: "holdings", source: src("equity.holdings"), sourceKey: "holdings" });
     }
   }
 
-  // Home and deductions --------------------------------------------------------------
-  const home = doc.home;
-  if (home) {
-    if (home.mortgage) add("home", "Mortgage", ["home", "mortgage"], profile.home?.mortgage, strip(home.mortgage), "mortgage");
-    add("home", "Property tax", ["home", "propertyTax"], profile.home?.propertyTax, home.propertyTax, "usd");
-  }
-  const ded = doc.deductions;
-  if (ded) {
-    add("home", "State income tax", ["deductions", "stateIncomeTax"], profile.deductions?.stateIncomeTax, ded.stateIncomeTax, "usd");
-    if (ded.charitable) {
-      add("home", "Charitable: cash", ["deductions", "charitable", "cash"], profile.deductions?.charitable?.cash, ded.charitable.cash, "usd");
-      add("home", "Charitable: appreciated stock", ["deductions", "charitable", "appreciatedStock"], profile.deductions?.charitable?.appreciatedStock, ded.charitable.appreciatedStock, "usd");
-      add("home", "Charitable: donor-advised fund", ["deductions", "charitable", "daf"], profile.deductions?.charitable?.daf, ded.charitable.daf, "usd");
-    }
-    add("home", "Medical expenses", ["deductions", "medical"], profile.deductions?.medical, ded.medical, "usd");
+  // Mortgage as one row -------------------------------------------------------------
+  if (doc.home?.mortgage) {
+    add({ section: "home", label: "Mortgage", path: ["home", "mortgage"], current: profile.home?.mortgage, proposed: strip(doc.home.mortgage), format: "mortgage", source: src("home.mortgage"), sourceKey: "home.mortgage" });
   }
 
-  // Assumptions ------------------------------------------------------------------------
-  const as = doc.assumptions;
-  if (as) {
-    add("assumptions", "Share value growth", ["assumptions", "fmvGrowth"], profile.assumptions.fmvGrowth, as.fmvGrowth, "pct");
-    add("assumptions", "Wage growth", ["assumptions", "wageGrowth"], profile.assumptions.wageGrowth, as.wageGrowth, "pct");
-    add("assumptions", "Inflation", ["assumptions", "inflation"], profile.assumptions.inflation, as.inflation, "pct");
-  }
-
-  const unknown = (doc.unknown ?? []).map((p) => ({ path: p, label: labelFor(p) }));
+  const unknown = (doc.unknown ?? []).map((p) => ({ path: p, label: fieldByIntake(p)?.label ?? labelFor(p) }));
   return { changes, unknown, questions: doc.questions ?? [], asOf: doc.as_of };
 }
 
-/** An intake grant as the profile stores it. */
-export function toGrant(g: IntakeGrant): EquityGrant {
+/** An intake grant as the profile stores it: the portal's three counts, verbatim. */
+export function toGrant(g: IntakeGrant, id: string, companyId?: string): EquityGrant {
   const type = g.type === "nqso" ? "nso" : g.type;
-  const exercised = g.exercised ?? 0;
-  const shares = type === "rsu"
-    ? (g.granted ?? g.unexercised ?? 0)
-    : (g.unexercised ?? Math.max(0, (g.granted ?? 0) - exercised));
-  const vested = g.vested === undefined ? undefined : type === "rsu" ? g.vested : Math.max(0, g.vested - exercised);
-  const out: EquityGrant = { name: g.name, type, owner: g.owner, grantDate: g.grantDate, granted: g.granted, shares, strike: type === "rsu" ? undefined : g.strike, vested, expires: g.expires };
+  const exercised = type === "rsu" ? undefined : g.exercised;
+  const granted = g.granted ?? (g.unexercised !== undefined ? g.unexercised + (exercised ?? 0) : 0);
+  const out: EquityGrant = {
+    id, name: g.name, type, company: companyId, owner: g.owner, grantDate: g.grantDate, granted,
+    vestedToDate: g.vested, exercisedToDate: exercised, strike: type === "rsu" ? undefined : g.strike, expires: g.expires,
+  };
   if (Array.isArray(g.vesting)) {
     const byYear: Record<number, number> = {};
     for (const ev of g.vesting) {
@@ -177,7 +146,6 @@ export function toGrant(g: IntakeGrant): EquityGrant {
 /** Turn accepted changes into profile edits, recording provenance alongside. */
 export function changesToEdits(changes: IntakeChange[], profile: Profile): ProfileEdit[] {
   const edits: ProfileEdit[] = [];
-  // Grants are written as a whole list so indices stay consistent.
   const grantChanges = changes.filter((c) => c.format === "grant");
   if (grantChanges.length) {
     const grants = [...profile.equity.grants];
@@ -188,45 +156,42 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
     }
     edits.push({ path: ["equity", "grants"], value: grants });
   }
+  const returnChanges = changes.filter((c) => c.format === "priorReturn");
+  if (returnChanges.length) {
+    const returns = [...(profile.returns ?? [])];
+    for (const c of returnChanges) {
+      const r = c.proposed as PriorReturn;
+      const i = returns.findIndex((x) => x.year === r.year);
+      if (i >= 0) returns[i] = r; else returns.push(r);
+    }
+    edits.push({ path: ["returns"], value: returns });
+  }
   for (const c of changes) {
-    if (c.format !== "grant") edits.push({ path: c.path, value: c.proposed });
-    if (c.source) edits.push({ path: ["sources", c.id], value: c.source });
+    if (c.format !== "grant" && c.format !== "priorReturn") edits.push({ path: c.path, value: c.proposed });
+    if (c.source) edits.push({ path: ["sources", c.sourceKey], value: c.source });
   }
   // A spouse needs a salary to exist; create the object when any spouse field arrives.
   if (!profile.people.spouse && changes.some((c) => c.path[0] === "people" && c.path[1] === "spouse") && !changes.some((c) => c.id === "people.spouse.salary")) {
     edits.unshift({ path: ["people", "spouse", "salary"], value: 0 });
   }
+  // Grants need a company to price against.
+  if (profile.equity.companies.length === 0 && grantChanges.length && !changes.some((c) => c.format === "companies")) {
+    edits.unshift({ path: ["equity", "companies"], value: [{ id: "c1", name: "Company", sharePrice: 0 }] });
+  }
   return edits;
-}
-
-const LABELS: Record<string, string> = {
-  "people.self.expectedBonus": "Your expected bonus",
-  "people.spouse.expectedBonus": "Spouse expected bonus",
-  "people.self.baseSalary": "Your base salary",
-  "people.self.pretaxContributions": "Your pre-tax contributions",
-  "equity.sharePrice": "Share value now",
-  "prior_return.amtCreditCarryforward": "AMT credit carryforward",
-  "home.mortgage": "Mortgage",
-};
-
-function labelFor(path: string): string {
-  return LABELS[path] ?? path.replace(/\[(\d+)\]/g, " #$1").replace(/\./g, " › ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 }
 
 /** Where an intake path lands in the profile, for values the user types in by hand. */
 export function profilePathForIntake(path: string): ProfilePath | null {
-  const direct: Record<string, ProfilePath> = {
-    "basics.filingStatus": ["filer", "filingStatus"], "basics.state": ["filer", "state"], "basics.dependents": ["filer", "dependents"], "basics.planStartYear": ["plan", "startYear"],
-    "income.interest": ["income", "interest"], "income.dividends.ordinary": ["income", "ordinaryDividends"], "income.dividends.qualified": ["income", "qualifiedDividends"],
-    "income.realizedGains.shortTerm": ["income", "shortTermGains"], "income.realizedGains.longTerm": ["income", "longTermGains"], "income.other": ["income", "otherOrdinary"],
-    "equity.sharePrice": ["equity", "sharePrice"], "equity.company": ["equity", "company"],
-    "home.propertyTax": ["home", "propertyTax"], "deductions.stateIncomeTax": ["deductions", "stateIncomeTax"], "deductions.medical": ["deductions", "medical"],
-    "deductions.charitable.cash": ["deductions", "charitable", "cash"], "deductions.charitable.appreciatedStock": ["deductions", "charitable", "appreciatedStock"], "deductions.charitable.daf": ["deductions", "charitable", "daf"],
-    "prior_return.amtCreditCarryforward": ["carryforwards", "amtCredit"], "prior_return.capitalLossCarryforward.shortTerm": ["carryforwards", "capitalLoss", "shortTerm"], "prior_return.capitalLossCarryforward.longTerm": ["carryforwards", "capitalLoss", "longTerm"], "prior_return.charitableCarryforward": ["carryforwards", "charitable"],
-    "assumptions.fmvGrowth": ["assumptions", "fmvGrowth"], "assumptions.wageGrowth": ["assumptions", "wageGrowth"], "assumptions.inflation": ["assumptions", "inflation"],
-  };
-  if (direct[path]) return direct[path]!;
-  const m = path.match(/^people\.(self|spouse)\.(name|baseSalary|expectedBonus|pretaxContributions|withholdingToDate)$/);
-  if (m) return ["people", m[1]!, { name: "name", baseSalary: "salary", expectedBonus: "bonus", pretaxContributions: "pretaxContributions", withholdingToDate: "withholdingToDate" }[m[2]!]!];
-  return null;
+  const f = fieldByIntake(path);
+  return f && f.review !== false ? toPath(f.path) : null;
+}
+
+/** Fields the assistant may set directly, as dot paths. */
+export function settablePaths(): string[] {
+  return FIELDS.filter((f) => f.review !== false && !f.path.startsWith("equity.")).map((f) => f.path);
+}
+
+function labelFor(path: string): string {
+  return path.replace(/\[(\d+)\]/g, " #$1").replace(/\./g, " › ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 }

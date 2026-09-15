@@ -4,18 +4,20 @@ import { Ledger, pct, usd } from "./ledger.ts";
 import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
+import { activeLevers, profileInYear } from "./timeline.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
 
 export function planYears(profile: Profile): number[] {
   return Array.from({ length: profile.plan.years }, (_, i) => profile.plan.startYear + i);
 }
 
+/** The active scenario's levers with overrides on top. */
 export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Levers {
-  const base = profile.levers?.exercises;
+  const base = activeLevers(profile);
   return {
     exercises: {
-      iso: { ...(base?.iso ?? {}), ...(overrides?.exercises?.iso ?? {}) },
-      nso: { ...(base?.nso ?? {}), ...(overrides?.exercises?.nso ?? {}) },
+      iso: { ...base.exercises.iso, ...(overrides?.exercises?.iso ?? {}) },
+      nso: { ...base.exercises.nso, ...(overrides?.exercises?.nso ?? {}) },
     },
   };
 }
@@ -36,6 +38,10 @@ export function openingCarries(profile: Profile): Carries {
   };
 }
 
+/**
+ * Inputs for one year. `profile` should already be the timeline-adjusted profile for that year
+ * (see profileInYear); growth assumptions compound from plan.startYear.
+ */
 export function yearInputs(profile: Profile, levers: Levers, year: number, carries: Carries, mortgage?: MortgageYear): YearInputs {
   const t = year - profile.plan.startYear;
   const grow = (x: number) => x * (1 + profile.assumptions.wageGrowth) ** t;
@@ -63,7 +69,7 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     longTermGains: inc.longTermGains ?? 0,
     shortTermGains: inc.shortTermGains ?? 0,
     capitalLossCarryIn: carries.capitalLoss,
-    mortgageInterestPaid: mortgage ? mortgage.interestPaid : ded.mortgageInterest ?? 0,
+    mortgageInterestPaid: mortgage ? mortgage.interestPaid : profile.home?.mortgageInterest ?? 0,
     mortgageCapFraction: mortgage ? mortgage.capFraction : 1,
     propertyTax: profile.home?.propertyTax ?? 0,
     stateIncomeTax: ded.stateIncomeTax ?? 0,
@@ -78,12 +84,13 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     rsuSharesVested: rsu.shares,
     rsuIncome: rsu.income,
     amtCreditCarryforwardIn: carries.amtCredit,
+    bracketRateDelta: profile.assumptions.bracketRateDelta ?? 0,
   };
 }
 
 export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   const ledger = new Ledger();
-  const params = federalParams(inputs.year, profile.assumptions.inflation);
+  const params = federalParams(inputs.year, profile.assumptions.inflation, inputs.bracketRateDelta);
   computeFederal(inputs, params, ledger);
   stateModule(inputs.state).compute(inputs, ledger, profile.assumptions.inflation);
   const total = ledger.put("totalTax", "Total tax", ledger.get("federalTotal") + ledger.get("stateTax"), "Federal + state.", ["federalTotal", "stateTax"]);
@@ -101,14 +108,23 @@ function carriesOut(result: YearResult): Carries {
   };
 }
 
-/** Run every plan year in sequence, threading the carryforwards through. */
+/** Run every plan year in sequence: the timeline shapes each year's facts, carryforwards thread through. */
 export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): PlanResult {
   const levers = resolveLevers(profile, leverOverrides);
-  const mortgage = profile.home?.mortgage ? amortize(profile.home.mortgage, profile.plan.startYear, profile.plan.years) : null;
   let carries = openingCarries(profile);
   const years: YearResult[] = [];
+  let mortgage: MortgageYear[] | null = null;
+  let mortgageKey = "";
   for (const [i, year] of planYears(profile).entries()) {
-    const result = computeYear(profile, yearInputs(profile, levers, year, carries, mortgage?.[i]));
+    const p = profileInYear(profile, year);
+    // Re-amortize only when the loan itself changes on the timeline.
+    const key = JSON.stringify(p.home?.mortgage ?? null);
+    if (key !== mortgageKey) {
+      mortgageKey = key;
+      mortgage = p.home?.mortgage ? amortize(p.home.mortgage, year, profile.plan.years - i) : null;
+      if (mortgage) mortgage = [...Array(i).fill(undefined), ...mortgage];
+    }
+    const result = computeYear(p, yearInputs(p, levers, year, carries, mortgage?.[i]));
     carries = carriesOut(result);
     years.push(result);
   }

@@ -9,12 +9,12 @@ const base: YearInputs = {
   salarySelf: 0, salarySpouse: 0, pretaxContributions: 0, otherOrdinary: 0, interest: 0, nonqualifiedDividends: 0, qualifiedDividends: 0, longTermGains: 0, shortTermGains: 0,
   capitalLossCarryIn: { shortTerm: 0, longTerm: 0 },
   mortgageInterestPaid: 0, mortgageCapFraction: 1, propertyTax: 0, stateIncomeTax: 0, charitableCash: 0, charitableStock: 0, charitableCarryIn: 0, medical: 0,
-  isoSharesExercised: 0, isoBargainElement: 0, nsoSharesExercised: 0, nsoIncome: 0, rsuSharesVested: 0, rsuIncome: 0, amtCreditCarryforwardIn: 0,
+  isoSharesExercised: 0, isoBargainElement: 0, nsoSharesExercised: 0, nsoIncome: 0, rsuSharesVested: 0, rsuIncome: 0, amtCreditCarryforwardIn: 0, bracketRateDelta: 0,
 };
 
 function fed(over: Partial<YearInputs>) {
   const ledger = new Ledger();
-  computeFederal({ ...base, ...over }, federalParams(over.year ?? 2026, 0.025), ledger);
+  computeFederal({ ...base, ...over }, federalParams(over.year ?? 2026, 0.025, over.bracketRateDelta ?? 0), ledger);
   return ledger;
 }
 
@@ -131,6 +131,15 @@ describe("wages, losses, giving and the mortgage cap", () => {
     const L = fed({ salarySelf: 400_000, mortgageInterestPaid: 48_000, mortgageCapFraction: 0.75 });
     expect(L.get("mortgageInterest")).toBeCloseTo(36_000);
     expect(L.get("usesItemized")).toBe(1);
+  });
+});
+
+describe("rate shift", () => {
+  test("a bracket rate delta raises every ordinary rate", () => {
+    const L = fed({ salarySelf: 300_000, bracketRateDelta: 0.02 });
+    const base = fed({ salarySelf: 300_000 });
+    expect(L.get("ordinaryTax")).toBeCloseTo(base.get("ordinaryTax") + 0.02 * base.get("ordinaryTaxable"), 0);
+    expect(L.get("marginalBracket")).toBeCloseTo(0.37);
   });
 });
 

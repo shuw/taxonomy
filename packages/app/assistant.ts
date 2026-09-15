@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { parseProfile } from "@taxonomy/engine";
+import { parseProfile, settablePaths } from "@taxonomy/engine";
 
 export const MODEL = process.env.TAXONOMY_MODEL ?? "claude-opus-5";
 const MAX_IMAGES = 6;
@@ -18,7 +18,7 @@ export const PROPOSAL_TOOL: Anthropic.Tool = {
       summary: { type: "string", description: "One or two sentences telling the user what this changes and anything you assumed." },
       set: {
         type: "array",
-        description: "Scalar fields to set, as dot paths: filer.filingStatus, filer.state, filer.dependents, plan.startYear, plan.years, people.self.salary, people.self.bonus, people.self.pretaxContributions, people.spouse.salary, people.spouse.bonus, income.otherOrdinary, income.interest, income.ordinaryDividends, income.qualifiedDividends, income.longTermGains, income.shortTermGains, home.propertyTax, deductions.stateIncomeTax, deductions.charitable.cash, deductions.charitable.appreciatedStock, deductions.charitable.daf, carryforwards.amtCredit, carryforwards.capitalLoss.longTerm, assumptions.fmvGrowth, assumptions.wageGrowth, assumptions.inflation, name.",
+        description: `Scalar fields to set, as dot paths: ${settablePaths().join(", ")}, name.`,
         items: {
           type: "object",
           properties: { path: { type: "string" }, value: { type: ["number", "string", "boolean"] } },
@@ -74,8 +74,7 @@ function systemPrompt(): Anthropic.TextBlockParam[] {
 
 How the profile works:
 - One YAML file per profile. Money is annual dollars for plan.startYear. filer.filingStatus is one of single, mfj, mfs, hoh. filer.state is a two-letter code. people.self.salary is base pay only (bonus and pre-tax contributions are separate fields); people.spouse is optional.
-- equity.sharePrice is the company's current per-share value; it grows by assumptions.fmvGrowth each year.
-- equity.grants is a list of grants with type iso, nso (NQSO/NSO are the same thing), or rsu. Options carry a strike. Vesting is either a schedule (start date, years, cliff months, cadence) or explicit per-year counts. \`vested\` is what has already vested by the plan's first day (for options: vested and unexercised).
+- equity.companies holds share prices; equity.grants is a list of grants with type iso, nso (NQSO/NSO are the same thing), or rsu, each with granted, vestedToDate and exercisedToDate counts. Options carry a strike. Vesting is either a schedule (start date, years, cliff months, cadence) or explicit per-year counts.
 - Tax treatment the tool models: ISO exercises create an AMT preference (spread) but no regular income; NSO exercises create ordinary wage income equal to the spread; RSUs create ordinary wage income when they vest. Sales are not modeled yet.
 - The user controls exercises with sliders, so do not set exercise counts; just describe grants accurately.
 

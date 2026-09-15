@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { amtCrossover, editProfileText, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { Intake } from "./components/Intake.tsx";
+import { ScenarioBar } from "./components/ScenarioBar.tsx";
 import { ProfileSwitcher } from "./components/ProfileSwitcher.tsx";
 import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
@@ -37,7 +37,6 @@ export function App() {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
   const [creating, setCreating] = useState(false);
-  const [exampleText, setExampleText] = useState<string | null>(null);
 
   const currentId = useMemo(() => {
     if (!list || list.length === 0) return null;
@@ -47,7 +46,6 @@ export function App() {
 
   const store = useProfile(currentId);
   const needIntake = list !== null && (list.length === 0 || creating);
-  useEffect(() => { if (needIntake && exampleText === null) void api.example().then((b) => setExampleText(b.text)); }, [needIntake, exampleText]);
 
   const switchTo = (id: string) => { setWantedId(id); setCreating(false); };
   const create = async (name: string, text: string) => {
@@ -57,10 +55,7 @@ export function App() {
   };
 
   if (list === null) return <div className="empty">Loading profiles…</div>;
-  if (needIntake) {
-    if (exampleText === null) return <div className="empty">Loading…</div>;
-    return <Intake exampleText={exampleText} onCreate={create} onCancel={list.length > 0 ? () => setCreating(false) : undefined} />;
-  }
+  if (needIntake) return <IntakeModal mode="create" onCreate={create} onClose={list.length > 0 ? () => setCreating(false) : undefined} />;
   const file = store.file;
   if (!file || file.id !== currentId) return <div className="empty">Loading profile…</div>;
   if (!file.profile) return <div className="empty"><div className="error">{file.error}</div></div>;
@@ -79,7 +74,7 @@ export function App() {
       await api.remove(file.id);
       const l = await refresh();
       const next = l.find((p) => p.id !== file.id);
-      if (next) switchTo(next.id);
+      if (next) switchTo(next.id); else setWantedId(null);
     },
   };
 
@@ -105,13 +100,19 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
   const levers = useMemo(() => resolveLevers(profile), [profile]);
+  const scenario = profile.activeScenario ?? "default";
   const plan = useMemo(() => runPlan(profile, levers), [profile, levers]);
   const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
   const sweep = useMemo(() => sweepIsoExercise(profile, levers, focusYear, 40), [profile, levers, focusYear]);
   const focusCrossover = crossovers.find((c) => c.year === focusYear) ?? crossovers[0]!;
   const hasIso = profile.equity.grants.some((g) => g.type === "iso");
 
-  const setExercise = (type: "iso" | "nso", year: number, n: number) => edit([{ path: ["levers", "exercises", type, year], value: Math.max(0, Math.round(n)) }]);
+  const setExercise = (type: "iso" | "nso", year: number, n: number) => {
+    const edits: ProfileEdit[] = [];
+    if (!profile.scenarios?.[scenario]) edits.push({ path: ["scenarios", scenario], value: levers }, { path: ["activeScenario"], value: scenario });
+    edits.push({ path: ["scenarios", scenario, "exercises", type, year], value: Math.max(0, Math.round(n)) });
+    edit(edits);
+  };
 
   return (
     <div className={"app" + (selected || assistantOpen ? " has-explain" : "")}>
@@ -120,6 +121,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         {switcher}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         <span className="chip">{years[0]}–{years[years.length - 1]}</span>
+        <ScenarioBar profile={profile} levers={levers} edit={edit} />
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
         <button type="button" className="btn" onClick={() => setIntakeOpen(true)}>Fill from documents</button>
@@ -168,7 +170,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={select} onClose={() => setSelected(null)} />
         </aside>
       )}
-      {intakeOpen && <IntakeModal profile={profile} onApply={edit} onClose={() => setIntakeOpen(false)} />}
+      {intakeOpen && <IntakeModal mode="fill" profile={profile} onApply={edit} onClose={() => setIntakeOpen(false)} />}
       {assistantOpen && !selected && (
         <aside className="explain assistant-aside">
           <AssistantPanel profile={profile} profileText={profileText} edit={edit} onClose={() => setAssistantOpen(false)} />

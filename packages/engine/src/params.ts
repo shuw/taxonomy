@@ -170,7 +170,16 @@ function scaleByStatus(v: ByStatus, f: number, step: number): ByStatus {
  * compounding the profile's inflation assumption from 2026 (the IRS uses chained CPI
  * with its own rounding, so projections are approximate by design).
  */
-export function federalParams(year: number, inflation: number): FederalParams {
+export function federalParams(year: number, inflation: number, bracketRateDelta = 0): FederalParams {
+  const p = baseParams(year, inflation);
+  if (!bracketRateDelta) return p;
+  const statuses: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
+  const brackets = {} as Record<FilingStatus, Bracket[]>;
+  for (const s of statuses) brackets[s] = p.brackets[s].map((b) => ({ upTo: b.upTo, rate: Math.max(0, Math.round((b.rate + bracketRateDelta) * 1000) / 1000) }));
+  return { ...p, brackets };
+}
+
+function baseParams(year: number, inflation: number): FederalParams {
   const base = FEDERAL_2026;
   if (year === 2025) return FEDERAL_2025;
   if (year <= base.year) return base;

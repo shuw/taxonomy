@@ -5,6 +5,8 @@ import { runPlan, resolveLevers } from "../src/plan.ts";
 import { exerciseSpread, sharesExercisable, rsuVesting, vestingOf } from "../src/equity.ts";
 import { amtCrossover, sweepIsoExercise } from "../src/thresholds.ts";
 import { calibrate } from "../src/calibration.ts";
+import { companyPrice, sharesOutstanding } from "../src/equity.ts";
+import { profileInYear } from "../src/timeline.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
 
@@ -46,7 +48,7 @@ describe("multi-year plan", () => {
     expect(plan.years[0]!.lines.agi!.value).toBeCloseTo(320_000 - 23_500 + 6_000 + 4_500 + 3_500 * 18);
   });
   test("NSO exercises are ordinary income, not an AMT preference", () => {
-    const withNso = { ...profile, equity: { ...profile.equity, grants: [...profile.equity.grants, { name: "NSO", type: "nso" as const, shares: 5_000, strike: 1, vested: 5_000 }] } };
+    const withNso = { ...profile, equity: { ...profile.equity, grants: [...profile.equity.grants, { id: "g9", name: "NSO", type: "nso" as const, granted: 5_000, vestedToDate: 5_000, strike: 1 }] } };
     const plan = runPlan(withNso, { exercises: { iso: { 2026: 0 }, nso: { 2026: 5_000 } } });
     const y = plan.years[0]!;
     expect(y.lines.nsoIncome!.value).toBeCloseTo(5_000 * 17);
@@ -77,7 +79,7 @@ describe("mortgage, carryforwards and calibration", () => {
     expect(plan.years[1]!.inputs.charitableCarryIn).toBeGreaterThan(0);
   });
   test("calibration recomputes the prior return line by line", () => {
-    const p = { ...profile, priorReturn: { year: 2025, inputs: { wages: 300_000, interest: 5_000, qualifiedDividends: 4_000, ordinaryDividends: 4_000 }, reported: { agi: 309_000, taxableIncome: 293_250, totalTax: 72_000 } } };
+    const p = { ...profile, returns: [{ year: 2025, inputs: { wages: 300_000, interest: 5_000, qualifiedDividends: 4_000, ordinaryDividends: 4_000 }, reported: { agi: 309_000, taxableIncome: 293_250, totalTax: 72_000 } }] };
     const cal = calibrate(p)!;
     expect(cal.year).toBe(2025);
     const agi = cal.rows.find((r) => r.id === "agi")!;
@@ -86,6 +88,34 @@ describe("mortgage, carryforwards and calibration", () => {
     const ti = cal.rows.find((r) => r.id === "taxableIncome")!;
     expect(ti.computed).toBe(309_000 - 15_750);
     expect(cal.missing).toContain("amt");
+  });
+});
+
+describe("timeline, scenarios and companies", () => {
+  test("a timeline entry changes the facts from its year on", () => {
+    const p = { ...profile, timeline: [{ year: 2028, path: "people.self.salary", value: 500_000 }, { year: 2027, path: "filer.filingStatus", value: "mfj" }] };
+    expect(profileInYear(p, 2026).people.self.salary).toBe(320_000);
+    expect(profileInYear(p, 2028).people.self.salary).toBe(500_000);
+    expect(profileInYear(p, 2027).filer.filingStatus).toBe("mfj");
+    const plan = runPlan(p);
+    expect(plan.years[0]!.inputs.filingStatus).toBe("single");
+    expect(plan.years[1]!.inputs.filingStatus).toBe("mfj");
+    expect(plan.years[2]!.inputs.salarySelf).toBeCloseTo(500_000 * 1.03 ** 2);
+  });
+  test("the active scenario supplies the levers", () => {
+    const p = { ...profile, scenarios: { default: { exercises: { iso: { 2026: 4_000 }, nso: {} } }, big: { exercises: { iso: { 2026: 30_000 }, nso: {} } } }, activeScenario: "big" };
+    expect(runPlan(p).years[0]!.inputs.isoSharesExercised).toBe(30_000);
+    expect(runPlan({ ...p, activeScenario: "default" }).years[0]!.inputs.isoSharesExercised).toBe(4_000);
+  });
+  test("a price path pins a year and growth resumes from it", () => {
+    const c = { ...profile.equity.companies[0]!, pricePath: { 2027: 40 } };
+    const p = { ...profile, equity: { ...profile.equity, companies: [c] } };
+    expect(companyPrice(p, c, 2026)).toBeCloseTo(18);
+    expect(companyPrice(p, c, 2027)).toBe(40);
+    expect(companyPrice(p, c, 2028)).toBeCloseTo(46);
+  });
+  test("outstanding shares exclude exercised ones", () => {
+    expect(sharesOutstanding({ id: "x", name: "x", type: "iso", granted: 60_000, exercisedToDate: 12_500, vestedToDate: 52_500, strike: 2 })).toBe(47_500);
   });
 });
 

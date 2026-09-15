@@ -1,13 +1,27 @@
 import { useMemo, useState } from "react";
-import { changesToEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, profilePathForIntake, reviewIntake, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { changesToEdits, editProfileText, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
-import { parseAmount } from "./fields.tsx";
+import { FILING_OPTIONS, Field, MoneyInput, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 
-interface Props { profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
+interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
+interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
+type Props = FillProps | CreateProps;
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
-export function IntakeModal({ profile, onApply, onClose }: Props) {
+/** A minimal, valid profile to start a new one from. */
+export function blankProfileText(name: string, filingStatus: FilingStatus, state: string, salary: number): string {
+  const year = new Date().getFullYear();
+  return stringifyProfile({
+    version: 3, name, filer: { filingStatus, state, dependents: [] }, plan: { startYear: Math.max(2026, year), years: 6 },
+    assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
+    people: { self: { salary } }, income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
+    timeline: [], scenarios: { default: { exercises: { iso: {}, nso: {} } } }, activeScenario: "default",
+  });
+}
+
+export function IntakeModal(props: Props) {
+  const create = props.mode === "create";
   const [step, setStep] = useState<Step>(1);
   const [sections, setSections] = useState<IntakeSection[]>(INTAKE_SECTIONS.map((s) => s.id));
   const [copied, setCopied] = useState(false);
@@ -15,6 +29,30 @@ export function IntakeModal({ profile, onApply, onClose }: Props) {
   const [accepted, setAccepted] = useState<Set<string> | null>(null);
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [showSame, setShowSame] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Create mode: the few facts a profile cannot exist without.
+  const [name, setName] = useState("");
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
+  const [state, setState] = useState("WA");
+  const [salary, setSalary] = useState(0);
+  const [start, setStart] = useState<"agent" | "manual">("agent");
+  const [manual, setManual] = useState({ bonus: 0, pretax: 0, sharePrice: 0, isoShares: 0, isoStrike: 0, isoVested: 0 });
+
+  const baseText = useMemo(() => {
+    if (!create) return null;
+    let text = blankProfileText(name.trim() || "New profile", filingStatus, state, salary);
+    if (start === "manual") {
+      const edits: ProfileEdit[] = [];
+      if (manual.bonus) edits.push({ path: ["people", "self", "bonus"], value: manual.bonus });
+      if (manual.pretax) edits.push({ path: ["people", "self", "pretaxContributions"], value: manual.pretax });
+      if (manual.isoShares > 0 || manual.sharePrice > 0) edits.push({ path: ["equity", "companies"], value: [{ id: "c1", name: "Company", sharePrice: manual.sharePrice }] });
+      if (manual.isoShares > 0) edits.push({ path: ["equity", "grants"], value: [{ id: "g1", name: "ISO grant", type: "iso", company: "c1", granted: manual.isoShares, vestedToDate: Math.min(manual.isoShares, manual.isoVested), strike: manual.isoStrike }] });
+      if (edits.length) text = editProfileText(text, edits);
+    }
+    return text;
+  }, [create, name, filingStatus, state, salary, start, manual]);
+  const profile: Profile = useMemo(() => (props.mode === "fill" ? props.profile : parseProfile(baseText!)), [props, baseText]);
 
   const prompt = useMemo(() => intakePrompt({ sections, profile }), [sections, profile]);
   const parsed = useMemo(() => (pasted.trim() ? parseIntake(pasted) : null), [pasted]);
@@ -35,8 +73,8 @@ export function IntakeModal({ profile, onApply, onClose }: Props) {
     URL.revokeObjectURL(url);
   };
 
-  const apply = () => {
-    if (!review) return;
+  const collectEdits = (): ProfileEdit[] => {
+    if (!review) return [];
     const chosen = review.changes.filter((c) => selected.has(c.id));
     const edits = changesToEdits(chosen, profile);
     for (const u of review.unknown) {
@@ -48,64 +86,114 @@ export function IntakeModal({ profile, onApply, onClose }: Props) {
       edits.push({ path, value: n ?? raw.trim() });
       edits.push({ path: ["sources", path.join(".")], value: "typed in during intake" });
     }
-    onApply(edits);
-    onClose();
+    return edits;
+  };
+
+  const finish = async () => {
+    const edits = collectEdits();
+    if (props.mode === "fill") {
+      props.onApply(edits);
+      props.onClose();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onCreate(name.trim() || "New profile", editProfileText(baseText!, edits));
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const visible = review ? review.changes.filter((c) => showSame || c.status !== "same") : [];
   const grouped = INTAKE_SECTIONS.map((s) => ({ section: s, rows: visible.filter((c) => c.section === s.id) })).filter((g) => g.rows.length);
   const sameCount = review ? review.changes.filter((c) => c.status === "same").length : 0;
+  const canCreate = !create || name.trim() !== "";
+  const onClose = props.onClose;
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal intake-modal" role="dialog" aria-modal="true" aria-label="Fill from documents">
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+      <div className="modal intake-modal" role="dialog" aria-modal="true" aria-label={create ? "New profile" : "Fill from documents"}>
         <header className="modal-head">
           <div>
-            <h3>Fill from documents</h3>
-            <div className="muted small" style={{ margin: 0 }}>Your agent reads the documents; you approve every number.</div>
+            <h3>{create ? "New profile" : "Fill from documents"}</h3>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Name it, hand the request to your agent, paste back what it finds. Or create it empty and fill it later." : "Your agent reads the documents; you approve every number."}</div>
           </div>
-          <nav className="steps">
-            {([1, 2, 3] as Step[]).map((n) => <button key={n} type="button" className={"step" + (step === n ? " on" : "")} onClick={() => setStep(n)}><span className="step-no">{n}</span>{["Choose", "Copy the request", "Paste and review"][n - 1]}</button>)}
-          </nav>
-          <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>
+          {(!create || start === "agent") && <nav className="steps">
+            {([1, 2] as Step[]).map((n) => <button key={n} type="button" className={"step" + (step === n ? " on" : "")} onClick={() => setStep(n)}><span className="step-no">{n}</span>{["Choose and copy", "Paste and review"][n - 1]}</button>)}
+          </nav>}
+          {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
         </header>
 
         {step === 1 && (
           <div className="modal-body">
-            <p className="lede">Pick what to gather. Each section lists the documents your agent will need to read or have access to.</p>
-            <ul className="section-list">
-              {INTAKE_SECTIONS.map((s) => (
-                <li key={s.id} className={sections.includes(s.id) ? "on" : ""}>
-                  <label>
-                    <input type="checkbox" checked={sections.includes(s.id)} onChange={() => toggleSection(s.id)} />
-                    <span>
-                      <strong>{s.title}</strong>
-                      <span className="what">{s.what}</span>
-                      <span className="docs">Documents: {s.documents}</span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="modal-actions"><span className="spacer" /><button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => setStep(2)}>Next: the request</button></div>
+            {create && (
+              <div className="create-basics">
+                <Field label="Profile name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Me, or Me if we marry in 2027" /></span></Field>
+                <Field label="How to start" wide><Segmented options={[{ value: "agent", label: "With your agent and documents (recommended)" }, { value: "manual", label: "By hand" }]} value={start} onChange={setStart} /></Field>
+                <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={filingStatus} onChange={setFilingStatus} /></Field>
+                <Field label="State"><Select options={STATE_OPTIONS} value={state} onChange={setState} /></Field>
+                <Field label="Base salary" hint="320k works"><MoneyInput value={salary} onChange={setSalary} placeholder="0" /></Field>
+                {start === "manual" && (
+                  <>
+                    <Field label="Bonus"><MoneyInput value={manual.bonus} onChange={(n) => setManual({ ...manual, bonus: n })} /></Field>
+                    <Field label="Pre-tax contributions" hint="401k, HSA"><MoneyInput value={manual.pretax} onChange={(n) => setManual({ ...manual, pretax: n })} /></Field>
+                    <Field label="Share value" hint="per share, if you have equity"><MoneyInput value={manual.sharePrice} onChange={(n) => setManual({ ...manual, sharePrice: n })} decimals={2} /></Field>
+                    <Field label="ISO shares granted" hint="optional; more grants later in the sidebar"><NumberInput value={manual.isoShares} onChange={(n) => setManual({ ...manual, isoShares: Math.round(n) })} min={0} /></Field>
+                    <Field label="ISO strike"><MoneyInput value={manual.isoStrike} onChange={(n) => setManual({ ...manual, isoStrike: n })} decimals={2} /></Field>
+                    <Field label="ISO shares vested"><NumberInput value={manual.isoVested} onChange={(n) => setManual({ ...manual, isoVested: Math.round(n) })} min={0} /></Field>
+                  </>
+                )}
+              </div>
+            )}
+            {create && start === "manual" && (
+              <div className="modal-actions">
+                <span className="muted small" style={{ margin: 0 }}>Everything else (other income, home, giving, last return) has a field in the sidebar.</span>
+                <span className="spacer" />
+                <button type="button" className="btn primary" disabled={!canCreate || busy} onClick={() => void finish()}>{busy ? "Creating…" : "Create profile"}</button>
+              </div>
+            )}
+            {(!create || start === "agent") && <div className="choose-copy">
+              <div className="choose">
+                <p className="lede">Pick what to gather. The request on the right updates as you choose.</p>
+                <ul className="section-list one-col">
+                  {INTAKE_SECTIONS.map((s) => (
+                    <li key={s.id} className={sections.includes(s.id) ? "on" : ""}>
+                      <label>
+                        <input type="checkbox" checked={sections.includes(s.id)} onChange={() => toggleSection(s.id)} />
+                        <span>
+                          <strong>{s.title}</strong>
+                          <span className="what">{s.what}</span>
+                          <span className="docs">Documents: {s.documents}</span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="copy">
+                <p className="lede">Paste this into any agent that can see your documents. It returns one YAML document; bring that to step 2.</p>
+                <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
+                <div className="modal-actions">
+                  <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
+                  <button type="button" className="btn" disabled={sections.length === 0} onClick={download}>Download .md</button>
+                  <span className="muted small" style={{ margin: 0 }}>{prompt.split(/\s+/).length.toLocaleString()} words</span>
+                </div>
+              </div>
+            </div>}
+            {(!create || start === "agent") && (
+              <div className="modal-actions">
+                {create && <button type="button" className="btn" disabled={!canCreate || busy} onClick={() => void finish()}>{busy ? "Creating…" : "Create now, paste later"}</button>}
+                <span className="spacer" />
+                <button type="button" className="btn primary" disabled={!canCreate} onClick={() => setStep(2)}>Next: paste the result</button>
+              </div>
+            )}
           </div>
         )}
 
         {step === 2 && (
-          <div className="modal-body">
-            <p className="lede">Paste this into any agent that can see your documents (Claude, ChatGPT, a CLI agent pointed at a folder). It returns one YAML document; bring that back to step 3.</p>
-            <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
-            <div className="modal-actions">
-              <button type="button" className="btn primary" onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
-              <button type="button" className="btn" onClick={download}>Download .md</button>
-              <span className="muted small" style={{ margin: 0 }}>{prompt.split(/\s+/).length.toLocaleString()} words · includes your current profile so re-runs come back complete</span>
-              <span className="spacer" />
-              <button type="button" className="btn" onClick={() => setStep(3)}>Next: paste the result</button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
           <div className="modal-body">
             <textarea className="paste-box" placeholder="Paste the YAML your agent returned…" value={pasted} onChange={(e) => { setPasted(e.target.value); setAccepted(null); }} />
             {parsed && parsed.problems.length > 0 && (
@@ -159,14 +247,17 @@ export function IntakeModal({ profile, onApply, onClose }: Props) {
                     </tbody>
                   </table>
                 </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn primary" disabled={selected.size === 0 && !Object.values(typed).some((v) => v.trim())} onClick={apply}>Apply {selected.size} change{selected.size === 1 ? "" : "s"}</button>
-                  <button type="button" className="btn" onClick={onClose}>Cancel</button>
-                  <span className="spacer" />
-                  <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.</span>
-                </div>
               </>
             )}
+            {error && <div className="error">{error}</div>}
+            <div className="modal-actions">
+              <button type="button" className="btn primary" disabled={busy || !canCreate || (!create && selected.size === 0 && !Object.values(typed).some((v) => v.trim()))} onClick={() => void finish()}>
+                {busy ? "Creating…" : create ? (review ? `Create with ${selected.size} change${selected.size === 1 ? "" : "s"}` : "Create profile") : `Apply ${selected.size} change${selected.size === 1 ? "" : "s"}`}
+              </button>
+              <button type="button" className="btn" onClick={() => setStep(1)}>Back</button>
+              <span className="spacer" />
+              <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.</span>
+            </div>
           </div>
         )}
       </div>
@@ -182,14 +273,16 @@ function fmt(v: unknown, format: IntakeChange["format"]): string {
     case "shares": return typeof v === "number" ? shares(v) : String(v);
     case "number": return typeof v === "number" ? v.toLocaleString("en-US") : String(v);
     case "grant": {
-      const g = v as { type: string; shares: number; strike?: number; vested?: number; schedule?: { years: number; cadence?: string; start: string; cliffMonths?: number }; vesting?: Record<string, number> };
-      const parts = [`${g.type.toUpperCase()} · ${shares(g.shares)} sh`];
+      const g = v as { type: string; granted: number; strike?: number; vestedToDate?: number; exercisedToDate?: number; schedule?: { years: number; cadence?: string; start: string; cliffMonths?: number }; vesting?: Record<string, number> };
+      const parts = [`${g.type.toUpperCase()} · ${shares(g.granted)} granted`];
       if (g.strike !== undefined) parts.push(`strike ${usd(g.strike)}`);
-      if (g.vested !== undefined) parts.push(`${shares(g.vested)} vested`);
+      if (g.vestedToDate !== undefined) parts.push(`${shares(g.vestedToDate)} vested`);
+      if (g.exercisedToDate) parts.push(`${shares(g.exercisedToDate)} exercised`);
       if (g.schedule) parts.push(`${g.schedule.years}y ${g.schedule.cadence ?? "monthly"} from ${g.schedule.start}${g.schedule.cliffMonths ? `, ${g.schedule.cliffMonths}mo cliff` : ""}`);
       else if (g.vesting) parts.push("vests " + Object.entries(g.vesting).map(([y, n]) => `${shares(n)} in ${y}`).join(", "));
       return parts.join(" · ");
     }
+    case "companies": return (v as { name: string; sharePrice: number }[]).map((c) => `${c.name} at ${usd(c.sharePrice)}/sh`).join("; ");
     case "holdings": {
       const lots = v as { lot: string; quantity: number; costBasis: number; amtBasis?: number }[];
       return lots.map((l) => `${l.lot}: ${shares(l.quantity)} sh, basis ${usd(l.costBasis)}${l.amtBasis !== undefined ? ` / AMT ${usd(l.amtBasis)}` : ""}`).join("; ");

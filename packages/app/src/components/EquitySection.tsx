@@ -1,8 +1,8 @@
-import { grantFmv, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, vestingOf, type AmtCrossover, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { shares, usd, usdCompact } from "../format.ts";
-import { Field, MoneyInput, NumberInput, Segmented, Select } from "./fields.tsx";
-import { sourceOf } from "./Sidebar.tsx";
+import { companyOf, grantFmv, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { pct, shares, usd, usdCompact } from "../format.ts";
+import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
 import { Section } from "./Section.tsx";
+import { sourceOf } from "./Sidebar.tsx";
 
 interface Props {
   profile: Profile;
@@ -21,23 +21,33 @@ const TYPE_OPTIONS = [{ value: "iso", label: "ISO" }, { value: "nso", label: "NS
 const CADENCE_OPTIONS = [{ value: "monthly", label: "monthly" }, { value: "quarterly", label: "quarterly" }, { value: "annual", label: "annual" }] as const;
 
 export function EquitySection({ profile, levers, crossovers, years, focusYear, onFocus, onExercise, edit, onOpenAssistant }: Props) {
-  const grants = profile.equity.grants;
+  const { companies, grants } = profile.equity;
   const set = (path: (string | number)[], value: unknown) => edit([{ path, value }]);
   const setGrant = (i: number, patch: Partial<EquityGrant>) => set(["equity", "grants"], grants.map((g, j) => (j === i ? clean({ ...g, ...patch }) : g)));
+  const setCompany = (i: number, patch: Partial<Company>) => set(["equity", "companies"], companies.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const hasType = (t: GrantType) => grants.some((g) => g.type === t);
   const exercisedIso = Object.values(levers.exercises.iso).reduce((s, n) => s + n, 0);
   const summary = grants.length === 0
     ? "no grants yet"
-    : [hasType("iso") && `${shares(exercisedIso)} ISO exercised`, hasType("rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType("nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + ` · ${usd(profile.equity.sharePrice)}/sh`;
+    : [hasType("iso") && `${shares(exercisedIso)} ISO exercised`, hasType("rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType("nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
+
+  const addCompany = () => set(["equity", "companies"], [...companies, { id: newId("c", companies.map((c) => c.id)), name: `Company ${companies.length + 1}`, sharePrice: 10 }]);
+  const addGrant = (type: GrantType) => {
+    const id = newId("g", grants.map((g) => g.id));
+    const g: EquityGrant = { id, name: `${TYPE_LABEL[type]} grant ${grants.length + 1}`, type, company: companies[0]?.id, granted: 1000, schedule: { start: `${profile.plan.startYear - 1}-01-01`, years: 4, cliffMonths: 12, cadence: type === "rsu" ? "quarterly" : "monthly" } };
+    if (type !== "rsu") g.strike = 1;
+    const edits: ProfileEdit[] = [];
+    if (companies.length === 0) { edits.push({ path: ["equity", "companies"], value: [{ id: "c1", name: "Company", sharePrice: 10 }] }); g.company = "c1"; }
+    edits.push({ path: ["equity", "grants"], value: [...grants, g] });
+    edit(edits);
+  };
 
   return (
     <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={summary}>
       <div className="assist-cta">
         <button type="button" className="btn primary" onClick={onOpenAssistant}>Paste a screenshot or describe your grants</button>
-        <span className="muted small" style={{ margin: 0 }}>The assistant fills this in; you approve each change.</span>
+        <span className="muted small" style={{ margin: 0 }}>Or use "Fill from documents" above for the full picture.</span>
       </div>
-
-      <Field label="Share value now" hint={profile.equity.sharePriceAsOf ? `per share, as of ${profile.equity.sharePriceAsOf}` : "409A or market price, per share"} wide source={sourceOf(profile, ["equity", "sharePrice"])}><MoneyInput value={profile.equity.sharePrice} onChange={(n) => set(["equity", "sharePrice"], n)} decimals={2} /></Field>
 
       {hasType("iso") && (
         <>
@@ -68,20 +78,37 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
         </>
       )}
 
+      <div className="subhead">Companies</div>
+      {companies.map((c, i) => (
+        <div className="grant" key={c.id}>
+          <div className="grant-head">
+            <input className="grant-name" value={c.name} onChange={(e) => setCompany(i, { name: e.target.value })} aria-label="Company name" />
+            {sourceOf(profile, ["companies", c.id, "sharePrice"]) && <span className="src" title={sourceOf(profile, ["companies", c.id, "sharePrice"])}>source</span>}
+            {companies.length > 1 && <button type="button" className="link danger" onClick={() => set(["equity", "companies"], companies.filter((_, j) => j !== i))} disabled={grants.some((g) => (g.company ?? companies[0]?.id) === c.id)}>Remove</button>}
+          </div>
+          <div className="row3">
+            <Field label="Share value" hint="per share now"><MoneyInput value={c.sharePrice} onChange={(n) => setCompany(i, { sharePrice: n })} decimals={2} /></Field>
+            <Field label="As of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => setCompany(i, { sharePriceAsOf: e.target.value || undefined })} /></span></Field>
+            <Field label="Growth" hint={c.growth === undefined ? `default ${pct(profile.assumptions.fmvGrowth)}` : "/yr"}><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => setCompany(i, { growth: n })} /></Field>
+          </div>
+          <PricePath company={c} years={years} onChange={(pricePath) => setCompany(i, { pricePath })} />
+        </div>
+      ))}
+      <button type="button" className="link" onClick={addCompany}>+ Add company</button>
+
       <div className="subhead">Grants</div>
-      {grants.map((g, i) => <GrantCard key={i} index={i} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
+      {grants.map((g, i) => <GrantCard key={g.id} grant={g} profile={profile} levers={levers} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
       <div className="add-grant">
-        {TYPE_OPTIONS.map((t) => (
-          <button type="button" key={t.value} className="link" onClick={() => set(["equity", "grants"], [...grants, blankGrant(t.value, grants.length + 1, profile.plan.startYear)])}>+ {t.label}</button>
-        ))}
+        {TYPE_OPTIONS.map((t) => <button type="button" key={t.value} className="link" onClick={() => addGrant(t.value)}>+ {t.label}</button>)}
       </div>
+
       {(profile.equity.holdings?.length ?? 0) > 0 && (
         <>
-          <div className="subhead">Shares owned</div>
+          <div className="subhead">Shares owned {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}</div>
           <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
           <div className="vest-rows">
-            {profile.equity.holdings!.map((h, i) => (
-              <div key={i} className="vest-row holding">
+            {profile.equity.holdings!.map((h) => (
+              <div key={h.id} className="vest-row holding">
                 <span>{h.lot}{h.owner === "spouse" ? " (spouse)" : ""}</span>
                 <span>{shares(h.quantity)} sh · {h.via.replace("_", " ")} · {h.acquired}</span>
                 <span className="mono">basis {usd(h.costBasis)}{h.amtBasis !== undefined ? ` / AMT ${usd(h.amtBasis)}` : ""}</span>
@@ -94,35 +121,49 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
   );
 }
 
-function blankGrant(type: GrantType, n: number, startYear: number): EquityGrant {
-  const g: EquityGrant = { name: `${TYPE_LABEL[type]} grant ${n}`, type, shares: 1000 };
-  if (type !== "rsu") g.strike = 1;
-  g.schedule = { start: `${startYear - 1}-01-01`, years: 4, cliffMonths: 12, cadence: type === "rsu" ? "quarterly" : "monthly" };
-  return g;
+function PricePath({ company, years, onChange }: { company: Company; years: number[]; onChange: (p: Record<number, number> | undefined) => void }) {
+  const entries = Object.entries(company.pricePath ?? {}).map(([y, p]) => [Number(y), p] as const).sort((a, b) => a[0] - b[0]);
+  const update = (list: (readonly [number, number])[]) => onChange(list.length ? Object.fromEntries(list) : undefined);
+  return (
+    <div className="price-path">
+      {entries.map(([y, p], i) => (
+        <div className="row3" key={i}>
+          <Field label="Known price in"><NumberInput value={y} onChange={(n) => update(entries.map((e, j) => (j === i ? [Math.round(n), e[1]] as const : e)))} grouping={false} /></Field>
+          <Field label="Per share"><MoneyInput value={p} onChange={(n) => update(entries.map((e, j) => (j === i ? [e[0], n] as const : e)))} decimals={2} /></Field>
+          <button type="button" className="link danger" style={{ alignSelf: "end", paddingBottom: 8 }} onClick={() => update(entries.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className="link" onClick={() => update([...entries, [entries.length ? entries[entries.length - 1]![0] + 1 : years[1] ?? years[0]!, company.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
+    </div>
+  );
 }
 
 /** Drop keys the YAML should not carry (undefined values, strike on RSUs). */
 function clean(g: EquityGrant): EquityGrant {
-  const out: EquityGrant = { name: g.name, type: g.type, shares: g.shares };
+  const out: EquityGrant = { id: g.id, name: g.name, type: g.type, granted: g.granted };
+  if (g.company) out.company = g.company;
   if (g.owner) out.owner = g.owner;
   if (g.grantDate) out.grantDate = g.grantDate;
-  if (g.granted !== undefined) out.granted = g.granted;
-  if (g.expires) out.expires = g.expires;
+  if (g.vestedToDate !== undefined) out.vestedToDate = g.vestedToDate;
+  if (g.type !== "rsu" && g.exercisedToDate !== undefined) out.exercisedToDate = g.exercisedToDate;
   if (g.type !== "rsu" && g.strike !== undefined) out.strike = g.strike;
-  if (g.fmv !== undefined) out.fmv = g.fmv;
-  if (g.vested !== undefined) out.vested = g.vested;
+  if (g.expires) out.expires = g.expires;
   if (g.schedule) out.schedule = g.schedule;
   else if (g.vesting) out.vesting = g.vesting;
   return out;
 }
 
-function GrantCard({ grant: g, index, profile, onChange, onRemove }: { grant: EquityGrant; index: number; profile: Profile; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
-  const source = sourceOf(profile, ["equity", "grants", index]);
+function GrantCard({ grant: g, profile, levers, onChange, onRemove }: { grant: EquityGrant; profile: Profile; levers: Levers; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
+  const source = sourceOf(profile, ["grants", g.id]);
   const v = vestingOf(profile, g);
   const mode: "schedule" | "years" | "none" = g.schedule ? "schedule" : g.vesting ? "years" : "none";
   const years = Array.from({ length: profile.plan.years }, (_, i) => profile.plan.startYear + i);
   const upcoming = years.map((y) => v.byYear[y] ?? 0);
   const spread = g.type === "rsu" ? null : Math.max(0, grantFmv(profile, g, profile.plan.startYear) - (g.strike ?? 0));
+  const outstanding = sharesOutstanding(g);
+  const exercisableNow = g.type === "rsu" ? null : vestedThrough(profile, g, profile.plan.startYear);
+  const companies = profile.equity.companies;
+  void levers;
   return (
     <div className="grant">
       <div className="grant-head">
@@ -133,25 +174,31 @@ function GrantCard({ grant: g, index, profile, onChange, onRemove }: { grant: Eq
         <button type="button" className="link danger" onClick={onRemove}>Remove</button>
       </div>
       <div className="row3">
-        <Field label="Type"><Select options={[...TYPE_OPTIONS]} value={g.type} onChange={(t) => onChange({ type: t, strike: t === "rsu" ? undefined : (g.strike ?? 1) })} /></Field>
-        <Field label={g.type === "rsu" ? "Units" : "Shares"}><NumberInput value={g.shares} onChange={(n) => onChange({ shares: Math.round(n) })} min={0} /></Field>
+        <Field label="Type"><Select options={[...TYPE_OPTIONS]} value={g.type} onChange={(t) => onChange({ type: t, strike: t === "rsu" ? undefined : (g.strike ?? 1), exercisedToDate: t === "rsu" ? undefined : g.exercisedToDate })} /></Field>
+        <Field label={g.type === "rsu" ? "Units granted" : "Shares granted"}><NumberInput value={g.granted} onChange={(n) => onChange({ granted: Math.round(n) })} min={0} /></Field>
         {g.type !== "rsu"
           ? <Field label="Strike"><MoneyInput value={g.strike ?? 0} onChange={(n) => onChange({ strike: n })} decimals={2} /></Field>
-          : <Field label="Value at vest"><span className="static">{usd(profile.equity.sharePrice)}/sh</span></Field>}
+          : <Field label="Value at vest"><span className="static">{usd(grantFmv(profile, g, profile.plan.startYear))}/sh</span></Field>}
       </div>
-      <div className="row2">
-        <Field label={g.type === "rsu" ? "Already vested" : "Vested, unexercised"} hint={`at ${profile.plan.startYear}`}>
-          <NumberInput value={g.vested ?? v.vestedAtStart} onChange={(n) => onChange({ vested: Math.max(0, Math.min(g.shares, Math.round(n))) })} min={0} />
+      <div className="row3">
+        <Field label="Vested to date" hint={`by ${profile.plan.startYear}`}>
+          <NumberInput value={g.vestedToDate ?? v.vestedAtStart + (g.type === "rsu" ? 0 : g.exercisedToDate ?? 0)} onChange={(n) => onChange({ vestedToDate: Math.max(0, Math.min(g.granted, Math.round(n))) })} min={0} />
         </Field>
-        <Field label="Vesting">
-          <Segmented options={[{ value: "schedule", label: "Schedule" }, { value: "years", label: "By year" }, { value: "none", label: "None" }]} value={mode}
-            onChange={(m) => {
-              if (m === "schedule") onChange({ schedule: g.schedule ?? { start: `${profile.plan.startYear - 1}-01-01`, years: 4, cliffMonths: 12, cadence: "monthly" }, vesting: undefined });
-              else if (m === "years") onChange({ schedule: undefined, vesting: g.vesting ?? Object.fromEntries(years.map((y) => [y, 0])) });
-              else onChange({ schedule: undefined, vesting: undefined, vested: g.vested ?? g.shares });
-            }} />
-        </Field>
+        {g.type !== "rsu"
+          ? <Field label="Exercised to date"><NumberInput value={g.exercisedToDate ?? 0} onChange={(n) => onChange({ exercisedToDate: Math.max(0, Math.min(g.granted, Math.round(n))) })} min={0} /></Field>
+          : <span />}
+        {companies.length > 1
+          ? <Field label="Company"><Select options={companies.map((c) => ({ value: c.id, label: c.name }))} value={g.company ?? companies[0]!.id} onChange={(c) => onChange({ company: c })} /></Field>
+          : <span />}
       </div>
+      <Field label="Vesting" wide>
+        <Segmented options={[{ value: "schedule", label: "Schedule" }, { value: "years", label: "By year" }, { value: "none", label: "None" }]} value={mode}
+          onChange={(m) => {
+            if (m === "schedule") onChange({ schedule: g.schedule ?? { start: `${profile.plan.startYear - 1}-01-01`, years: 4, cliffMonths: 12, cadence: "monthly" }, vesting: undefined });
+            else if (m === "years") onChange({ schedule: undefined, vesting: g.vesting ?? Object.fromEntries(years.map((y) => [y, 0])) });
+            else onChange({ schedule: undefined, vesting: undefined, vestedToDate: g.vestedToDate ?? g.granted });
+          }} />
+      </Field>
       {mode === "schedule" && g.schedule && (
         <div className="row4">
           <Field label="Vest start"><span className="input-wrap"><input type="date" value={g.schedule.start} onChange={(e) => onChange({ schedule: { ...g.schedule!, start: e.target.value } })} /></span></Field>
@@ -166,8 +213,9 @@ function GrantCard({ grant: g, index, profile, onChange, onRemove }: { grant: Eq
         </div>
       )}
       <div className="grant-foot muted">
-        {mode !== "none" && upcoming.some((n) => n > 0) ? `Vests ${years.map((y, i) => upcoming[i] ? `${shares(upcoming[i]!)} in ${y}` : null).filter(Boolean).join(", ")}.` : "Nothing more vests in the plan."}
-        {spread !== null && ` Spread ${usd(spread)}/sh today.`}
+        {g.type === "rsu" ? `${shares(outstanding - (g.vestedToDate ?? v.vestedAtStart))} unvested.` : `${shares(outstanding)} outstanding, ${shares(exercisableNow ?? 0)} exercisable now.`}
+        {mode !== "none" && upcoming.some((n) => n > 0) ? ` Vests ${years.map((y, i) => upcoming[i] ? `${shares(upcoming[i]!)} in ${y}` : null).filter(Boolean).join(", ")}.` : ""}
+        {spread !== null && ` Spread ${usd(spread)}/sh today${companyOf(profile, g) && companies.length > 1 ? ` (${companyOf(profile, g)!.name})` : ""}.`}
       </div>
     </div>
   );
@@ -176,7 +224,7 @@ function GrantCard({ grant: g, index, profile, onChange, onRemove }: { grant: Eq
 interface LeverProps { year: number; available: number; value: number; mark: number | null; over: boolean; sharesBeforeAmt: number; spread: number; focus: boolean; onFocus: (y: number) => void; onChange: (n: number) => void; }
 
 function ExerciseLever({ year, available, value, mark, over, sharesBeforeAmt, spread, focus, onFocus, onChange }: LeverProps) {
-  const pct = (n: number) => (available > 0 ? (n / available) * 100 : 0);
+  const pctOf = (n: number) => (available > 0 ? (n / available) * 100 : 0);
   return (
     <div className={"lever" + (focus ? " focus" : "")}>
       <div className="head">
@@ -185,9 +233,9 @@ function ExerciseLever({ year, available, value, mark, over, sharesBeforeAmt, sp
       </div>
       <div className="track">
         <input type="range" className="range" min={0} max={available} step={available > 5000 ? 50 : 10} value={value} disabled={available === 0}
-          style={{ "--pct": `${pct(value)}%` } as React.CSSProperties}
+          style={{ "--pct": `${pctOf(value)}%` } as React.CSSProperties}
           onChange={(e) => onChange(Number(e.target.value))} onFocus={() => onFocus(year)} />
-        {mark !== null && <div className="mark" style={{ left: `calc(9px + (100% - 18px) * ${pct(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares`} />}
+        {mark !== null && <div className="mark" style={{ left: `calc(9px + (100% - 18px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares`} />}
       </div>
       <div className="foot">
         <span className={over ? "over" : ""}>

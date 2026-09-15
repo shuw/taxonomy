@@ -365,3 +365,18 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .cal-verdict.good { background: var(--good-bg); color: var(--good); }
 .cal-verdict.bad { background: var(--bad-bg); color: var(--bad); }
 .ledger.cal th:not(:first-child), .ledger.cal td:not(:first-child) { text-align: right; }
+
+/* Scenarios, timeline, two-step intake, create basics ------------------------------- */
+.scenario-bar { display: flex; align-items: center; gap: 4px; }
+.inline-form { display: flex; align-items: center; gap: 4px; }
+.inline-form .input-wrap { width: 160px; }
+.timeline-row .grant-name { font-weight: 400; font-size: 12px; }
+.price-path { display: flex; flex-direction: column; gap: 6px; }
+.choose-copy { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(320px, 3fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .choose-copy { grid-template-columns: 1fr; } }
+.section-list.one-col { grid-template-columns: 1fr; }
+.choose, .copy { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.copy .prompt-box { min-height: 380px; }
+.create-basics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 12px 14px; background: var(--surface-2); border-radius: 14px; }
+.create-basics .wide { grid-column: 1 / -1; }
+.modal { width: min(1180px, 100%); }

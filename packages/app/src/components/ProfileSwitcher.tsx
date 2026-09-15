@@ -45,7 +45,7 @@ export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, on
               <button type="button" onClick={() => setMode("rename")}>Rename</button>
               <button type="button" onClick={() => { setOpen(false); onDuplicate(); }}>Duplicate</button>
               <button type="button" onClick={() => { setOpen(false); onNew(); }}>New profile…</button>
-              <button type="button" className="danger" onClick={() => setMode("delete")} disabled={profiles.length < 2}>Delete…</button>
+              <button type="button" className="danger" onClick={() => setMode("delete")}>Delete…</button>
             </>
           )}
           {mode === "rename" && (
@@ -59,7 +59,7 @@ export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, on
           )}
           {mode === "delete" && (
             <div className="menu-form">
-              <p>Delete <strong>{currentName}</strong>? The file is removed from <code>data/profiles</code>.</p>
+              <p>Delete <strong>{currentName}</strong>? The file is removed from <code>data/profiles</code>.{profiles.length < 2 ? " It is your only profile; you will start over." : ""}</p>
               <div className="menu-actions">
                 <button type="button" className="btn" onClick={() => setMode("menu")}>Keep</button>
                 <button type="button" className="btn danger" onClick={() => { setOpen(false); onDelete(); }}>Delete</button>

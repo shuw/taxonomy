@@ -1,33 +1,50 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
-import type { Charitable, Equity, EquityGrant, FilingStatus, GrantType, Levers, Profile } from "./types.ts";
+import { newId } from "./equity.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, Levers, PriorReturn, Profile, Source } from "./types.ts";
 
 export const FILING_STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
 const GRANT_TYPES: GrantType[] = ["iso", "nso", "rsu"];
+export const CURRENT_VERSION = 3;
 
-/** Version 1 files and the pre-typed-grant shape, still accepted on read. */
-interface V1Profile {
+/* Older shapes, still accepted on read ------------------------------------------------- */
+
+interface V2Grant { name: string; type: GrantType; owner?: "self" | "spouse"; grantDate?: string; granted?: number; shares: number; strike?: number; fmv?: number; vested?: number; vesting?: Record<number, number>; schedule?: EquityGrant["schedule"]; expires?: string; id?: string }
+interface V2Holding { id?: string; lot: string; owner?: "self" | "spouse"; quantity: number; acquired: string; via: Holding["via"]; costBasis: number; amtBasis?: number; company?: string }
+
+interface RawProfile {
   version?: number;
   name?: string;
-  filer?: Profile["filer"];
+  filer?: { filingStatus: FilingStatus; state: string; dependents?: number | Dependent[] };
   plan?: Profile["plan"];
   assumptions?: Partial<Profile["assumptions"]>;
   income?: Profile["income"] & { wages?: number };
   people?: Profile["people"];
-  deductions?: Omit<Profile["deductions"] & {}, "charitable"> & { charitable?: number | Charitable; propertyTax?: number };
+  deductions?: { stateIncomeTax?: number; charitable?: number | Charitable; medical?: number; mortgageInterest?: number; propertyTax?: number };
   home?: Profile["home"];
   carryforwards?: Profile["carryforwards"];
-  priorReturn?: Profile["priorReturn"];
-  equity?: Partial<Equity> & { isoGrants?: { name: string; strike: number; fmv: number; shares: number }[]; amtCreditCarryforward?: number };
+  priorReturn?: PriorReturn;
+  returns?: PriorReturn[];
+  equity?: {
+    company?: string; sharePrice?: number; sharePriceAsOf?: string;
+    companies?: Company[];
+    grants?: (V2Grant | EquityGrant)[];
+    holdings?: V2Holding[];
+    isoGrants?: { name: string; strike: number; fmv: number; shares: number }[];
+    amtCreditCarryforward?: number;
+  };
   levers?: Partial<Levers> & { isoExercises?: Record<number, number> };
-  sources?: Record<string, string>;
+  scenarios?: Record<string, Levers>;
+  activeScenario?: string;
+  timeline?: Profile["timeline"];
+  sources?: Record<string, Source>;
 }
 
-/** Parse a profile file (v1 or v2) into the current shape and fail loudly on anything the engine cannot work with. */
+/** Parse a profile file of any version into the current shape; fail loudly on anything the engine cannot work with. */
 export function parseProfile(text: string): Profile {
-  const raw = parse(text) as V1Profile | null;
+  const raw = parse(text) as RawProfile | null;
   if (!raw || typeof raw !== "object") throw new Error("profile is empty");
   const problems: string[] = [];
-  if (raw.version !== 1 && raw.version !== 2) problems.push("version must be 1 or 2");
+  if (![1, 2, 3].includes(raw.version as number)) problems.push("version must be 1, 2 or 3");
   if (!raw.filer || !FILING_STATUSES.includes(raw.filer.filingStatus)) problems.push(`filer.filingStatus must be one of ${FILING_STATUSES.join(", ")}`);
   if (!raw.filer?.state) problems.push("filer.state is required");
   if (!raw.plan || !Number.isInteger(raw.plan.startYear) || !Number.isInteger(raw.plan.years) || raw.plan.years < 1) problems.push("plan.startYear and plan.years are required");
@@ -41,59 +58,101 @@ export function parseProfile(text: string): Profile {
 
   const { wages: _wages, ...income } = raw.income ?? {};
   const d = raw.deductions ?? {};
-  const deductions: Profile["deductions"] = {
-    stateIncomeTax: d.stateIncomeTax,
-    charitable: typeof d.charitable === "number" ? { cash: d.charitable } : d.charitable,
-    medical: d.medical,
-    mortgageInterest: d.mortgageInterest,
-  };
   const home: Profile["home"] = { ...(raw.home ?? {}) };
   if (home.propertyTax === undefined && typeof d.propertyTax === "number") home.propertyTax = d.propertyTax;
+  if (home.mortgageInterest === undefined && typeof d.mortgageInterest === "number") home.mortgageInterest = d.mortgageInterest;
   const carryforwards: Profile["carryforwards"] = { ...(raw.carryforwards ?? {}) };
   if (carryforwards.amtCredit === undefined && typeof raw.equity?.amtCreditCarryforward === "number") carryforwards.amtCredit = raw.equity.amtCreditCarryforward;
+  const dependentsRaw = raw.filer!.dependents;
+  const dependents: Dependent[] | undefined = Array.isArray(dependentsRaw) ? dependentsRaw : typeof dependentsRaw === "number" ? Array.from({ length: dependentsRaw }, () => ({})) : undefined;
+  const returns = raw.returns ?? (raw.priorReturn ? [raw.priorReturn] : undefined);
+
+  let scenarios = raw.scenarios;
+  if (!scenarios && raw.levers) scenarios = { default: normalizeLevers(raw.levers) };
 
   return {
-    version: 2,
+    version: 3,
     name: typeof raw.name === "string" ? raw.name : undefined,
-    filer: raw.filer!,
+    filer: { filingStatus: raw.filer!.filingStatus, state: raw.filer!.state, dependents },
     plan: raw.plan!,
     assumptions: { inflation: 0.025, wageGrowth: 0, fmvGrowth: 0, ...raw.assumptions },
     people: people!,
     income,
     carryforwards,
-    priorReturn: raw.priorReturn,
+    returns,
     equity,
     home,
-    deductions,
-    levers: normalizeLevers(raw),
-    sources: raw.sources,
+    deductions: { stateIncomeTax: d.stateIncomeTax, charitable: typeof d.charitable === "number" ? { cash: d.charitable } : d.charitable, medical: d.medical },
+    timeline: raw.timeline,
+    scenarios,
+    activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
+    sources: rekeySources(raw.sources, equity),
   };
 }
 
-function normalizeEquity(raw: V1Profile, problems: string[]): Equity {
-  const e = raw.equity ?? {};
-  const grants: EquityGrant[] = [...(e.grants ?? [])];
-  if (e.isoGrants) for (const g of e.isoGrants) grants.push({ name: g.name, type: "iso", shares: g.shares, strike: g.strike, fmv: g.fmv, vested: g.shares });
-  grants.forEach((g, i) => {
-    if (!GRANT_TYPES.includes(g.type)) problems.push(`equity.grants[${i}].type must be one of ${GRANT_TYPES.join(", ")}`);
-    if (typeof g.shares !== "number" || g.shares < 0) problems.push(`equity.grants[${i}].shares must be a number`);
-    if (g.type !== "rsu" && typeof g.strike !== "number") problems.push(`equity.grants[${i}].strike is required for options`);
-    if (g.schedule && !/^\d{4}-\d{2}-\d{2}$/.test(g.schedule.start)) problems.push(`equity.grants[${i}].schedule.start must be YYYY-MM-DD`);
-  });
-  const sharePrice = e.sharePrice ?? grants.find((g) => g.fmv !== undefined)?.fmv ?? 0;
-  return { company: e.company, sharePrice, sharePriceAsOf: e.sharePriceAsOf, grants, holdings: e.holdings };
-}
-
-function normalizeLevers(raw: V1Profile): Profile["levers"] {
-  const l = raw.levers;
-  if (!l) return undefined;
+function normalizeLevers(l: NonNullable<RawProfile["levers"]>): Levers {
   return { exercises: { iso: { ...(l.isoExercises ?? {}), ...(l.exercises?.iso ?? {}) }, nso: { ...(l.exercises?.nso ?? {}) } } };
 }
 
-/** Whether a file predates the current schema (version 1, or the pre-typed-grant keys). */
+function normalizeEquity(raw: RawProfile, problems: string[]): Profile["equity"] {
+  const e = raw.equity ?? {};
+  const companies: Company[] = [...(e.companies ?? [])];
+  const legacyPrice = e.sharePrice ?? e.isoGrants?.[0]?.fmv;
+  if (companies.length === 0 && (legacyPrice !== undefined || (e.grants?.length ?? 0) > 0 || (e.isoGrants?.length ?? 0) > 0)) {
+    companies.push({ id: "c1", name: e.company ?? "Company", sharePrice: legacyPrice ?? 0, sharePriceAsOf: e.sharePriceAsOf });
+  }
+  const ids: string[] = [];
+  const grants: EquityGrant[] = [];
+  const pushGrant = (g: EquityGrant) => { ids.push(g.id); grants.push(g); };
+  for (const g of e.isoGrants ?? []) {
+    pushGrant({ id: newId("g", ids), name: g.name, type: "iso", granted: g.shares, vestedToDate: g.shares, exercisedToDate: 0, strike: g.strike });
+  }
+  for (const g of e.grants ?? []) {
+    if ("granted" in g && typeof g.granted === "number" && !("shares" in g)) {
+      pushGrant({ ...(g as EquityGrant), id: (g as EquityGrant).id ?? newId("g", ids) });
+      continue;
+    }
+    const v2 = g as V2Grant;
+    const granted = v2.granted ?? v2.shares;
+    const exercised = v2.type === "rsu" ? 0 : Math.max(0, granted - v2.shares);
+    const vestedToDate = v2.vested === undefined ? undefined : v2.type === "rsu" ? v2.vested : v2.vested + exercised;
+    pushGrant(stripUndefined({
+      id: v2.id ?? newId("g", ids), name: v2.name, type: v2.type, owner: v2.owner, grantDate: v2.grantDate,
+      granted, vestedToDate, exercisedToDate: exercised || undefined, strike: v2.type === "rsu" ? undefined : v2.strike,
+      vesting: v2.vesting, schedule: v2.schedule, expires: v2.expires,
+    }));
+  }
+  grants.forEach((g, i) => {
+    if (!GRANT_TYPES.includes(g.type)) problems.push(`equity.grants[${i}].type must be one of ${GRANT_TYPES.join(", ")}`);
+    if (typeof g.granted !== "number" || g.granted < 0) problems.push(`equity.grants[${i}].granted must be a number`);
+    if (g.type !== "rsu" && typeof g.strike !== "number") problems.push(`equity.grants[${i}].strike is required for options`);
+    if (g.schedule && !/^\d{4}-\d{2}-\d{2}$/.test(g.schedule.start)) problems.push(`equity.grants[${i}].schedule.start must be YYYY-MM-DD`);
+    if (g.company && !companies.some((c) => c.id === g.company)) problems.push(`equity.grants[${i}].company "${g.company}" is not in equity.companies`);
+  });
+  const hids: string[] = [];
+  const holdings = e.holdings?.map((h) => { const id = h.id ?? newId("h", hids); hids.push(id); return { ...h, id }; });
+  return { companies, grants, holdings };
+}
+
+/** Sources keyed by grant or holding index move to ids, so reordering never orphans them. */
+function rekeySources(sources: Record<string, Source> | undefined, equity: Profile["equity"]): Record<string, Source> | undefined {
+  if (!sources) return undefined;
+  const out: Record<string, Source> = {};
+  for (const [k, v] of Object.entries(sources)) {
+    const m = k.match(/^equity\.grants\.(\d+)$/);
+    const h = k.match(/^equity\.holdings$/);
+    if (m && equity.grants[Number(m[1])]) out[`grants.${equity.grants[Number(m[1])]!.id}`] = v;
+    else if (h) out["holdings"] = v;
+    else if (k === "equity.sharePrice" && equity.companies[0]) out[`companies.${equity.companies[0].id}.sharePrice`] = v;
+    else out[k] = v;
+  }
+  return out;
+}
+
+/** Whether a file predates the current schema. */
 export function isLegacyProfileText(text: string): boolean {
-  const raw = parse(text) as V1Profile | null;
-  return !!raw && (raw.version !== 2 || !!raw.equity?.isoGrants || !!raw.levers?.isoExercises);
+  const raw = parse(text) as RawProfile | null;
+  return !!raw && raw.version !== CURRENT_VERSION;
 }
 
 /** Rewrite an old file into the current shape. Comments do not survive a version bump; the structure is re-emitted with fresh ones. */
@@ -103,18 +162,19 @@ export function migrateProfileText(text: string): string {
 }
 
 const COMMENTS: Record<string, string> = {
-  filer: "single | mfj | mfs | hoh; state is a two-letter code (only WA is modeled so far)",
+  filer: "single | mfj | mfs | hoh; state is a two-letter code (only WA is modeled so far); dependents by birth year",
   plan: "the years on screen",
-  assumptions: "inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to the share value",
+  assumptions: "inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to share values; bracketRateDelta shifts every bracket rate",
   people: "base salary and bonus per earner; RSU vests and option exercises are added by the engine",
   income: "household investment and other income for the start year",
   carryforwards: "balances entering the first plan year: Form 8801 credit, Schedule D losses, unused charitable gifts",
-  priorReturn: "the last filed return, for calibration",
-  equity: "sharePrice is per share at the start year; grants are iso | nso | rsu with a vesting schedule or per-year counts",
+  returns: "filed returns; the newest is used for calibration",
+  equity: "companies with a share price; grants by the portal's three counts (granted, vestedToDate, exercisedToDate); holdings are lots you own",
   home: "the mortgage as a loan; interest and the $750k cap are computed",
   deductions: "charitable by kind; stateIncomeTax; medical",
-  levers: "where the sliders start",
-  sources: "where each number came from, keyed by path",
+  timeline: "dated changes to any value above, in force from that year on: { year, path, value }",
+  scenarios: "named lever settings; activeScenario picks one",
+  sources: "where each number came from, keyed by path (grants and holdings by id)",
 };
 
 /** Emit a profile as YAML with a comment on each top-level section. */
@@ -132,7 +192,7 @@ export function stringifyProfile(profile: Profile): string {
   return doc.toString({ lineWidth: 0 });
 }
 
-function stripUndefined<T>(value: T): T {
+export function stripUndefined<T>(value: T): T {
   if (Array.isArray(value)) return value.map(stripUndefined) as T;
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};

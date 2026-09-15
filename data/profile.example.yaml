@@ -1,20 +1,20 @@
 # Taxonomy profile. Amounts are annual dollars for plan.startYear unless noted.
 # Real profiles live in data/profiles/<id>.yaml (gitignored); the app creates them.
-version: 2
+version: 3
 name: Example
 
-# single | mfj | mfs | hoh; state is a two-letter code (only WA is modeled so far)
+# single | mfj | mfs | hoh; state is a two-letter code (only WA is modeled so far); dependents by birth year
 filer:
   filingStatus: single
   state: WA
-  dependents: 0
+  dependents: []
 
 # the years on screen
 plan:
   startYear: 2026
   years: 6
 
-# inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to the share value
+# inflation indexes brackets after 2026; wageGrowth applies to salaries; fmvGrowth to share values; bracketRateDelta shifts every bracket rate
 assumptions:
   inflation: 0.025
   wageGrowth: 0.03
@@ -45,19 +45,27 @@ carryforwards:
   capitalLoss: { shortTerm: 0, longTerm: 0 }
   charitable: 0
 
-# sharePrice is per share at the start year; grants are iso | nso | rsu with a vesting schedule or per-year counts
+# companies with a share price; grants by the portal's three counts (granted, vestedToDate, exercisedToDate); holdings are lots you own
 equity:
-  company: Example Inc.
-  sharePrice: 18.00
+  companies:
+    - id: c1
+      name: Example Inc.
+      sharePrice: 18.00          # per share at plan.startYear (409A for private companies)
+      # pricePath: { 2027: 40 }  # a known or assumed price in a later year (an IPO); growth resumes from there
   grants:
-    - name: "2023 ISO grant"
+    - id: g1
+      name: "2023 ISO grant"
       type: iso
-      shares: 40000          # unexercised
+      company: c1
+      granted: 40000
+      vestedToDate: 40000        # vested by the start of the plan
+      exercisedToDate: 0         # already exercised (those shares live in holdings)
       strike: 2.00
-      vested: 40000          # vested and unexercised at the start of the plan
-    - name: "2025 RSU refresh"
+    - id: g2
+      name: "2025 RSU refresh"
       type: rsu
-      shares: 8000
+      company: c1
+      granted: 8000
       schedule:
         start: 2025-03-15
         years: 4
@@ -75,9 +83,16 @@ deductions:
   stateIncomeTax: 0
   charitable: { cash: 0, appreciatedStock: 0, daf: 0 }
 
-# where the sliders start
-levers:
-  exercises:
-    iso:
-      2026: 4000
-    nso: {}
+# dated changes to any value above, in force from that year on: { year, path, value }
+timeline: []
+  # - { year: 2028, path: people.self.salary, value: 400000, note: "promotion" }
+  # - { year: 2027, path: filer.filingStatus, value: mfj }
+
+# named lever settings; activeScenario picks one
+scenarios:
+  default:
+    exercises:
+      iso:
+        2026: 4000
+      nso: {}
+activeScenario: default

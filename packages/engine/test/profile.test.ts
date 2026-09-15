@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { editProfileText, isLegacyProfileText, migrateProfileText, parseProfile, stringifyProfile } from "../src/profile.ts";
+import { runPlan } from "../src/plan.ts";
 
 const example = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
 
@@ -9,35 +10,35 @@ describe("profile editing", () => {
     const out = editProfileText(example, [
       { path: ["people", "self", "salary"], value: 410_000 },
       { path: ["filer", "filingStatus"], value: "mfj" },
-      { path: ["levers", "exercises", "iso", 2027], value: 1_500 },
+      { path: ["scenarios", "default", "exercises", "iso", 2027], value: 1_500 },
     ]);
     const p = parseProfile(out);
     expect(p.people.self.salary).toBe(410_000);
     expect(p.filer.filingStatus).toBe("mfj");
-    expect(p.levers?.exercises?.iso[2027]).toBe(1_500);
+    expect(p.scenarios?.default?.exercises.iso[2027]).toBe(1_500);
     expect(out).toContain("# Taxonomy profile");
-    expect(out).toContain("# unexercised");
+    expect(out).toContain("# already exercised");
   });
   test("undefined deletes a key and lists can be replaced", () => {
     const out = editProfileText(example, [
       { path: ["deductions", "charitable", "cash"], value: undefined },
-      { path: ["equity", "grants"], value: [{ name: "A", type: "iso", strike: 1, shares: 100 }, { name: "B", type: "rsu", shares: 200 }] },
+      { path: ["equity", "grants"], value: [{ id: "a", name: "A", type: "iso", strike: 1, granted: 100 }, { id: "b", name: "B", type: "rsu", granted: 200 }] },
     ]);
     const p = parseProfile(out);
     expect(p.deductions?.charitable?.cash).toBeUndefined();
     expect(p.equity.grants.map((g) => g.name)).toEqual(["A", "B"]);
   });
   test("numeric and quoted year keys resolve to the same entry", () => {
-    const quoted = example.replace("      2026: 4000", '      "2026": 4000');
+    const quoted = example.replace("        2026: 4000", '        "2026": 4000');
     expect(quoted).not.toBe(example);
-    const out = editProfileText(quoted, [{ path: ["levers", "exercises", "iso", 2026], value: 9_000 }]);
+    const out = editProfileText(quoted, [{ path: ["scenarios", "default", "exercises", "iso", 2026], value: 9_000 }]);
     expect(out.match(/2026/g)!.length).toBe(example.match(/2026/g)!.length);
-    expect(parseProfile(out).levers?.exercises?.iso[2026]).toBe(9_000);
-    const created = editProfileText(example, [{ path: ["levers", "exercises", "nso"], value: {} }, { path: ["levers", "exercises", "nso", 2027], value: 5 }]);
+    expect(parseProfile(out).scenarios?.default?.exercises.iso[2026]).toBe(9_000);
+    const created = editProfileText(example, [{ path: ["scenarios", "default", "exercises", "nso"], value: {} }, { path: ["scenarios", "default", "exercises", "nso", 2027], value: 5 }]);
     expect(created).toContain("2027: 5");
     expect(created).not.toContain('"2027"');
   });
-  test("version 1 files parse into the v2 shape and migrate to a fresh v2 document", () => {
+  test("version 1 files parse into the current shape and migrate to a fresh document", () => {
     const legacy = `version: 1
 filer: { filingStatus: single, state: WA }
 plan: { startYear: 2026, years: 3 }
@@ -57,21 +58,50 @@ levers:
 `;
     expect(isLegacyProfileText(legacy)).toBe(true);
     const p = parseProfile(legacy);
-    expect(p.version).toBe(2);
+    expect(p.version).toBe(3);
     expect(p.people.self.salary).toBe(100_000);
-    expect(p.equity.sharePrice).toBe(20);
-    expect(p.equity.grants[0]).toMatchObject({ type: "iso", shares: 1000, strike: 2, vested: 1000 });
+    expect(p.equity.companies[0]).toMatchObject({ id: "c1", sharePrice: 20 });
+    expect(p.equity.grants[0]).toMatchObject({ id: "g1", type: "iso", granted: 1000, vestedToDate: 1000, strike: 2 });
     expect(p.carryforwards?.amtCredit).toBe(4000);
     expect(p.home?.propertyTax).toBe(9000);
+    expect(p.home?.mortgageInterest).toBe(15000);
     expect(p.deductions?.charitable).toEqual({ cash: 1200 });
-    expect(p.deductions?.mortgageInterest).toBe(15000);
-    expect(p.levers?.exercises?.iso[2026]).toBe(100);
+    expect(p.scenarios?.default?.exercises.iso[2026]).toBe(100);
+    expect(p.activeScenario).toBe("default");
     const migrated = migrateProfileText(legacy);
     expect(isLegacyProfileText(migrated)).toBe(false);
-    expect(migrated).toContain("version: 2");
-    expect(migrated).toContain("sharePrice: 20");
+    expect(migrated).toContain("version: 3");
     expect(parseProfile(migrated)).toEqual(p);
     expect(migrateProfileText(migrated)).toBe(migrated);
+  });
+  test("version 2 grants become the granted/vested/exercised triple with ids, and sources move to ids", () => {
+    const v2 = `version: 2
+filer: { filingStatus: mfj, state: WA, dependents: 2 }
+plan: { startYear: 2026, years: 3 }
+assumptions: { inflation: 0.02, wageGrowth: 0, fmvGrowth: 0.1 }
+people: { self: { salary: 100000 } }
+income: {}
+equity:
+  company: Acme
+  sharePrice: 21
+  grants:
+    - { name: iso, type: iso, granted: 60000, shares: 47500, vested: 40000, strike: 2 }
+    - { name: rsu, type: rsu, shares: 8000, vested: 3500 }
+  holdings:
+    - { lot: L1, quantity: 100, acquired: 2025-01-01, via: iso_exercise, costBasis: 2 }
+priorReturn: { year: 2025, inputs: { wages: 1 }, reported: { agi: 1 } }
+levers: { exercises: { iso: { 2026: 5 }, nso: {} } }
+sources: { "equity.grants.1": "Shareworks", "equity.sharePrice": "409A", "people.self.salary": "stub" }
+`;
+    const p = parseProfile(v2);
+    expect(p.filer.dependents).toHaveLength(2);
+    expect(p.equity.companies[0]).toMatchObject({ id: "c1", name: "Acme", sharePrice: 21 });
+    expect(p.equity.grants[0]).toMatchObject({ id: "g1", granted: 60_000, exercisedToDate: 12_500, vestedToDate: 52_500 });
+    expect(p.equity.grants[1]).toMatchObject({ id: "g2", granted: 8_000, vestedToDate: 3_500 });
+    expect(p.equity.holdings?.[0]?.id).toBe("h1");
+    expect(p.returns?.[0]?.year).toBe(2025);
+    expect(p.sources).toEqual({ "grants.g2": "Shareworks", "companies.c1.sharePrice": "409A", "people.self.salary": "stub" });
+    expect(runPlan(p).years[0]!.inputs.isoSharesExercised).toBe(5);
   });
   test("stringifyProfile round-trips the example", () => {
     const p = parseProfile(example);

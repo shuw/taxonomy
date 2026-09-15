@@ -20,10 +20,10 @@ vesting schedule (start date, years, cliff, cadence) or explicit per-year counts
 
 ## Filling the profile from documents
 
-The **Fill from documents** button opens a three-step modal. Pick the sections to gather, copy
-the generated request into any agent that can see your documents (Claude with connectors, a
-CLI agent pointed at a folder of PDFs, ChatGPT with uploads), and paste back the YAML it
-returns. The app validates it, shows every proposed change beside the current value with the
+The **Fill from documents** button opens a two-step modal. Pick the sections to gather while the
+generated request updates beside them, copy it into any agent that can see your documents
+(Claude with connectors, a CLI agent pointed at a folder of PDFs, ChatGPT with uploads), and
+paste back the YAML it returns. The app validates it, shows every proposed change beside the current value with the
 source the agent cited, and writes only the rows you accept. Sources stay with each number and
 show as chips in the sidebar. If the intake includes last year's return, a calibration card
 shows how closely the engine reproduces it.
@@ -39,10 +39,20 @@ credentials: `export ANTHROPIC_API_KEY=...` or `ant auth login`. Proposals appea
 nothing is written until you click Apply. Set `TAXONOMY_MODEL` to change the model (default
 `claude-opus-5`).
 
-## Profile schema (version 2)
+## Profile schema (version 3)
 
-`people` (self and optional spouse: salary, bonus, pre-tax contributions), household `income`,
-`carryforwards` (AMT credit, capital losses, charitable), `priorReturn` for calibration,
-`equity` (share price, typed grants with vesting, holdings with cost and AMT basis), `home`
-(mortgage as a loan; interest and the $750k cap are computed), `deductions` (charitable by kind,
-state tax, medical), `levers`, and `sources`. Version 1 files are migrated on first read.
+Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,
+`equity` (companies with a share price and optional price path; grants by the portal's three
+counts; holdings with cost and AMT basis), `home` and `deductions` are facts for the first plan
+year. `timeline` holds dated changes to any of them. `scenarios` holds named lever settings and
+`activeScenario` picks one; "Save as…" in the top bar snapshots the current levers. `sources`
+records provenance by path, with grants, holdings and companies keyed by id. Older files are
+migrated on first read. The full description is in `docs/DATA-MODEL.md`; every scalar field is
+declared once in `packages/engine/src/fields.ts`, which drives the intake prompt, the review
+table, the assistant and the timeline picker.
+
+## Creating a profile
+
+"New profile" in the top bar opens the same intake flow with two start modes: with your agent
+and documents (the default), or by hand with a short form. Either way the profile is a file
+you can keep editing from the sidebar or in a text editor.
