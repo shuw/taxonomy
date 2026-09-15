@@ -12,10 +12,11 @@ export interface IntakeDocument {
   basics?: {
     filingStatus?: FilingStatus;
     state?: string;
-    dependents?: number;
+    /** A count, or the dependents' birth years. */
+    dependents?: number | number[];
     planStartYear?: number;
   };
-  pay?: { dependents?: number };
+  pay?: { dependents?: number | number[] };
   people?: { self?: IntakePerson; spouse?: IntakePerson };
   prior_return?: IntakePriorReturn;
   income?: {
@@ -191,15 +192,26 @@ export function parseIntake(text: string): IntakeParse {
 
   const doc: IntakeDocument = { taxonomy_intake: 1, as_of: date("as_of", d.as_of) };
 
+  /** Dependents come as a count or as a list of birth years (numbers, or objects with birthYear). */
+  const dependents = (path: string, raw: unknown): number | number[] | undefined => {
+    if (raw === undefined || raw === null) return undefined;
+    if (Array.isArray(raw)) {
+      const years = raw.map((x) => (x && typeof x === "object" ? (x as { birthYear?: unknown; year?: unknown }).birthYear ?? (x as { year?: unknown }).year : x)).map((x) => (typeof x === "string" ? Number(x) : x));
+      if (years.every((y) => typeof y === "number" && y >= 1900 && y <= 2100)) return years as number[];
+      problems.push({ path, message: "must be a count or a list of birth years" });
+      return undefined;
+    }
+    return num(path, raw, { min: 0 });
+  };
   const basics = obj("basics", d.basics);
   if (basics) {
     const fsRaw = str("basics.filingStatus", basics.filingStatus)?.toLowerCase();
     const fs = fsRaw === undefined ? undefined : normalizeFiling(fsRaw);
     if (fsRaw !== undefined && !fs) problems.push({ path: "basics.filingStatus", message: `must be one of ${FILING.join(", ")}` });
-    doc.basics = { filingStatus: fs, state: str("basics.state", basics.state)?.toUpperCase(), dependents: num("basics.dependents", basics.dependents, { min: 0 }), planStartYear: num("basics.planStartYear", basics.planStartYear, { min: 2025, max: 2100 }) };
+    doc.basics = { filingStatus: fs, state: str("basics.state", basics.state)?.toUpperCase(), dependents: dependents("basics.dependents", basics.dependents), planStartYear: num("basics.planStartYear", basics.planStartYear, { min: 2025, max: 2100 }) };
   }
   const payRaw = obj("pay", d.pay);
-  if (payRaw) doc.pay = { dependents: num("pay.dependents", payRaw.dependents, { min: 0 }) };
+  if (payRaw) doc.pay = { dependents: dependents("pay.dependents", payRaw.dependents) };
   const people = obj("people", d.people);
   if (people) doc.people = { self: person("people.self", people.self), spouse: person("people.spouse", people.spouse) };
 

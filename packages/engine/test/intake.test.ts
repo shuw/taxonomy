@@ -160,3 +160,23 @@ describe("intake prompt", () => {
     expect(text).toContain("report only these paths: people.self.expectedBonus");
   });
 });
+
+describe("dependents", () => {
+  test("birth years are accepted and become dependents with ages", () => {
+    const { parseIntake } = require("../src/intake/schema.ts") as typeof import("../src/intake/schema.ts");
+    const { reviewIntake, changesToEdits } = require("../src/intake/apply.ts") as typeof import("../src/intake/apply.ts");
+    const { parseProfile } = require("../src/profile.ts") as typeof import("../src/profile.ts");
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
+    const parsed = parseIntake("taxonomy_intake: 1\npay:\n  dependents: [2019, 2022]\n");
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.doc?.pay?.dependents).toEqual([2019, 2022]);
+    const review = reviewIntake(parsed.doc!, profile);
+    const row = review.changes.find((c) => c.id === "filer.dependents")!;
+    expect(row.proposed).toBe("2019, 2022");
+    const edits = changesToEdits([row], profile);
+    expect(edits.find((e) => e.path.join(".") === "filer.dependents")?.value).toEqual([{ birthYear: 2019 }, { birthYear: 2022 }]);
+    const count = parseIntake("taxonomy_intake: 1\npay:\n  dependents: 2\n");
+    expect(reviewIntake(count.doc!, profile).changes.find((c) => c.id === "filer.dependents")?.proposed).toBe("2");
+  });
+});

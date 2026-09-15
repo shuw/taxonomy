@@ -21,6 +21,8 @@ export interface IntakeChange {
   note?: string;
   /** Key under `sources` when applied (grants and holdings use ids). */
   sourceKey: string;
+  /** Dependents' birth years, when the agent gave them rather than a count. */
+  birthYears?: number[];
   /** The intake path this row came from, for matching the agent's questions. */
   intakeKey?: string;
 }
@@ -58,9 +60,13 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
     if (proposed === undefined) continue;
     if (f.path.startsWith("equity.companies.0.") && profile.equity.companies.length === 0) continue; // handled by the companies row
     if (f.path === "filer.dependents") {
-      const n = typeof proposed === "number" ? Math.max(0, Math.round(proposed)) : 0;
-      const cur = profile.filer.dependents?.length ?? 0;
-      add({ section: f.section, label: f.label, path: ["filer", "dependents"], current: profile.filer.dependents === undefined ? undefined : cur, proposed: n === cur ? cur : n, source: src(f.intake), format: "number", sourceKey: f.path });
+      const years = Array.isArray(proposed) ? (proposed as number[]) : undefined;
+      const n = years ? years.length : typeof proposed === "number" ? Math.max(0, Math.round(proposed)) : 0;
+      const existing = profile.filer.dependents;
+      const curYears = existing?.map((d) => d.birthYear).filter((y): y is number => typeof y === "number") ?? [];
+      const current = existing === undefined ? undefined : curYears.length === existing.length && existing.length > 0 ? curYears.join(", ") : String(existing.length);
+      const shown = years ? years.join(", ") : String(n);
+      add({ section: f.section, label: years ? "Dependents (birth years)" : "Dependents", path: ["filer", "dependents"], current, proposed: current === shown ? current : shown, source: src(f.intake), format: "text", sourceKey: f.path, birthYears: years });
       continue;
     }
     add({ section: f.section, label: f.label, path: toPath(f.path), current: getPath(profile, f.path), proposed, source: src(f.intake), format: f.type, sourceKey: f.path });
@@ -178,9 +184,12 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
   }
   for (const c of changes) {
     if (c.id === "filer.dependents") {
-      const n = typeof c.proposed === "number" ? c.proposed : 0;
       const existing = profile.filer.dependents ?? [];
-      edits.push({ path: ["filer", "dependents"], value: existing.length >= n ? existing.slice(0, n) : [...existing, ...Array.from({ length: n - existing.length }, () => ({}))] });
+      if (c.birthYears) edits.push({ path: ["filer", "dependents"], value: c.birthYears.map((birthYear) => ({ birthYear })) });
+      else {
+        const n = Number(String(c.proposed).split(",").length && !isNaN(Number(c.proposed)) ? Number(c.proposed) : String(c.proposed).split(",").length);
+        edits.push({ path: ["filer", "dependents"], value: existing.length >= n ? existing.slice(0, n) : [...existing, ...Array.from({ length: n - existing.length }, () => ({}))] });
+      }
     } else if (c.format !== "grant" && c.format !== "priorReturn") edits.push({ path: c.path, value: c.proposed });
     if (c.source) edits.push({ path: ["sources", c.sourceKey], value: c.source });
   }

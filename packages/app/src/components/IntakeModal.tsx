@@ -13,6 +13,7 @@ const REQUIRED_BASICS: { id: string; text: string; about: string }[] = [
   { id: "filer.filingStatus", text: "How do you file? Single, married filing jointly, separately, or head of household.", about: "filer.filingStatus" },
   { id: "filer.state", text: "Which state do you live in?", about: "filer.state" },
   { id: "people.self.salary", text: "What is your base salary? Base pay only; equity income is added from your grants.", about: "people.self.salary" },
+  { id: "filer.dependents", text: "Any dependents? Their birth years, comma separated, or leave blank for none.", about: "filer.dependents" },
 ];
 
 const thisYear = () => Math.max(2026, new Date().getFullYear());

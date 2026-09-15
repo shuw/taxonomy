@@ -17,6 +17,8 @@ export interface FieldDef {
   type: FieldType;
   /** Where the number lives, for the prompt comment (form and line). */
   hint?: string;
+  /** Literal shown in the request template instead of the type's default. */
+  example?: string;
   enum?: string[];
   /** Reviewed as its own row (default). Structured rows (prior return, mortgage) consume the rest. */
   review?: boolean;
@@ -43,7 +45,7 @@ export const FIELDS: FieldDef[] = [
   basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], hint: "single | mfj | mfs | hoh, from the last return's first page (Form 1040 filing status box)", timeline: true, required: true }),
   basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code, from the last return's address or a pay stub", timeline: true, required: true }),
   basics({ path: "plan.startYear", label: "First plan year", type: "year" }),
-  pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", hint: "count of dependents claimed on the last return" }),
+  pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", example: "[]", hint: "birth years of the dependents claimed on the last return (Form 1040 dependents table), e.g. [2019, 2022]; [] if none", required: true }),
   ...person("self"),
   ...person("spouse"),
 
@@ -118,6 +120,7 @@ export const requiredFields = (section: IntakeSection): FieldDef[] => FIELDS.fil
 
 /** Example value for a field in the prompt template. */
 export function exampleValue(f: FieldDef): string {
+  if (f.example !== undefined) return f.example;
   switch (f.type) {
     case "usd": case "number": return "0";
     case "bool": return "false";
