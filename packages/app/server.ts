@@ -89,6 +89,13 @@ function validate(text: unknown): string | null {
   try { parseProfile(text); return null; } catch (e) { return String((e as Error).message ?? e); }
 }
 
+/** What an MCP client needs to start Taxonomy's server: the runtime and the absolute script path. */
+function agentConnection() {
+  const script = resolve(import.meta.dir, "../mcp/server.ts");
+  const bun = Bun.which("bun") ?? "bun";
+  return { root: resolve(import.meta.dir, "../.."), script, command: bun, args: [script], config: { mcpServers: { taxonomy: { command: bun, args: [script] } } } };
+}
+
 const port = Number(process.env.PORT ?? 5180);
 Bun.serve({
   port,
@@ -97,6 +104,7 @@ Bun.serve({
   routes: {
     "/": index,
     "/api/example": () => Response.json({ text: readFileSync(examplePath, "utf8") }),
+    "/api/agent": () => Response.json(agentConnection()),
     "/api/profiles": {
       GET: () => Response.json(listProfiles()),
       POST: async (req) => {

@@ -30,4 +30,6 @@ export type { IntakeChange, IntakeReview, IntakeSection } from "./intake/apply.t
 export { intakePrompt, knownFacts, INTAKE_SECTIONS, DOCUMENT_SECTIONS } from "./intake/prompt.ts";
 export type { PromptOptions, SectionInfo } from "./intake/prompt.ts";
 export { profileGaps } from "./gaps.ts";
+export * as tools from "./tools.ts";
+export type { EventInput, YearHeadline, Delta, FactChangeInput, PendingRow } from "./tools.ts";
 export type { Gap } from "./gaps.ts";

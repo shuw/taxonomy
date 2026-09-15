@@ -236,6 +236,8 @@ export interface SaleLever {
 /** A named list of decisions. */
 export interface Scenario {
   events: ScenarioEvent[];
+  /** Where it came from, e.g. "proposed by your agent on 2026-09-15". */
+  note?: string;
 }
 
 /** The per-year lever table the engine computes from; derived from a scenario's events. */
@@ -285,6 +287,19 @@ export interface StatePolicy {
 
 export type Source = string | { doc: string; asOf?: string; note?: string };
 
+/** A change to a fact or assumption an agent proposed; nothing takes effect until you accept it in the app. */
+export interface PendingChange {
+  id: string;
+  /** Dot path into the profile, as in the field registry (company fields carry their index). */
+  path: string;
+  value: unknown;
+  /** When set, the change goes on the timeline from that year instead of replacing the fact. */
+  from?: number;
+  /** Where the agent got it: the document, or "told in chat". */
+  source?: string;
+  proposed?: string;
+}
+
 /** Something the intake agent asked you to confirm, kept until you mark it done. */
 export interface FollowUp {
   id: string;
@@ -328,6 +343,7 @@ export interface Profile {
   /** Where numbers came from, keyed by profile path ("people.self.salary"); grants and holdings by id ("grants.g1"). */
   sources?: Record<string, Source>;
   followUps?: FollowUp[];
+  pending?: PendingChange[];
 }
 
 /** Fully resolved inputs for one tax year, after profile defaults, growth, the timeline and levers are applied. */

@@ -566,3 +566,22 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .legend .sw.hatch { background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface) 2px 3px); }
 .cap-label.kept { fill: var(--series-kept); }
 .cap-label.tax { fill: var(--ink-2); font-weight: 500; }
+
+/* Proposals from an agent, and connecting one */
+.proposal { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; border-left: 3px solid var(--accent); }
+.proposal-text { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 6px; }
+.proposal-title { font: 600 15px/1.3 var(--display); }
+.proposal-deltas { display: flex; gap: 8px; flex-wrap: wrap; }
+.proposal-deltas .delta { margin-top: 0; }
+.proposal-actions { display: flex; gap: 6px; align-items: center; }
+.scenario-note { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-box { display: flex; gap: 8px; align-items: flex-start; }
+.copy-box .prompt-box { flex: 1; }
+.how-to { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.how-to code, .facts-pane code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+.pending-rows { border-collapse: collapse; font-size: 13.5px; }
+.pending-rows td { padding: 3px 10px 3px 0; vertical-align: middle; }
+.pending-label { font-weight: 600; }
+.pending-arrow { color: var(--muted); }
+.pending-actions { white-space: nowrap; }
+.pending-actions .btn.icon { width: 26px; height: 26px; }

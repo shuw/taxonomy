@@ -31,6 +31,20 @@ shows how closely the engine reproduces it.
 The overall design is in `docs/ARCHITECTURE.md`. The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live in
 `packages/engine/src/intake/` and are tested against a fixture.
 
+## Connect your agent
+
+Taxonomy is also an MCP server, so the Claude you already use can read the plan, explain any
+number with the engine's reason, try what-ifs and propose scenarios. "Edit my information" has a
+**Connect your agent** tab with the exact config for Claude Desktop (a snippet for
+`claude_desktop_config.json`) and Claude Code (the repository's `.mcp.json` registers it; or
+`claude mcp add taxonomy -- bun packages/mcp/server.ts`). Proposals arrive as new scenarios and
+show up as a banner with their effect on total tax and cash: Accept, Compare against the current
+plan, or Discard. The agent never does tax math. Facts and assumptions it hears ("assume 20% growth", "salary
+goes to 400k in 2028") land as pending changes you accept row by row in the same banner;
+documents go through the intake review (`intake_request` and `apply_intake` are tools too). Claude on the web cannot
+reach a local server; "Ask your agent" on the plan card copies a question with the plan's numbers
+in it for that case. The design is in `docs/LLM-INTERFACE.md`.
+
 ## Profile schema (version 3)
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { useHashState } from "./hash.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, exercisedIn, planYears, resolveLevers, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { activeScenario, exercisedIn, planYears, resolveLevers, statusName, tools, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { EventTimeline } from "./components/timeline/EventTimeline.tsx";
 import { factMarkers } from "./components/timeline/factMarkers.ts";
 import { usePlanAnalyses } from "./hooks/usePlanAnalyses.ts";
@@ -26,6 +26,7 @@ import { CalibrationCard } from "./components/CalibrationCard.tsx";
 import { CreditRecoveryView } from "./components/CreditRecovery.tsx";
 import { HoldOrSellCard } from "./components/HoldOrSell.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
+import { ProposalBanner } from "./components/ProposalBanner.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -96,6 +97,15 @@ export function App() {
         switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
     </ProfileIdContext.Provider>
   );
+}
+
+/** Copies a question with this plan's numbers in it, for an agent that cannot reach the server (Claude on the web). */
+function AskButton({ profile, year }: { profile: Profile; year: number }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(tools.askText(profile, year)); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+  };
+  return <button type="button" className="btn" title="Copy a question with this plan's numbers in it, to paste into any agent" onClick={() => void copy()}>{copied ? "Copied" : "Ask your agent"}</button>;
 }
 
 interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
@@ -173,6 +183,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
 
       <main className="main">
         {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
+        <ProposalBanner profile={profile} edit={edit} onCompare={() => setPinned({ levers, plan })} />
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} />
         <section className="card timeline-card">
@@ -182,6 +193,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <div className="sub">{stripCopy} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView !== "cash" ? "Gray columns are the pinned scenario." : ""}</div>
             </div>
             <div className="plan-years"><Segmented options={[{ value: "combined", label: "Combined" }, { value: "tax", label: "Tax" }, { value: "cash", label: "Cash" }]} value={planView} onChange={setPlanView} /></div>
+            <AskButton profile={profile} year={focusYear} />
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
           {strip}

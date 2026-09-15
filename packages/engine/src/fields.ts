@@ -45,6 +45,7 @@ export const FIELDS: FieldDef[] = [
   basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], hint: "single | mfj | mfs | hoh, from the last return's first page (Form 1040 filing status box)", timeline: true, required: true }),
   basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code, from the last return's address or a pay stub", timeline: true, required: true }),
   basics({ path: "plan.startYear", label: "First plan year", type: "year" }),
+  basics({ path: "plan.years", label: "Years to plan", type: "number" }),
   pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", example: "[]", hint: "birth years of the dependents claimed on the last return (Form 1040 dependents table), e.g. [2019, 2022]; [] if none", required: true }),
   ...person("self"),
   ...person("spouse"),
@@ -91,6 +92,7 @@ export const FIELDS: FieldDef[] = [
   { path: "equity.companies.0.name", intake: "equity.company", label: "Company", section: "equity", type: "text" },
   { path: "equity.companies.0.sharePrice", intake: "equity.sharePrice.value", label: "Share value now", section: "equity", type: "usd", hint: "per share; 409A for private companies, market price otherwise", required: true },
   { path: "equity.companies.0.sharePriceAsOf", intake: "equity.sharePrice.asOf", label: "Share value date", section: "equity", type: "date" },
+  { path: "equity.companies.0.growth", label: "Share value growth for this company", section: "equity", type: "pct", hint: "annual, as a fraction; overrides the general assumption" },
 
   { path: "home.mortgage.balance", intake: "home.mortgage.balance", label: "Mortgage balance", section: "home", type: "usd", hint: "outstanding principal now (Form 1098 box 2 is the balance at Jan 1)", review: false },
   { path: "home.mortgage.rate", intake: "home.mortgage.rate", label: "Mortgage rate", section: "home", type: "pct", hint: "annual, as a fraction", review: false },

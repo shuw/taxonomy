@@ -1,7 +1,7 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
 import { eventsFromLevers } from "./events.ts";
-import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PendingChange, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
 
 /** The per-year lever table older files stored directly: a share count per year. */
 type LegacyLevers = { exercises: { iso: Record<number, number>; nso: Record<number, number> } };
@@ -42,6 +42,7 @@ interface RawProfile {
   timeline?: Profile["timeline"];
   sources?: Record<string, Source>;
   followUps?: Profile["followUps"];
+  pending?: Profile["pending"];
 }
 
 /** Parse a profile file of any version into the current shape; fail loudly on anything the engine cannot work with. */
@@ -97,7 +98,20 @@ export function parseProfile(text: string): Profile {
     activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
     sources: rekeySources(raw.sources, equity, raw.equity?.isoGrants?.length ?? 0),
     followUps: raw.followUps,
+    pending: withPendingIds(raw.pending),
   };
+}
+
+function withPendingIds(list: unknown): Profile["pending"] {
+  if (!Array.isArray(list)) return undefined;
+  const taken: string[] = [];
+  const out = list.flatMap((p): PendingChange[] => {
+    if (!p || typeof p !== "object" || typeof (p as PendingChange).path !== "string") return [];
+    const id = (p as PendingChange).id ?? newId("p", taken);
+    taken.push(id);
+    return [{ ...(p as PendingChange), id }];
+  });
+  return out.length ? out : undefined;
 }
 
 function normalizeLevers(l: NonNullable<RawProfile["levers"]>): LegacyLevers {
@@ -106,7 +120,7 @@ function normalizeLevers(l: NonNullable<RawProfile["levers"]>): LegacyLevers {
 
 /** A scenario is a list of events; older files stored the per-year lever table instead. */
 function normalizeScenario(raw: Partial<LegacyLevers> & Partial<Scenario> | null | undefined): Scenario {
-  if (raw && Array.isArray(raw.events)) return { events: raw.events };
+  if (raw && Array.isArray(raw.events)) return { events: raw.events, ...(typeof raw.note === "string" ? { note: raw.note } : {}) };
   if (raw && raw.exercises) return { events: eventsFromLevers(normalizeLevers(raw)) };
   return { events: [] };
 }
@@ -215,6 +229,7 @@ const COMMENTS: Record<string, string> = {
   scenarios: "named lists of decisions on the timeline: exercise, sell and liquidity events; activeScenario picks one",
   sources: "where each number came from, keyed by path (grants and holdings by id)",
   followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
+  pending: "changes to facts your agent proposed; nothing here counts until you accept it in the app",
 };
 
 /** Emit a profile as YAML with a comment on each top-level section. */

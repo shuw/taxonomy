@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "taxonomy": { "command": "bun", "args": ["packages/mcp/server.ts"] }
+  }
+}

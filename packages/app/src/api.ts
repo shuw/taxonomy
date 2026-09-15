@@ -1,4 +1,6 @@
 export interface ProfileSummary { id: string; name: string; path: string; mtime: number; }
+/** How an MCP client starts Taxonomy's server on this machine. */
+export interface AgentConnection { root: string; script: string; command: string; args: string[]; config: { mcpServers: Record<string, { command: string; args: string[] }> }; }
 export interface ProfileFileBody { id: string; path: string; mtime: number; text: string; }
 
 /** The file changed on disk since the app last read it; carries the current version. */
@@ -17,6 +19,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, headers:
 
 export const api = {
   example: () => call<{ text: string }>("/api/example"),
+  agent: () => call<AgentConnection>("/api/agent"),
   list: () => call<ProfileSummary[]>("/api/profiles"),
   get: (id: string) => call<ProfileFileBody>(`/api/profiles/${id}`),
   /** Writes only if the file still has `mtime`; a 409 carries the newer file. */

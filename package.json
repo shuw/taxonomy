@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "bun --watch packages/app/server.ts",
     "test": "bun test packages/engine",
-    "typecheck": "tsc -p packages/engine && tsc -p packages/app",
+    "typecheck": "tsc -p packages/engine && tsc -p packages/app && tsc -p packages/mcp",
+    "mcp": "bun packages/mcp/server.ts",
     "plan": "bun packages/engine/src/cli.ts"
   },
   "devDependencies": {

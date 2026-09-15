@@ -10,6 +10,7 @@ agent-driven intake, `PROPOSAL.md` the original brief.
 ```
 packages/engine      pure TypeScript, no React, no I/O; unit-tested with bun test
 packages/app         React UI (Bun serves it; no bundler beyond Bun's) + a small file server
+packages/mcp         MCP server over stdio: the engine's tool layer for an outside agent
 data/profiles/*.yaml one file per person or what-if (gitignored); data/profile.example.yaml
 docs/                this file, the data model, the intake contract, the proposal
 ```
@@ -96,6 +97,17 @@ capital gains excise tax (7% + 2.9% over $1M) and the 2028 millionaires' tax as 
 California is an approximate income tax with its own AMT; Texas, Florida and Nevada are zero. A
 modeled state income tax flows into the federal SALT deduction through the second pass.
 
+### Tool layer (`tools.ts`)
+
+Pure functions an agent calls through `packages/mcp/server.ts`: orient (`context`, `plan`),
+explain (`explain`, `compareYears`, `amtHeadroom`, `recovery`, `holdVersusSell`, `lots`,
+`sellToCover`), try (`whatIf`, `proposeScenario`, `setActiveScenario`, `deleteScenario`) and
+intake (`intakeRequest`, `applyIntake`) and facts (`updateFacts` writes `pending`; `pendingReview`
+and `resolvePending` back the review card). Mutations return `ProfileEdit[]`; the MCP server applies
+them to the file with `editProfileText` and validates before writing, the same path the app uses.
+The app reads `proposals` (scenarios with a `note` that are not active, with their deltas) for
+the proposal banner and `askText` for the clipboard question. See `LLM-INTERFACE.md`.
+
 ## App
 
 ```
@@ -110,11 +122,15 @@ components/
   SweepChart      AMT versus ISO shares for one year and company
   CreditRecovery, HoldOrSell, CalibrationCard, FollowUps, LedgerTable, ExplainPanel
   Sidebar         quick basics, EquityKnobs (price and growth per company), assumptions
-  FactsModal      "Edit my information": every recorded fact, one tab per section
+  FactsModal      "Edit my information": every recorded fact, one tab per section, plus
+                  ConnectAgent (MCP config for Claude Desktop and Claude Code)
+  ProposalBanner  scenarios an agent wrote (Accept / Compare / Discard) and pending fact
+                  changes with before/after rows
   IntakeModal     the agent request / paste / review flow (see INTAKE.md)
 persist.ts        usePersisted: UI state remembered per profile in localStorage
 useProfile.ts     load, poll the file for outside edits, debounce PUTs
-server.ts         GET/PUT/DELETE profiles as YAML text; same-origin guard; migrate on read
+server.ts         GET/PUT/DELETE profiles as YAML text; same-origin guard; migrate on read;
+                  GET /api/agent tells the app how an MCP client starts packages/mcp
 ```
 
 Edits from the UI are `ProfileEdit[]` (a path and a value) applied to the YAML *text* with

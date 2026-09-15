@@ -1,0 +1,7 @@
+{
+  "name": "@taxonomy/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.12.0", "zod": "^3.25.0", "@taxonomy/engine": "workspace:*", "yaml": "^2.8.1" }
+}

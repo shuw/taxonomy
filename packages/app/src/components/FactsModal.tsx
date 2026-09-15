@@ -3,9 +3,10 @@ import { calibrate, latestReturn, statusName, type Profile, type ProfileEdit } f
 import { pct, usd, usdCompact } from "../format.ts";
 import { sourceOf } from "../sources.ts";
 import { EquityFacts, equitySummary } from "./EquitySection.tsx";
+import { ConnectAgent } from "./ConnectAgent.tsx";
 import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
 
-export const FACT_TABS = ["you", "equity", "income", "home", "deductions", "history"] as const;
+export const FACT_TABS = ["you", "equity", "income", "home", "deductions", "history", "agent"] as const;
 export type FactTab = (typeof FACT_TABS)[number];
 export const isFactTab = (v: unknown): v is FactTab => typeof v === "string" && (FACT_TABS as readonly string[]).includes(v);
 
@@ -51,6 +52,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
     { id: "home", title: "Home", color: "var(--series-state)", summary: home.mortgage ? `${usdCompact(home.mortgage.balance)} at ${pct(home.mortgage.rate)}` : home.propertyTax ? `${usdCompact(home.propertyTax)} property tax` : "no mortgage" },
     { id: "deductions", title: "Giving and deductions", color: "var(--series-violet)", summary: giving > 0 ? `${usdCompact(giving)} charitable` : "no charitable giving" },
     { id: "history", title: "Last return", color: "var(--series-amt)", summary: ret ? `${ret.year}${calTotal ? ` · within ${pct(Math.abs(calTotal.delta) / Math.max(1, calTotal.reported))}` : ""}` : cf.amtCredit ? `${usdCompact(cf.amtCredit)} AMT credit` : "none on file" },
+    { id: "agent", title: "Connect your agent", color: "var(--accent)", summary: "Claude Desktop, Claude Code or the web" },
   ];
 
   return (
@@ -168,6 +170,8 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                 {!ret && <p className="muted small">Fill from documents to add last year's return; the tool will show how closely it reproduces it.</p>}
               </>
             )}
+
+            {tab === "agent" && <ConnectAgent />}
           </div>
         </div>
       </div>

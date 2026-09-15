@@ -23,6 +23,7 @@ export function ScenarioBar({ profile, scenario, edit }: Props) {
           {names.map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </span>
+      {scenario.note && <span className="chip ghost scenario-note" title={scenario.note}>{scenario.note}</span>}
       {naming
         ? <form className="inline-form" onSubmit={(e) => { e.preventDefault(); save(); }}>
             <span className="input-wrap"><input autoFocus value={draft} placeholder="scenario name" onChange={(e) => setDraft(e.target.value)} /></span>
