@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { usePersisted } from "../persist.ts";
 import { companyOf, grantFmv, grantsMissingVesting, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd, usdCompact } from "../format.ts";
 import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
@@ -61,39 +61,40 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
         </div>
       )}
 
-      {hasType("iso") && focusCrossover && (
+      {(hasType("iso") || hasType("nso") || hasType("rsu")) && (
         <>
-          <div className="subhead">Exercise ISOs <span className="muted">· spread goes to AMT</span></div>
-          <YearStrip years={years} focusYear={focusYear} onFocus={onFocus} value={(y) => levers.exercises.iso[y] ?? 0}
-            mark={(y) => { const c = crossovers.find((x) => x.year === y); return c && c.available > 0 && c.sharesBeforeAmt < c.available ? c.sharesBeforeAmt / c.available : null; }} />
-          <ExerciseLever year={focusYear} available={focusCrossover.available} value={Math.min(levers.exercises.iso[focusYear] ?? 0, focusCrossover.available)}
-            mark={focusCrossover.available > 0 && focusCrossover.sharesBeforeAmt < focusCrossover.available ? focusCrossover.sharesBeforeAmt : null}
-            over={focusCrossover.overCrossover} sharesBeforeAmt={focusCrossover.sharesBeforeAmt} spread={nextShareSpread(profile, "iso", focusYear)} onChange={(n) => onExercise("iso", focusYear, n)} />
-        </>
-      )}
-
-      {hasType("nso") && (
-        <>
-          <div className="subhead">Exercise NSOs <span className="muted">· spread is wage income</span></div>
-          <YearStrip years={years} focusYear={focusYear} onFocus={onFocus} value={(y) => levers.exercises.nso[y] ?? 0} mark={() => null} />
-          <ExerciseLever year={focusYear} available={nsoAvailable} value={Math.min(levers.exercises.nso[focusYear] ?? 0, nsoAvailable)} mark={null} over={false} sharesBeforeAmt={0}
-            spread={nextShareSpread(profile, "nso", focusYear)} onChange={(n) => onExercise("nso", focusYear, n)} />
-        </>
-      )}
-
-      {hasType("rsu") && (
-        <>
-          <div className="subhead">RSU vesting <span className="muted">· wages the year units settle</span></div>
+          <div className="subhead">By year <span className="muted">· pick a year, then move its levers</span></div>
           <div className="year-strip">
             {years.map((y) => {
-              const v = rsuVesting(profile, y);
+              const iso = levers.exercises.iso[y] ?? 0;
+              const nso = levers.exercises.nso[y] ?? 0;
+              const rsu = hasType("rsu") ? rsuVesting(profile, y).shares : 0;
+              const parts = [iso > 0 && <span key="i" className="yc-iso">{shares(iso)} ISO</span>, nso > 0 && <span key="n" className="yc-nso">{shares(nso)} NSO</span>, rsu > 0 && <span key="r" className="yc-rsu">{shares(rsu)} RSU</span>].filter(Boolean);
               return (
                 <button type="button" key={y} className={"year-chip" + (y === focusYear ? " on" : "")} onClick={() => onFocus(y)}>
                   <span className="yc-year">{y}</span>
-                  <span className="yc-val">{v.shares ? `${shares(v.shares)} · ${usdCompact(v.income)}` : "none"}</span>
+                  {parts.length ? parts : <span className="yc-val">—</span>}
                 </button>
               );
             })}
+          </div>
+          <div className="lever focus">
+            <div className="year">{focusYear}</div>
+            {hasType("iso") && focusCrossover && (
+              <LeverRow label="ISO" hint="spread goes to AMT" available={focusCrossover.available} value={Math.min(levers.exercises.iso[focusYear] ?? 0, focusCrossover.available)}
+                mark={focusCrossover.available > 0 && focusCrossover.sharesBeforeAmt < focusCrossover.available ? focusCrossover.sharesBeforeAmt : null}
+                over={focusCrossover.overCrossover} sharesBeforeAmt={focusCrossover.sharesBeforeAmt} spread={nextShareSpread(profile, "iso", focusYear)} onChange={(n) => onExercise("iso", focusYear, n)} />
+            )}
+            {hasType("nso") && (
+              <LeverRow label="NSO" hint="spread is wage income" available={nsoAvailable} value={Math.min(levers.exercises.nso[focusYear] ?? 0, nsoAvailable)} mark={null} over={false} sharesBeforeAmt={0}
+                spread={nextShareSpread(profile, "nso", focusYear)} onChange={(n) => onExercise("nso", focusYear, n)} />
+            )}
+            {hasType("rsu") && (() => { const v = rsuVesting(profile, focusYear); return (
+              <div className="lever-row">
+                <div className="head"><span className="badge rsu">RSU</span><span className="lever-hint muted">wages the year units settle</span></div>
+                <div className="foot"><span>{v.shares ? `${shares(v.shares)} units settle · ${usdCompact(v.income)} of wages` : "nothing settles this year"}</span></div>
+              </div>
+            ); })()}
           </div>
         </>
       )}
@@ -123,26 +124,8 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
   );
 }
 
-/** One chip per plan year; click to bring that year's slider up. Shows the lever's value and, for ISOs, where AMT starts. */
-function YearStrip({ years, focusYear, onFocus, value, mark }: { years: number[]; focusYear: number; onFocus: (y: number) => void; value: (y: number) => number; mark: (y: number) => number | null }) {
-  return (
-    <div className="year-strip">
-      {years.map((y) => {
-        const m = mark(y);
-        return (
-          <button type="button" key={y} className={"year-chip" + (y === focusYear ? " on" : "")} onClick={() => onFocus(y)}>
-            <span className="yc-year">{y}</span>
-            <span className="yc-val">{value(y) ? shares(value(y)) : "—"}</span>
-            {m !== null && <span className="yc-mark" style={{ left: `${Math.min(100, m * 100)}%` }} />}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removable, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; removable: boolean; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersisted<boolean>(`open.company.${c.id}`, false, (v): v is boolean => typeof v === "boolean");
   const source = sourceOf(profile, ["companies", c.id, "sharePrice"]);
   const pathEntries = Object.entries(c.pricePath ?? {}).map(([y, p]) => [Number(y), p] as const).sort((a, b) => a[0] - b[0]);
   const updatePath = (list: (readonly [number, number])[]) => onChange({ pricePath: list.length ? Object.fromEntries(list) : undefined });
@@ -207,7 +190,7 @@ function clean(g: EquityGrant): EquityGrant {
 }
 
 function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGrant; profile: Profile; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersisted<boolean>(`open.grant.${g.id}`, false, (v): v is boolean => typeof v === "boolean");
   const source = sourceOf(profile, ["grants", g.id]);
   const v = vestingOf(profile, g);
   const mode: "schedule" | "years" | "none" = g.schedule ? "schedule" : g.vesting ? "years" : "none";
@@ -295,14 +278,15 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
   );
 }
 
-interface LeverProps { year: number; available: number; value: number; mark: number | null; over: boolean; sharesBeforeAmt: number; spread: number; onChange: (n: number) => void; }
+interface LeverProps { label: string; hint: string; available: number; value: number; mark: number | null; over: boolean; sharesBeforeAmt: number; spread: number; onChange: (n: number) => void; }
 
-function ExerciseLever({ year, available, value, mark, over, sharesBeforeAmt, spread, onChange }: LeverProps) {
+function LeverRow({ label, hint, available, value, mark, over, sharesBeforeAmt, spread, onChange }: LeverProps) {
   const pctOf = (n: number) => (available > 0 ? (n / available) * 100 : 0);
   return (
-    <div className="lever focus">
+    <div className="lever-row">
       <div className="head">
-        <span className="year">{year}</span>
+        <span className={"badge " + label.toLowerCase()}>{label}</span>
+        <span className="lever-hint muted">{hint}</span>
         <NumberInput value={value} onChange={(n) => onChange(Math.min(available, n))} min={0} suffix="sh" />
       </div>
       <div className="track">

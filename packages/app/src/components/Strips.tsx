@@ -9,15 +9,28 @@ const TAX_SERIES: Series[] = [
   { id: "regular", label: "Regular tax (after AMT credit)", color: "var(--series-regular)", value: (y) => y.lines.regularTax!.value - y.lines.amtCreditUsed!.value },
   { id: "amt", label: "AMT", color: "var(--series-amt)", value: (y) => y.lines.amt!.value },
   { id: "surtax", label: "NIIT + Medicare", color: "var(--series-surtax)", value: (y) => y.lines.niit!.value + y.lines.additionalMedicare!.value },
-  { id: "state", label: "State", color: "var(--series-state)", value: (y) => y.lines.stateTax!.value },
 ];
+const STATE_SERIES: Series = { id: "state", label: "State", color: "var(--series-state)", value: (y) => y.lines.stateTax!.value };
+
+/** State tax as the lines the state module wrote, so Washington's two taxes show apart (and the proposed one shows even at zero). */
+function taxSeries(plan: PlanResult): Series[] {
+  const lines = plan.years[0]?.lines ?? {};
+  if (lines.stateCapitalGainsTax && lines.stateHighEarnerTax) {
+    return [
+      ...TAX_SERIES,
+      { id: "stateCg", label: lines.stateCapitalGainsTax.label, color: "var(--series-state)", value: (y) => y.lines.stateCapitalGainsTax?.value ?? 0 },
+      { id: "stateHe", label: lines.stateHighEarnerTax.label, color: "var(--series-state-2)", value: (y) => y.lines.stateHighEarnerTax?.value ?? 0 },
+    ];
+  }
+  return [...TAX_SERIES, { ...STATE_SERIES, label: lines.stateTax?.label ?? "State" }];
+}
 const CREDIT_SERIES: Series[] = [
   { id: "credit", label: "AMT credit carried forward", color: "var(--series-amt)", value: (y) => y.lines.amtCreditCarryforwardOut!.value },
 ];
 
 interface StripProps { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void; }
 
-export const TaxStrip = (p: StripProps) => <ColumnStrip {...p} series={TAX_SERIES} height={230} />;
+export const TaxStrip = (p: StripProps) => <ColumnStrip {...p} series={taxSeries(p.plan)} height={230} />;
 export const CreditStrip = (p: StripProps) => <ColumnStrip {...p} series={CREDIT_SERIES} height={170} />;
 
 const GAP = 2;

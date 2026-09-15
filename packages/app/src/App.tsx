@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { amtCrossover, planYears, resolveLevers, runPlan, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
@@ -88,8 +89,10 @@ export function App() {
   };
 
   return (
-    <Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
-      switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
+    <ProfileIdContext.Provider value={file.id}>
+      <Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
+        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
+    </ProfileIdContext.Provider>
   );
 }
 
@@ -98,7 +101,7 @@ interface WorkspaceProps { profile: Profile; profileText: string; path: string; 
 function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
-  const [focusYear, setFocusYear] = useState(years[0]!);
+  const [focusYear, setFocusYear] = usePersisted<number>("focusYear", years[0]!, (v): v is number => typeof v === "number");
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   const [intakeOpen, setIntakeOpenState] = useState(() => location.hash === "#intake");
@@ -147,7 +150,6 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} />
-        <CalibrationCard profile={profile} />
         <section className="card">
           <h2>Tax by year</h2>
           <div className="sub">Click a year to focus it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
@@ -172,6 +174,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <div className="sub">Click any number for the reason behind it.</div>
           <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={select} />
         </section>
+        <CalibrationCard profile={profile} />
       </main>
 
       {selected && (
