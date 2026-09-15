@@ -136,9 +136,9 @@ describe("intake prompt", () => {
     expect(text).toContain("baseSalary:");
     expect(text).toContain("unexercised:");
     expect(text).not.toContain("prior_return:");
-    expect(text).toContain("never estimate");
+    expect(text).toContain("Never estimate");
     expect(text).toContain("## How we'll work");
-    expect(text).toContain("Required, per section");
+    expect(text).toContain("Required before you finish");
     expect(text).toContain("people.self.baseSalary");
     expect(text).toContain("equity.sharePrice.value");
     expect(text).toContain("never exercised");
@@ -153,6 +153,6 @@ describe("intake prompt", () => {
   });
   test("a follow-up restricts to the listed paths", () => {
     const text = intakePrompt({ sections: ["basics"], onlyPaths: ["people.self.expectedBonus"] });
-    expect(text).toContain("Only report these paths: people.self.expectedBonus");
+    expect(text).toContain("report only these paths: people.self.expectedBonus");
   });
 });

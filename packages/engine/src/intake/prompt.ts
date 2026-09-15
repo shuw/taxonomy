@@ -139,39 +139,39 @@ export function intakePrompt(opts: PromptOptions): string {
   const required = sections.map((s) => ({ s, items: requiredList(s.id) })).filter((x) => x.items.length);
   const shortcuts = sections.flatMap((s) => s.shortcuts ?? []);
   const parts: string[] = [];
-  parts.push(`I'm setting up Taxonomy, a personal tax-planning tool, and I need you to pull some numbers out of my documents. Please read all of this before doing anything.
+  parts.push(`Help me set up Taxonomy, a personal tax-planning tool. It needs numbers from my documents. Read this whole message first.
 
 ## How we'll work
 
-1. **Look first.** Search anything you can reach (connected Drive or mail, files I've uploaded, this conversation) for: ${sections.map((s) => s.search).join("; ")}. Read the relevant ones.
-2. **Then tell me where we stand, in one short message.** A few lines on what you found, then a numbered list of what you still need. For each item, say exactly what would resolve it: the form and line, the portal page to screenshot, or the number to type. If a document would be faster than a question, name the document. Never guess a required item.${shortcuts.length ? `\n   Shortcut answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
-3. **Repeat until nothing required is missing**, or I say I can't provide something.
-4. **Finish with one message** containing a two-line summary and then the YAML document in one \`\`\`yaml block. Nothing after the block. I'll paste that block into the tool, which shows me every number with its source before saving anything.
+1. **Look.** Search what you can reach (Drive, mail, my uploads, this chat) for: ${sections.map((s) => s.search).join("; ")}.
+2. **Report back, briefly.** What you found in a few lines, then a numbered list of what's missing. For each: the form and line, the portal page, or the number I should type. Suggest a document when that's faster than a question. Never guess a required item.${shortcuts.length ? `\n   One-word answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
+3. **Repeat** until nothing required is missing, or I say I can't provide it.
+4. **Finish** with a two-line summary and the YAML in one \`\`\`yaml block, nothing after it. The tool shows me each number with its source before saving.
 
-## What I need${opts.profile ? " (what the tool already has is at the bottom; don't ask about that)" : ""}
+## What I need${opts.profile ? " (skip what the tool already has, listed at the bottom)" : ""}
 
 ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.`).join("\n")}
 
-Required, per section, before you finish:
+Required before you finish:
 
 ${required.map(({ s, items }) => `**${s.title}**\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
 
-Everything else in the shape below is optional: fill it when a document shows it, leave it out when none does.
+Everything else is optional: fill it when a document shows it, leave it out otherwise.
 
-## Rules for the numbers
+## Rules
 
-- Copy from documents or from my answers; never estimate or fill from general knowledge.
-- Every number gets a \`sources\` entry keyed by its path: the document and the line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
-- Filed return beats portal, portal beats pay stub, pay stub beats memory. If two documents disagree, ask me; if I can't settle it, report the more authoritative one and put the other in \`questions\`.
-- Whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
-- Base salary is base pay only. RSU vests and option exercises are added by the tool from the grants.
-- Options: report granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO and NSO are the same type: \`nso\`. Omit the \`spouse\` block if there is no spouse.
+- Copy from documents or my answers. Never estimate.
+- Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
+- Filed return beats portal beats pay stub beats memory. If sources disagree, ask me; if I can't settle it, use the stronger source and note the other in \`questions\`.
+- Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575).
+- Base salary is base pay only; the tool adds RSU and option income from the grants.
+- Options: granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO is \`nso\`. No spouse, no \`spouse\` block.
 - Optional items you couldn't find go under \`unknown\`.
-- \`questions\` is for judgment calls I should double-check later, not for restating what you found: a value you derived rather than read, two sources that disagree, something a document hints at but doesn't show. One sentence each, with \`about\` set to the path it concerns and \`proposed\` to the value you went with. The tool shows these to me as a checklist after the numbers are in.${opts.onlyPaths?.length ? `\n- This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}.` : ""}
+- \`questions\` is for judgment calls I should double-check later: a derived value, disagreeing sources, something hinted but not shown. One sentence each, with \`about\` (the path) and \`proposed\` (the value you used).${opts.onlyPaths?.length ? `\n- Follow-up: report only these paths: ${opts.onlyPaths.join(", ")}.` : ""}
 
 ## The shape
 
-Use exactly these keys. Omit any key you cannot fill; do not write 0 for unknown.
+Exactly these keys. Omit what you can't fill; never write 0 for unknown.
 
 \`\`\`yaml
 taxonomy_intake: 1
@@ -188,7 +188,7 @@ questions:
   if (opts.profile) {
     parts.push(`## What the tool already has
 
-I entered filing status and state myself; do not ask about those. Anything else here came from an earlier pass or is a placeholder (a 0 salary is a placeholder, not a fact). For the sections above, report the full current state (not a diff); the tool works out what changed.
+Filing status and state are mine; do not ask about those. The rest is from an earlier pass or a placeholder (a 0 salary is a placeholder, not a fact). For the sections above, report the full current state (not a diff); the tool works out what changed.
 
 \`\`\`yaml
 ${knownFacts(opts.profile, opts.sections)}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { FILING_OPTIONS, Field, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
@@ -17,6 +17,7 @@ interface Basics {
 }
 
 const thisYear = () => Math.max(2026, new Date().getFullYear());
+const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Basics", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", assumptions: "Assumptions" };
 
 function profileTextFrom(b: Basics): string {
   return stringifyProfile({
@@ -33,9 +34,22 @@ function profileTextFrom(b: Basics): string {
   });
 }
 
+const DRAFT_KEY = (scope: string) => `taxonomy.intake.${scope}`;
+function loadDraft<T>(scope: string, fallback: T): T {
+  try { const v = sessionStorage.getItem(DRAFT_KEY(scope)); return v ? { ...fallback, ...(JSON.parse(v) as Partial<T>) } : fallback; } catch { return fallback; }
+}
+function saveDraft(scope: string, value: unknown): void {
+  try { sessionStorage.setItem(DRAFT_KEY(scope), JSON.stringify(value)); } catch {}
+}
+export function clearDraft(scope: string): void {
+  try { sessionStorage.removeItem(DRAFT_KEY(scope)); } catch {}
+}
+
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
-  const [basics, setBasics] = useState<Basics>({ name: "Me", filingStatus: "single", state: "WA", startYear: thisYear() });
+  const scope = create ? "new" : `fill.${props.profile.name ?? ""}`;
+  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me", filingStatus: "single", state: "WA", startYear: thisYear() }));
+  useEffect(() => { if (create) saveDraft(`${scope}.basics`, basics); }, [create, scope, basics]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
@@ -49,12 +63,13 @@ export function IntakeModal(props: Props) {
   const finish = async (edits: ProfileEdit[]) => {
     if (props.mode === "fill") {
       props.onApply(edits);
+      clearDraft(`${scope}.paste`);
       props.onClose();
       return;
     }
     setBusy(true);
     setError(null);
-    try { await props.onCreate(basics.name.trim() || "New profile", editProfileText(baseText!, edits)); }
+    try { await props.onCreate(basics.name.trim() || "New profile", editProfileText(baseText!, edits)); clearDraft(`${scope}.basics`); clearDraft(`${scope}.paste`); }
     catch (e) { setError(String((e as Error).message ?? e)); }
     finally { setBusy(false); }
   };
@@ -65,7 +80,7 @@ export function IntakeModal(props: Props) {
         <header className="modal-head">
           <div>
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "Three facts from you; your agent reads the rest from your documents." : "Your agent reads the documents; you approve every number."}</div>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Three facts from you. Your agent reads the rest." : "Your agent reads the documents. You approve the numbers."}</div>
           </div>
           {create && !onClose && <ThemeToggle />}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
@@ -82,16 +97,17 @@ export function IntakeModal(props: Props) {
           </div>
         )}
 
-        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} />
+        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} scope={scope} />
       </div>
     </div>
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void> }) {
+function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void>; scope: string }) {
   const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
-  const [pasted, setPasted] = useState("");
+  const [pasted, setPasted] = useState(() => loadDraft(`${scope}.paste`, { text: "" }).text);
+  useEffect(() => { saveDraft(`${scope}.paste`, { text: pasted }); }, [scope, pasted]);
   const [accepted, setAccepted] = useState<Set<string> | null>(null);
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [showSame, setShowSame] = useState(false);
@@ -106,12 +122,6 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked; the textarea is selectable */ }
-  };
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([prompt], { type: "text/markdown" }));
-    const a = document.createElement("a");
-    a.href = url; a.download = "taxonomy-intake-request.md"; a.click();
-    URL.revokeObjectURL(url);
   };
   const edits = (): ProfileEdit[] => {
     if (!review) return [];
@@ -140,14 +150,13 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
     <div className="modal-body">
       <div className="two-col">
         <div className="col">
-          <div className="col-title"><span className="step-no">1</span> {create ? "Then copy this into your agent" : "Copy this into your agent"}</div>
-          <p className="muted small">It asks for what lives in documents: your pay stub, last year's return, 1099s, your equity portal, Form 3921, Form 1098. Any agent that can see those works: Claude with your Drive or mail, a CLI agent pointed at a folder, ChatGPT with uploads.</p>
+          <div className="col-title"><span className="step-no">1</span> Give this to your agent</div>
+          <p className="muted small">Any agent that can see your files: Claude with Drive or mail, ChatGPT with uploads, a CLI agent in a folder. It reads your documents, asks you about gaps, and returns one block of YAML.</p>
           <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
           <div className="modal-actions">
             <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
-            <button type="button" className="btn" disabled={sections.length === 0} onClick={download}>Download .md</button>
             <details className="sections-details">
-              <summary>{sectionLabel}</summary>
+              <summary>Asking for: {sectionLabel.toLowerCase()}</summary>
               <ul>
                 {INTAKE_SECTIONS.map((s) => (
                   <li key={s.id}><label><input type="checkbox" checked={sections.includes(s.id)} onChange={() => setSections((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))} /> <strong>{s.title}</strong> <span className="muted">{s.documents}</span></label></li>
@@ -157,8 +166,8 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
           </div>
         </div>
         <div className="col">
-          <div className="col-title"><span className="step-no">2</span> Paste what it returns</div>
-          <textarea className="paste-box" placeholder="Paste the YAML here…" value={pasted} onChange={(e) => { setPasted(e.target.value); setAccepted(null); }} />
+          <div className="col-title"><span className="step-no">2</span> Paste the reply here</div>
+          <textarea className="paste-box" placeholder="The whole reply is fine." value={pasted} onChange={(e) => { setPasted(e.target.value); setAccepted(null); }} />
           {parsed && parsed.problems.length > 0 && (
             <div className="error">
               Not quite the expected shape:
@@ -166,7 +175,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
             </div>
           )}
           {parsed && parsed.doc && parsed.warnings.length > 0 && <div className="muted small">Read with small corrections: {parsed.warnings.map((w) => `${w.path} (${w.message})`).join("; ")}.</div>}
-          {!review && <p className="muted small">In Claude, use the copy button on the final code block; pasting the whole reply works too. {create ? "Optional now: you can create the profile and paste later from the sidebar." : "The changes show up here for you to approve."}</p>}
+          {!review && <p className="muted small">{create ? "You can also skip this now and do it later from the sidebar." : "What changed will show here before anything is saved."}</p>}
         </div>
       </div>
 
@@ -174,11 +183,11 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
         <div className="found">
           <div className="found-head">
             <strong>Found {review.changes.filter((c) => c.status !== "same").length} values</strong>
-            <span className="muted">{INTAKE_SECTIONS.map((s) => ({ s, n: review.changes.filter((c) => c.section === s.id && c.status !== "same").length })).filter((x) => x.n).map((x) => `${x.s.title} ${x.n}`).join(" · ")}{review.asOf ? ` · as of ${review.asOf}` : ""}</span>
-            {review.questions.length > 0 && <span className="pill">{review.questions.length} to confirm afterward</span>}
+            <span className="muted">{INTAKE_SECTIONS.map((s) => ({ s, n: review.changes.filter((c) => c.section === s.id && c.status !== "same").length })).filter((x) => x.n).map((x) => `${SHORT[x.s.id] ?? x.s.title} ${x.n}`).join(" · ")}</span>
+            {review.questions.length > 0 && <span className="pill">{review.questions.length} to double-check later</span>}
           </div>
           <details className="found-details">
-            <summary>Check the values{sameCount > 0 ? ` (${sameCount} unchanged hidden)` : ""}</summary>
+            <summary>See them{sameCount > 0 ? ` (${sameCount} unchanged hidden)` : ""}</summary>
             {sameCount > 0 && <button type="button" className="link" onClick={() => setShowSame((v) => !v)}>{showSame ? "hide" : "show"} unchanged</button>}
             <div className="table-wrap">
               <table className="review">
@@ -214,7 +223,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>{!canFinish ? "Give the profile a name first." : review?.questions.length ? "Your agent's questions will be waiting on the main screen." : "Sources are kept with each number."}</span>
+        <span className="muted small" style={{ margin: 0 }}>{!canFinish ? "Give the profile a name first." : review?.questions.length ? "Your agent's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
         <span className="spacer" />
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits())}>
           {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}

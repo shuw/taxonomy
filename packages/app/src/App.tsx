@@ -27,6 +27,13 @@ function rememberedId(): string | null {
   try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
+/** Dialog state lives in the hash so a refresh lands you where you were. */
+function setHash(name: string | null) {
+  const url = new URL(location.href);
+  url.hash = name ? `#${name}` : "";
+  history.replaceState(null, "", url);
+}
+
 function remember(id: string) {
   try { localStorage.setItem(STORAGE_KEY, id); } catch {}
   const url = new URL(location.href);
@@ -37,7 +44,8 @@ function remember(id: string) {
 export function App() {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreatingState] = useState(() => location.hash === "#new");
+  const setCreating = (v: boolean) => { setCreatingState(v); setHash(v ? "new" : null); };
 
   const currentId = useMemo(() => {
     if (!list || list.length === 0) return null;
@@ -93,7 +101,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const [focusYear, setFocusYear] = useState(years[0]!);
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [intakeOpen, setIntakeOpenState] = useState(() => location.hash === "#intake");
+  const setIntakeOpen = (v: boolean) => { setIntakeOpenState(v); setHash(v ? "intake" : null); };
   const select = (sel: Selection | null) => setSelected(sel);
 
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
