@@ -41,7 +41,7 @@ function profileTextFrom(b: Basics): string {
 
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
-  const [basics, setBasics] = useState<Basics>({ name: "", filingStatus: "single", state: "WA", salary: 0, bonus: 0, pretax: 0, spouseSalary: 0, dependents: "", startYear: thisYear() });
+  const [basics, setBasics] = useState<Basics>({ name: "Me", filingStatus: "single", state: "WA", salary: 0, bonus: 0, pretax: 0, spouseSalary: 0, dependents: "", startYear: thisYear() });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
@@ -80,7 +80,7 @@ export function IntakeModal(props: Props) {
         {create && (
           <div className="modal-body create-head">
             <div className="create-basics">
-              <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" /></span></Field>
+              <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
               <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={basics.filingStatus} onChange={(v) => set("filingStatus", v)} /></Field>
               <Field label="State"><Select options={STATE_OPTIONS} value={basics.state} onChange={(v) => set("state", v)} /></Field>
               <Field label="Dependents" hint="birth years, if any"><span className="input-wrap"><input value={basics.dependents} onChange={(e) => set("dependents", e.target.value)} placeholder="e.g. 2019, 2022" /></span></Field>
@@ -227,7 +227,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Your agent's questions will be waiting on the main screen." : "Sources are kept with each number."}</span>
+        <span className="muted small" style={{ margin: 0 }}>{!canFinish ? "Give the profile a name first." : review?.questions.length ? "Your agent's questions will be waiting on the main screen." : "Sources are kept with each number."}</span>
         <span className="spacer" />
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits())}>
           {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
