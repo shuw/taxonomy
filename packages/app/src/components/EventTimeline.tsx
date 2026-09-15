@@ -154,6 +154,9 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       </div>
 
       {drag?.moved && (() => { const e = events.find((x) => x.id === drag.id); return e ? <div className="ev-ghost" style={{ left: drag.x + 10, top: drag.y - 10 }}>{chipKind(e, saleResult)} → {drag.target ?? "…"}</div> : null; })()}
+      {selected && selected.kind === "exercise" && (
+        <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
+      )}
       {selected && selected.kind === "liquidity" && (
         <LiquidityInspector profile={profile} plan={plan} years={years} event={selected} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
       )}
