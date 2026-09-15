@@ -515,18 +515,18 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 /* Timeline of decisions ------------------------------------------------------------ */
 .event-strip { display: flex; align-items: flex-start; padding: 2px 12px 0 46px; min-height: 36px; }
 .event-col .ev-info { margin-top: 2px; }
-.event-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0 3px; min-width: 0; }
-.ev-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 5px 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); text-align: left; cursor: pointer; color: inherit; min-width: 0; transition: border-color .12s ease, background .12s ease; }
+.event-col { display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 0 6px; min-width: 0; }
+.ev-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); text-align: left; cursor: pointer; color: inherit; min-width: 0; transition: border-color .12s ease, background .12s ease; }
 .ev-chip:hover { border-color: var(--ink-2); }
 .ev-chip.on { border-color: var(--accent); background: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
-.ev-chip .ev-kind { font: 700 11px/1.2 var(--display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.ev-chip .ev-val { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ev-chip .ev-kind { font: 700 12px/1.2 var(--display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ev-chip .ev-val { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ev-chip.exercise.iso { border-left: 3px solid var(--series-amt); }
 .ev-chip.exercise.nso { border-left: 3px solid var(--series-violet); }
 .ev-chip.fact { border-style: dashed; background: transparent; }
 .ev-chip.fact .ev-kind { color: var(--muted); }
 .ev-add-wrap { position: relative; display: flex; justify-content: center; }
-.ev-add { width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--muted); background: transparent; color: var(--muted); font: 700 16px/1 var(--display); cursor: pointer; transition: all .12s ease; }
+.ev-add { width: 30px; height: 30px; border-radius: 50%; border: 1px dashed var(--muted); background: transparent; color: var(--muted); font: 700 16px/1 var(--display); cursor: pointer; transition: all .12s ease; }
 .ev-add:hover, .ev-add.on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--focus); }
 .ev-menu { position: absolute; top: 30px; left: 50%; translate: -50% 0; z-index: 3; display: flex; flex-direction: column; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; animation: fade-in .12s ease; }
 .ev-menu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: inherit; font-weight: 500; white-space: nowrap; }
@@ -568,7 +568,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .event-strip { position: relative; }
 .strip-label { position: absolute; left: 0; top: 4px; width: 40px; font: 600 9.5px/1.15 var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .event-strip.info { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); min-height: 0; }
-.ev-info { display: flex; align-items: flex-start; gap: 5px; padding: 2px 4px; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer; color: var(--muted); font-size: 11.5px; line-height: 1.3; min-width: 0; width: 100%; }
+.ev-info { display: flex; align-items: flex-start; gap: 6px; padding: 4px 6px; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer; color: var(--muted); font-size: 12.5px; line-height: 1.3; min-width: 0; width: 100%; }
 .ev-info:hover { background: var(--surface-2); color: var(--ink-2); }
 .ev-info.on { background: var(--focus); color: var(--ink); }
 .ev-info .ev-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin-top: 4px; }

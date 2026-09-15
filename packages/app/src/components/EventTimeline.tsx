@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type FieldDef, type IntakeSection, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
+import { MAX_BAND } from "./Strips.tsx";
 import { LeverRow } from "./LeverRow.tsx";
 import { MoneyInput, NumberInput, PercentInput, Select, parseAmount } from "./fields.tsx";
 
 /** Same margins as the tax chart, so event columns sit under their bars. */
 const M = { left: 46, right: 12 };
-export const columnBand = (width: number, n: number) => Math.min(120, (width - M.left - M.right) / n);
+export const columnBand = (width: number, n: number) => Math.min(MAX_BAND, (width - M.left - M.right) / n);
 
 /** A marker for something that happens in a year but is not a decision: a fact change or an RSU settlement. */
 export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; /** Index into profile.timeline when this marker is a dated change. */ entryIndex?: number; }

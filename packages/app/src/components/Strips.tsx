@@ -34,7 +34,9 @@ export const TaxStrip = (p: StripProps) => <ColumnStrip {...p} series={taxSeries
 export const CreditStrip = (p: StripProps) => <ColumnStrip {...p} series={CREDIT_SERIES} height={170} />;
 
 const GAP = 2;
-const BAR = 24;
+/** Columns grow with the card up to this width; bars take a share of the column. */
+export const MAX_BAND = 260;
+const barWidth = (band: number) => Math.round(Math.min(48, Math.max(24, band * 0.28)));
 
 /** A rounded-top rectangle grown from a baseline (square bottom corners). */
 function topRounded(x: number, y: number, w: number, h: number, r: number): string {
@@ -47,7 +49,8 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
   const m = { top: 24, right: 12, bottom: 28, left: 46 };
-  const band = Math.min(120, (width - m.left - m.right) / years.length);
+  const band = Math.min(MAX_BAND, (width - m.left - m.right) / years.length);
+  const BAR = barWidth(band);
   const totals = years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0));
   const pinnedTotals = pinned ? pinned.years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0)) : null;
   const max = Math.max(...totals, ...(pinnedTotals ?? []));
