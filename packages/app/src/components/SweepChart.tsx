@@ -12,13 +12,20 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
   const m = { top: 18, right: 14, bottom: 28, left: 46 };
   const plotW = width - m.left - m.right, plotH = height - m.top - m.bottom;
   const maxShares = Math.max(1, crossover.available);
-  const maxAmt = Math.max(1, ...sweep.map((p) => p.amt));
+  // Extra tax across the whole plan versus exercising nothing this year: what the AMT costs once the credit comes back.
+  const base = sweep[0]?.planTotalTax ?? 0;
+  const extra = (p: SweepPoint) => Math.max(0, p.planTotalTax - base);
+  const maxAmt = Math.max(1, ...sweep.map((p) => Math.max(p.amt, extra(p))));
   const ticks = niceTicks(maxAmt, 3);
   const top = ticks[ticks.length - 1] ?? maxAmt;
   const xOf = (s: number) => m.left + (s / maxShares) * plotW;
   const yOf = (v: number) => m.top + plotH - (v / top) * plotH;
   const baseY = m.top + plotH;
   const line = sweep.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.shares)},${yOf(p.amt)}`).join(" ");
+  const extraLine = sweep.map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.shares)},${yOf(extra(p))}`).join(" ");
+  const last = sweep[sweep.length - 1];
+  const perShare = last && last.shares > crossover.sharesBeforeAmt ? last.amt / (last.shares - crossover.sharesBeforeAmt) : 0;
+  const keptShare = last && last.amt > 0 ? extra(last) / last.amt : 0;
   const beyond = sweep.filter((p) => p.shares >= crossover.sharesBeforeAmt);
   const area = beyond.length > 1
     ? `M${xOf(crossover.sharesBeforeAmt)},${baseY} L${xOf(crossover.sharesBeforeAmt)},${yOf(0)} ` + beyond.map((p) => `L${xOf(p.shares)},${yOf(p.amt)}`).join(" ") + ` L${xOf(beyond[beyond.length - 1]!.shares)},${baseY} Z`
@@ -50,6 +57,7 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
         ))}
         {area && <path d={area} fill="var(--series-amt)" opacity={0.1} />}
         <path d={line} fill="none" stroke="var(--series-amt)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={extraLine} fill="none" stroke="var(--ink-2)" strokeWidth={1.5} strokeDasharray="4 4" strokeLinejoin="round" />
         {crossover.sharesBeforeAmt < crossover.available && (
           <g>
             <line x1={xOf(crossover.sharesBeforeAmt)} x2={xOf(crossover.sharesBeforeAmt)} y1={m.top} y2={baseY} stroke="var(--ink-2)" strokeWidth={1} />
@@ -58,6 +66,7 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
         )}
         {hp && <line x1={xOf(hp.shares)} x2={xOf(hp.shares)} y1={m.top} y2={baseY} stroke="var(--grid)" strokeWidth={1} />}
         <circle cx={xOf(cur)} cy={yOf(curAmt)} r={5} fill="var(--series-amt)" stroke="var(--surface)" strokeWidth={2} />
+        {cur > 0 && <text className="cap-label" x={xOf(cur) + (cur > maxShares * 0.7 ? -8 : 8)} y={yOf(curAmt) - 8} textAnchor={cur > maxShares * 0.7 ? "end" : "start"}>now: {shares(cur)} sh · {usdCompact(curAmt)}</text>}
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
         {[0, 0.5, 1].map((f) => <text key={f} className="axis-label" x={xOf(f * maxShares)} y={height - 8} textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"}>{shares(f * maxShares)} sh</text>)}
       </svg>
@@ -66,11 +75,20 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
           <div className="row"><strong>{shares(hp.shares)} shares</strong></div>
           <div className="row"><span>AMT this year</span><span>{usd(hp.amt)}</span></div>
           <div className="row"><span>Tax this year</span><span>{usd(hp.totalTax)}</span></div>
-          <div className="row"><span>Tax over plan</span><span>{usd(hp.planTotalTax)}</span></div>
+          <div className="row"><span>Extra tax over the plan</span><span>{usd(extra(hp))}</span></div>
           <div className="row"><span>Credit unused at end</span><span>{usd(hp.amtCreditCarryforwardEnd)}</span></div>
           <div className="row muted"><span>click to set</span></div>
         </div>
       )}
+      <div className="legend">
+        <span><span className="sw" style={{ background: "var(--series-amt)" }} />AMT this year</span>
+        <span><span className="sw dashed" />Extra tax over the whole plan, after the credit comes back</span>
+      </div>
+      <p className="muted small sweep-reading">
+        {crossover.sharesBeforeAmt >= crossover.available
+          ? `Every one of the ${shares(crossover.available)} exercisable shares fits under this year's AMT line.`
+          : `Up to ${shares(crossover.sharesBeforeAmt)} shares this year cost no AMT: regular tax already covers the tentative minimum. Past that, each share adds about ${usd(perShare)} of AMT now, most of it a prepayment that returns as credit in later years` + (last ? `: exercising all ${shares(last.shares)} means ${usdCompact(last.amt)} of AMT in ${crossover.year} but about ${usdCompact(extra(last))} more tax over the plan (${Math.round(keptShare * 100)}% of it).` : ".")}
+      </p>
     </div>
   );
 }
