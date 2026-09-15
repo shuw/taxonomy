@@ -61,8 +61,21 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
           </>
         )}
       </Section>
+      <div className="sidebar-foot">
+        <button type="button" className="link muted" onClick={resetView} title="Forget which sections and cards are open, the focused year, dismissed suggestions and the selected decision. Your data and theme stay.">Reset view</button>
+      </div>
     </div>
   );
+}
+
+/** Clear remembered UI state (not data, not the theme) and reload. */
+function resetView() {
+  try {
+    const keep = new Set(["taxonomy.profile", "taxonomy.theme"]);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("taxonomy.") && !keep.has(k)) localStorage.removeItem(k);
+  } catch {}
+  location.hash = "";
+  location.reload();
 }
 
 const labelOf = (path: string) => timelineFields().find((f) => f.path === path)?.label ?? path;

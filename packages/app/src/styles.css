@@ -575,3 +575,5 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ev-info-text { min-width: 0; display: flex; flex-direction: column; }
 .ev-info-label { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev-info-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-foot { padding: 14px 20px 0; }
+.link.muted { color: var(--muted); font-size: 12.5px; }
