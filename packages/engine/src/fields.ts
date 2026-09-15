@@ -40,9 +40,9 @@ const person = (who: "self" | "spouse"): FieldDef[] => {
 };
 
 export const FIELDS: FieldDef[] = [
-  basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], timeline: true, required: true }),
-  basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code", timeline: true, required: true }),
-  basics({ path: "plan.startYear", intake: "basics.planStartYear", label: "First plan year", type: "year", hint: "first year on screen; usually the current year" }),
+  basics({ path: "filer.filingStatus", intake: "basics.filingStatus", label: "Filing status", type: "enum", enum: ["single", "mfj", "mfs", "hoh"], hint: "single | mfj | mfs | hoh, from the last return's first page (Form 1040 filing status box)", timeline: true, required: true }),
+  basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code, from the last return's address or a pay stub", timeline: true, required: true }),
+  basics({ path: "plan.startYear", label: "First plan year", type: "year" }),
   pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", hint: "count of dependents claimed on the last return" }),
   ...person("self"),
   ...person("spouse"),

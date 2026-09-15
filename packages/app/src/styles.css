@@ -422,3 +422,8 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .followups label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; line-height: 1.45; }
 .followups input { margin-top: 3px; accent-color: var(--accent); }
 .followups .where { color: var(--accent); font-weight: 500; white-space: nowrap; }
+.followups ul.missing { margin-bottom: 10px; }
+.missing-row { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+.missing-text { font-weight: 500; }
+.missing-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.missing-answer .segmented { flex: 1; }

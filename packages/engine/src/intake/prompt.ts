@@ -15,7 +15,7 @@ export interface SectionInfo {
 }
 
 export const INTAKE_SECTIONS: SectionInfo[] = [
-  { id: "basics", title: "Filing basics", what: "Filing status, state and first plan year. Answered in the app; only ask for these if you want them read off the last return.", documents: "last return's header", search: "the last return's first page" },
+  { id: "basics", title: "Filing basics", what: "Filing status and state of residence.", documents: "the last return's first page, or a pay stub for the state", search: "the last return's first page", shortcuts: ["single, married (joint), separate or head of household answers filingStatus; a two-letter code answers state"] },
   { id: "pay", title: "Pay and household", what: "Base salary, expected bonus, pre-tax contributions and withholding so far, per earner; dependents claimed.", documents: "latest pay stub, offer letter, W-2 box 12, the last return's header", search: "pay stub, \"earnings statement\", offer letter, W-2, the last return's first page", shortcuts: ["\"no bonus\" sets expectedBonus to 0", "\"no 401k\" sets pretaxContributions to 0"] },
   { id: "prior_return", title: "Last filed return", what: "The figures the model must reproduce, plus the carryforwards that enter this year: AMT credit, capital losses, unused charitable gifts.", documents: "Form 1040, Form 6251, Form 8801, Schedule D, Schedule A", search: "\"Form 1040\" and the tax year, \"tax return\", TurboTax or accountant PDFs, \"Form 8801\", \"Form 6251\"", shortcuts: ["\"no AMT\" means no Form 6251 or 8801 was filed: the AMT block is omitted and the credit carryforward is 0", "\"standard deduction\" means no Schedule A: itemized is omitted", "\"no capital losses\" sets both carryforwards to 0"] },
   { id: "income", title: "Investment and other income", what: "Interest, dividends (total and qualified), gains realized so far, K-1 or side income.", documents: "1099-INT, 1099-DIV, 1099-B or brokerage year-to-date", search: "1099-INT, 1099-DIV, 1099-B, \"consolidated 1099\", brokerage statements" },
@@ -99,7 +99,7 @@ function template(section: IntakeSection): string {
 }
 
 /** Sections whose answers live in documents rather than in the user's head; the request asks for these by default. */
-export const DOCUMENT_SECTIONS: IntakeSection[] = ["pay", "prior_return", "income", "equity", "home"];
+export const DOCUMENT_SECTIONS: IntakeSection[] = ["basics", "pay", "prior_return", "income", "equity", "home"];
 
 export interface PromptOptions {
   sections: IntakeSection[];
@@ -112,10 +112,8 @@ export interface PromptOptions {
 /** The request the user hands to their agent. Agent-agnostic: instructions, the schema for the chosen sections, the current profile, and the output rules. */
 /** The values the profile already holds for the requested sections, as a short YAML the agent can read at a glance. */
 export function knownFacts(profile: Profile, sections: IntakeSection[]): string {
-  const facts: Record<string, unknown> = {
-    filer: { filingStatus: profile.filer.filingStatus, state: profile.filer.state, spouse: profile.people.spouse ? "yes" : "no" },
-    planStartYear: profile.plan.startYear,
-  };
+  const facts: Record<string, unknown> = { planStartYear: profile.plan.startYear };
+  if (!sections.includes("basics")) facts.filer = { filingStatus: profile.filer.filingStatus, state: profile.filer.state };
   if (sections.includes("pay")) facts.pay = { dependents: (profile.filer.dependents ?? []).length, people: { self: { salary: profile.people.self.salary, bonus: profile.people.self.bonus }, spouse: profile.people.spouse ? { salary: profile.people.spouse.salary } : undefined } };
   if (sections.includes("prior_return")) {
     const r = [...(profile.returns ?? [])].sort((a, b) => b.year - a.year)[0];
@@ -188,7 +186,7 @@ questions:
   if (opts.profile) {
     parts.push(`## What the tool already has
 
-Filing status and state are mine; do not ask about those. The rest is from an earlier pass or a placeholder (a 0 salary is a placeholder, not a fact). For the sections above, report the full current state (not a diff); the tool works out what changed.
+These came from an earlier pass or are placeholders: a 0 salary, a "single" filing status with no source, are placeholders, not facts. For the sections above, report the full current state (not a diff); the tool works out what changed.
 
 \`\`\`yaml
 ${knownFacts(opts.profile, opts.sections)}

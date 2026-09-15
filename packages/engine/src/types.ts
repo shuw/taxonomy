@@ -210,6 +210,8 @@ export interface FollowUp {
   text: string;
   /** Profile path it concerns, when known ("carryforwards.amtCredit", "grants.g1"). */
   about?: string;
+  /** "missing": a required fact nobody supplied yet; answered inline. "confirm" (default): a judgment call to double-check. */
+  kind?: "confirm" | "missing";
   resolved?: boolean;
   added?: string;
 }

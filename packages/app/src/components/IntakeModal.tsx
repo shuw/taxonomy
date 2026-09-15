@@ -1,34 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
-import { FILING_OPTIONS, Field, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { Field, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
 interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
 type Props = FillProps | CreateProps;
 
-/** The facts a person knows without looking anything up; pay and household come from documents. */
-interface Basics {
-  name: string;
-  filingStatus: FilingStatus;
-  state: string;
-  startYear: number;
-}
+interface Basics { name: string }
+const REQUIRED_BASICS: { id: string; text: string; about: string }[] = [
+  { id: "filer.filingStatus", text: "How do you file? Single, married filing jointly, separately, or head of household.", about: "filer.filingStatus" },
+  { id: "filer.state", text: "Which state do you live in?", about: "filer.state" },
+  { id: "people.self.salary", text: "What is your base salary? Base pay only; equity income is added from your grants.", about: "people.self.salary" },
+];
 
 const thisYear = () => Math.max(2026, new Date().getFullYear());
-const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Basics", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", assumptions: "Assumptions" };
+const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Filing", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", assumptions: "Assumptions" };
 
 function profileTextFrom(b: Basics): string {
   return stringifyProfile({
     version: 3, name: b.name.trim() || "New profile",
-    filer: { filingStatus: b.filingStatus, state: b.state, dependents: [] },
-    plan: { startYear: b.startYear, years: 6 },
+    filer: { filingStatus: "single", state: "WA", dependents: [] },
+    plan: { startYear: thisYear(), years: 6 },
     assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
-    people: {
-      self: { salary: 0 },
-      spouse: b.filingStatus === "mfj" || b.filingStatus === "mfs" ? { salary: 0 } : undefined,
-    },
+    people: { self: { salary: 0 } },
     income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
     timeline: [], scenarios: { default: { exercises: { iso: {}, nso: {} } } }, activeScenario: "default",
   });
@@ -48,7 +44,7 @@ export function clearDraft(scope: string): void {
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
   const scope = create ? "new" : `fill.${props.profile.name ?? ""}`;
-  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me", filingStatus: "single", state: "WA", startYear: thisYear() }));
+  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me" }));
   useEffect(() => { if (create) saveDraft(`${scope}.basics`, basics); }, [create, scope, basics]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +54,8 @@ export function IntakeModal(props: Props) {
   const profile: Profile = useMemo(() => (props.mode === "fill" ? props.profile : parseProfile(baseText!)), [props, baseText]);
   const canCreate = !create || basics.name.trim() !== "";
   const onClose = props.onClose;
-  const married = basics.filingStatus === "mfj" || basics.filingStatus === "mfs";
 
-  const finish = async (edits: ProfileEdit[]) => {
+  const finish = async (edits: ProfileEdit[], provided: Set<string> = new Set()) => {
     if (props.mode === "fill") {
       props.onApply(edits);
       clearDraft(`${scope}.paste`);
@@ -69,7 +64,12 @@ export function IntakeModal(props: Props) {
     }
     setBusy(true);
     setError(null);
-    try { await props.onCreate(basics.name.trim() || "New profile", editProfileText(baseText!, edits)); clearDraft(`${scope}.basics`); clearDraft(`${scope}.paste`); }
+    // Whatever the agent did not supply is asked on the main screen, not here.
+    const text = editProfileText(baseText!, edits);
+    const missing = REQUIRED_BASICS.filter((b) => !provided.has(b.id)).map((b, i) => ({ id: `m${i + 1}`, text: b.text, about: b.about, kind: "missing" as const, added: new Date().toISOString().slice(0, 10) }));
+    const existing = parseProfile(text).followUps ?? [];
+    const withMissing = missing.length ? editProfileText(text, [{ path: ["followUps"], value: [...missing, ...existing] }]) : text;
+    try { await props.onCreate(basics.name.trim() || "New profile", withMissing); clearDraft(`${scope}.basics`); clearDraft(`${scope}.paste`); }
     catch (e) { setError(String((e as Error).message ?? e)); }
     finally { setBusy(false); }
   };
@@ -80,7 +80,7 @@ export function IntakeModal(props: Props) {
         <header className="modal-head">
           <div>
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "Three facts from you. Your agent reads the rest." : "Your agent reads the documents. You approve the numbers."}</div>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Name it. Your agent reads the rest from your documents; anything missing is asked afterward." : "Your agent reads the documents. You approve the numbers."}</div>
           </div>
           {create && !onClose && <ThemeToggle />}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
@@ -90,9 +90,6 @@ export function IntakeModal(props: Props) {
           <div className="modal-body create-head">
             <div className="create-basics">
               <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
-              <Field label="Filing status" wide><Segmented options={[...FILING_OPTIONS]} value={basics.filingStatus} onChange={(v) => set("filingStatus", v)} /></Field>
-              <Field label="State"><Select options={STATE_OPTIONS} value={basics.state} onChange={(v) => set("state", v)} /></Field>
-              <Field label="First plan year"><NumberInput value={basics.startYear} onChange={(n) => set("startYear", Math.max(2026, Math.round(n)))} min={2026} grouping={false} /></Field>
             </div>
           </div>
         )}
@@ -103,7 +100,7 @@ export function IntakeModal(props: Props) {
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void>; scope: string }) {
+function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[], provided?: Set<string>) => Promise<void>; scope: string }) {
   const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
   const [pasted, setPasted] = useState(() => loadDraft(`${scope}.paste`, { text: "" }).text);
@@ -225,7 +222,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope 
       <div className="modal-actions">
         <span className="muted small" style={{ margin: 0 }}>{!canFinish ? "Give the profile a name first." : review?.questions.length ? "Your agent's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
         <span className="spacer" />
-        <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits())}>
+        <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set([...selected].filter((id) => review?.changes.find((c) => c.id === id && c.proposed !== 0 && c.proposed !== ""))))}>
           {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
         </button>
       </div>

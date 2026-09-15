@@ -131,7 +131,9 @@ questions:
 describe("intake prompt", () => {
   test("includes the chosen sections, the rules, and the current profile", () => {
     const text = intakePrompt({ sections: ["pay", "equity"], profile });
-    expect(text).toContain("do not ask about those");
+    expect(text).toContain("placeholders, not facts");
+    expect(text).toContain("filingStatus: single");
+    expect(intakePrompt({ sections: ["basics"], profile })).not.toContain("filer:");
     expect(text).toContain("taxonomy_intake: 1");
     expect(text).toContain("baseSalary:");
     expect(text).toContain("unexercised:");
