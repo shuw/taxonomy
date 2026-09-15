@@ -211,6 +211,16 @@ export type ScenarioEvent =
       price?: number;
       /** Specific lots, lot id to shares; when absent, lots are picked lowest tax first. */
       lots?: Record<string, number>;
+    }
+  | {
+      id: string;
+      kind: "liquidity";
+      year: number;
+      date?: string;
+      /** Company id; defaults to every company. */
+      company?: string;
+      /** Share price at the event; sets that year's price. Defaults to the modeled price. */
+      price?: number;
     };
 
 /** One sale as the engine sees it. */
@@ -235,6 +245,8 @@ export interface Levers {
   exerciseDates?: { iso: Record<number, string>; nso: Record<number, string> };
   /** Sales per year, in date order. */
   sales?: Record<number, SaleLever[]>;
+  /** Liquidity events by company id ("*" for all): the year settles double-trigger RSUs and the price, if given, pins that year's share price. */
+  liquidity?: Record<string, { year: number; price?: number }>;
 }
 
 /** A dated change to any profile value, in force from that year on. */

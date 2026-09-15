@@ -20,6 +20,8 @@ export function leversOf(scenario: Scenario | undefined): Levers {
       if (e.date) levers.exerciseDates![e.type][e.year] = e.date;
     } else if (e.kind === "sell") {
       (levers.sales![e.year] ??= []).push({ id: e.id, shares: e.shares, date: e.date, price: e.price, lots: e.lots });
+    } else if (e.kind === "liquidity") {
+      (levers.liquidity ??= {})[e.company ?? "*"] = { year: e.year, price: e.price };
     }
   }
   return levers;

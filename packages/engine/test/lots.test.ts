@@ -96,3 +96,17 @@ describe("sales in the plan", () => {
     expect(less.inputs.saleProceeds).toBeLessThan(less.lines.totalTax!.value);
   });
 });
+
+describe("liquidity events", () => {
+  test("a liquidity event settles double-trigger RSUs that year and pins the share price", () => {
+    const rsu = { ...profile.equity.grants.find((g) => g.type === "rsu")!, settlement: "liquidity" as const };
+    const p: Profile = { ...profile, equity: { ...profile.equity, grants: profile.equity.grants.map((g) => (g.id === rsu.id ? rsu : g)) } };
+    const none = runPlan({ ...p, scenarios: { default: { events: [] } }, activeScenario: "default" });
+    expect(none.years.every((y) => y.inputs.rsuSharesVested === 0)).toBe(true);
+    const ipo = runPlan({ ...p, scenarios: { default: { events: [{ id: "e1", kind: "liquidity", year: 2028, price: 60 }] } }, activeScenario: "default" });
+    const y28 = ipo.years.find((y) => y.year === 2028)!;
+    expect(y28.inputs.rsuSharesVested).toBeGreaterThan(0);
+    expect(y28.inputs.rsuIncome / y28.inputs.rsuSharesVested).toBeCloseTo(60, 6);
+    expect(ipo.years.find((y) => y.year === 2027)!.inputs.rsuSharesVested).toBe(0);
+  });
+});

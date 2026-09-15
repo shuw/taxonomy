@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
+import { companyPrice, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, openingLots, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
 import { LeverRow } from "./LeverRow.tsx";
@@ -10,9 +10,9 @@ const M = { left: 46, right: 12 };
 export const columnBand = (width: number, n: number) => Math.min(120, (width - M.left - M.right) / n);
 
 /** A marker for something that happens in a year but is not a decision: a fact change or an RSU settlement. */
-export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; }
+export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; milestone?: boolean; }
 
-export type AddKind = { kind: "exercise"; type: "iso" | "nso" } | { kind: "sell" };
+export type AddKind = { kind: "exercise"; type: "iso" | "nso" } | { kind: "sell" } | { kind: "liquidity" };
 
 interface Props {
   profile: Profile;
@@ -41,7 +41,33 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
     ...(has("iso") ? [{ key: "iso", label: "Exercise ISOs", what: { kind: "exercise", type: "iso" } as AddKind }] : []),
     ...(has("nso") ? [{ key: "nso", label: "Exercise NSOs", what: { kind: "exercise", type: "nso" } as AddKind }] : []),
     ...(canSell ? [{ key: "sell", label: "Sell shares", what: { kind: "sell" } as AddKind }] : []),
+    ...(profile.equity.companies.length > 0 ? [{ key: "liquidity", label: "Liquidity event (IPO, tender)", what: { kind: "liquidity" } as AddKind }] : []),
   ];
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; target: number | null; moved: boolean } | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const columnAt = (clientX: number): number | null => {
+    const rect = stripRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const i = Math.floor((clientX - rect.left - M.left) / band);
+    return i >= 0 && i < years.length ? years[i]! : null;
+  };
+  const startDrag = (id: string) => (ev: React.PointerEvent) => {
+    if (ev.button !== 0) return;
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    setDrag({ id, x: ev.clientX, y: ev.clientY, target: null, moved: false });
+  };
+  const moveDrag = (ev: React.PointerEvent) => {
+    if (!drag || drag.id !== (ev.currentTarget as HTMLElement).dataset.id) return;
+    const moved = drag.moved || Math.abs(ev.clientX - drag.x) > 6 || Math.abs(ev.clientY - drag.y) > 6;
+    setDrag({ ...drag, x: moved ? ev.clientX : drag.x, y: moved ? ev.clientY : drag.y, target: moved ? columnAt(ev.clientX) : null, moved });
+  };
+  const endDrag = (e: ScenarioEvent) => (ev: React.PointerEvent) => {
+    if (!drag || drag.id !== e.id) return;
+    const target = drag.moved ? columnAt(ev.clientX) : null;
+    setDrag(null);
+    if (drag.moved) { if (target !== null && target !== e.year) onChange(e.id, { year: target, date: undefined }); }
+    else onSelect(e.id === selectedId ? null : e.id);
+  };
   const selected = events.find((e) => e.id === selectedId) ?? null;
   const selectedFact = facts.find((f) => f.id === selectedId) ?? null;
 
@@ -61,20 +87,21 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
 
   return (
     <div className="events">
-      <div className="event-strip" ref={ref}>
+      <div className="event-strip" ref={(el) => { (ref as React.MutableRefObject<HTMLDivElement | null>).current = el; stripRef.current = el; }}>
         {years.map((y) => {
           const here = events.filter((e) => e.year === y);
           const factsHere = facts.filter((f) => f.year === y);
           return (
-            <div className="event-col" key={y} style={{ flex: `0 0 ${band}px` }}>
+            <div className={"event-col" + (drag?.moved && drag.target === y ? " target" : "")} key={y} style={{ flex: `0 0 ${band}px` }}>
               {here.map((e) => (
-                <button type="button" key={e.id} className={"ev-chip " + e.kind + " " + (e.kind === "exercise" ? e.type : "") + (e.id === selectedId ? " on" : "")} onClick={() => onSelect(e.id === selectedId ? null : e.id)}>
-                  <span className="ev-kind">{e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()}` : `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}`}</span>
-                  <span className="ev-val">{e.kind === "sell" ? `${shares(saleResult(e)?.shares ?? e.shares)} sh` : `${shares(e.shares)} sh`}</span>
+                <button type="button" key={e.id} data-id={e.id} className={"ev-chip " + e.kind + " " + (e.kind === "exercise" ? e.type : "") + (e.id === selectedId ? " on" : "") + (drag?.id === e.id && drag.moved ? " dragging" : "")}
+                  onPointerDown={startDrag(e.id)} onPointerMove={moveDrag} onPointerUp={endDrag(e)} onPointerCancel={() => setDrag(null)} title="Drag to another year">
+                  <span className="ev-kind">{chipKind(e, saleResult)}</span>
+                  <span className="ev-val">{chipValue(e, profile, saleResult)}</span>
                 </button>
               ))}
               {factsHere.map((f) => (
-                <button type="button" key={f.id} className={"ev-chip fact" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)}>
+                <button type="button" key={f.id} className={"ev-chip fact" + (f.milestone ? " milestone" : "") + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)}>
                   <span className="ev-kind">{f.label}</span>
                   <span className="ev-val">{f.detail}</span>
                 </button>
@@ -98,6 +125,10 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       {selected && selected.kind === "exercise" && (
         <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
       )}
+      {drag?.moved && (() => { const e = events.find((x) => x.id === drag.id); return e ? <div className="ev-ghost" style={{ left: drag.x + 10, top: drag.y - 10 }}>{chipKind(e, saleResult)} → {drag.target ?? "…"}</div> : null; })()}
+      {selected && selected.kind === "liquidity" && (
+        <LiquidityInspector profile={profile} plan={plan} years={years} event={selected} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
+      )}
       {selected && selected.kind === "sell" && (
         <SaleInspector profile={profile} plan={plan} years={years} event={selected} result={saleResult(selected)} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} onSellToCover={() => onSellToCover(selected.id)} />
       )}
@@ -110,12 +141,55 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
             <span className="spacer" />
             {selectedFact.edit && <button type="button" className="link" onClick={selectedFact.edit}>Edit</button>}
           </div>
-          <p className="muted small">A fact, not a decision: it applies to every scenario. Decisions are the colored chips.</p>
+          <p className="muted small">{selectedFact.milestone ? "A holding-period milestone: shares held cross into a cheaper tax treatment on this date. Sell on or after it to get that treatment." : "A fact, not a decision: it applies to every scenario. Decisions are the colored chips."}</p>
         </div>
       )}
       {!selected && !selectedFact && events.length === 0 && (
         <p className="muted small events-empty">{kinds.length ? "Nothing decided yet. Press + under a year to add an exercise or a sale." : "Add option grants or shares you own under Edit my information, and the decisions appear here."}</p>
       )}
+    </div>
+  );
+}
+
+function chipKind(e: ScenarioEvent, saleResult: (e: Extract<ScenarioEvent, { kind: "sell" }>) => SaleResult | undefined): string {
+  if (e.kind === "exercise") return `Exercise ${e.type.toUpperCase()}`;
+  if (e.kind === "sell") return `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}`;
+  return "Liquidity";
+}
+function chipValue(e: ScenarioEvent, profile: Profile, saleResult: (e: Extract<ScenarioEvent, { kind: "sell" }>) => SaleResult | undefined): string {
+  if (e.kind === "exercise") return `${shares(e.shares)} sh`;
+  if (e.kind === "sell") return `${shares(saleResult(e)?.shares ?? e.shares)} sh`;
+  const c = profile.equity.companies.find((x) => x.id === e.company) ?? profile.equity.companies[0];
+  return `${usd(e.price ?? companyPrice(profile, c, e.year))}/sh`;
+}
+
+function LiquidityInspector({ profile, plan, years, event: e, onChange, onRemove }: { profile: Profile; plan: PlanResult; years: number[]; event: Extract<ScenarioEvent, { kind: "liquidity" }>; onChange: (patch: Partial<ScenarioEvent>) => void; onRemove: () => void }) {
+  const companies = profile.equity.companies;
+  const c = companies.find((x) => x.id === e.company) ?? companies[0];
+  const modeled = companyPrice(profile, c, e.year);
+  const yr = plan.years.find((y) => y.year === e.year);
+  const doubleTrigger = profile.equity.grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && (g.company ?? companies[0]?.id) === c?.id);
+  return (
+    <div className="event-inspector liquidity">
+      <div className="ei-head">
+        <strong>Liquidity event</strong>
+        <span className="muted">in</span>
+        <span className="ei-year"><Select options={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(e.year)} onChange={(y) => onChange({ year: Number(y) })} /></span>
+        {companies.length > 1 && <span className="ei-year"><Select options={companies.map((x) => ({ value: x.id, label: x.name }))} value={c?.id ?? ""} onChange={(id) => onChange({ company: id })} /></span>}
+        <span className="spacer" />
+        <button type="button" className="link danger" onClick={onRemove}>Remove</button>
+      </div>
+      <div className="ei-row">
+        <label className="ei-price">
+          <span className="muted small">Share price at the event</span>
+          <MoneyInput value={e.price ?? modeled} onChange={(n) => onChange({ price: Math.abs(n - modeled) < 0.005 ? undefined : n })} decimals={2} />
+          {e.price !== undefined && <button type="button" className="link" onClick={() => onChange({ price: undefined })}>use modeled</button>}
+        </label>
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>
+        {e.price !== undefined ? `Pins ${c?.name ?? "the company"} at ${usd(e.price)} per share for ${e.year}; growth resumes from there.` : `Uses the modeled ${e.year} price, ${usd(modeled)} per share.`}
+        {doubleTrigger ? ` Double-trigger RSUs settle here: ${yr && yr.inputs.rsuSharesVested > 0 ? `${shares(yr.inputs.rsuSharesVested)} units, ${usdCompact(yr.inputs.rsuIncome)} of wages in ${e.year}` : "none are time-vested by then"}.` : " No double-trigger RSUs depend on it."}
+      </p>
     </div>
   );
 }
@@ -268,5 +342,22 @@ export function factMarkers(profile: Profile, years: number[], onEditTimeline: (
       if (v.shares > 0) out.push({ id: `rsu${y}`, year: y, label: "RSUs settle", detail: `${shares(v.shares)} · ${usdCompact(v.income)}`, edit: onEditEquity });
     }
   }
+  return out;
+}
+
+/** Holding-period milestones per year: shares held at the start of the year that turn long-term or qualifying during it. */
+export function milestoneMarkers(profile: Profile, plan: PlanResult, years: number[]): FactMarker[] {
+  const out: FactMarker[] = [];
+  years.forEach((y, i) => {
+    const lots = i === 0 ? openingLots(profile) : (plan.years[i - 1]?.lotsEnd ?? []);
+    const inYear = lotMilestones(lots, `${y}-01-01`).filter((m) => m.date.startsWith(String(y)));
+    for (const becomes of ["long-term", "qualifying"] as const) {
+      const ms = inYear.filter((m) => m.becomes === becomes);
+      if (ms.length === 0) continue;
+      const total = ms.reduce((s, m) => s + m.shares, 0);
+      const first = ms[0]!.date;
+      out.push({ id: `m-${y}-${becomes}`, year: y, label: `Turn ${becomes}`, detail: `${shares(total)} sh from ${first.slice(5)}`, milestone: true });
+    }
+  });
   return out;
 }

@@ -36,8 +36,9 @@ The document format is in `docs/INTAKE.md`; the parser, prompt and mapping live 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,
 `equity` (companies with a share price and optional price path; grants by the portal's three
 counts; holdings with cost and AMT basis), `home` and `deductions` are facts for the first plan
-year. `timeline` holds dated changes to any of them. `scenarios` holds named lever settings and
-`activeScenario` picks one; "Save as…" in the top bar snapshots the current levers. `sources`
+year. `timeline` holds dated changes to any of them. `scenarios` holds named lists of decisions (events
+on the plan's timeline: exercises, sales and liquidity events) and `activeScenario`
+picks one; "Save as…" in the top bar snapshots the current decisions. `sources`
 records provenance by path, with grants, holdings and companies keyed by id. Older files are
 migrated on first read. The full description is in `docs/DATA-MODEL.md`; every scalar field is
 declared once in `packages/engine/src/fields.ts`, which drives the intake prompt, the review

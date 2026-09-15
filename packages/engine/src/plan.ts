@@ -22,7 +22,20 @@ export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Le
     },
     exerciseDates: overrides?.exerciseDates ?? base.exerciseDates,
     sales: overrides?.sales ?? base.sales,
+    liquidity: overrides?.liquidity ?? base.liquidity,
   };
+}
+
+/** The profile with the scenario's liquidity events applied: each names the year double-trigger RSUs settle and, with a price, pins that year's share price. */
+export function profileWithLevers(profile: Profile, levers: Levers): Profile {
+  const liq = levers.liquidity;
+  if (!liq || Object.keys(liq).length === 0) return profile;
+  const companies = profile.equity.companies.map((c) => {
+    const l = liq[c.id] ?? liq["*"];
+    if (!l) return c;
+    return { ...c, liquidityYear: l.year, pricePath: l.price !== undefined ? { ...(c.pricePath ?? {}), [l.year]: l.price } : c.pricePath };
+  });
+  return { ...profile, equity: { ...profile.equity, companies } };
 }
 
 /** Balances that flow from one plan year into the next. */
@@ -131,13 +144,14 @@ function carriesOut(result: YearResult): Carries {
  */
 export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): PlanResult {
   const levers = resolveLevers(profile, leverOverrides);
+  const base = profileWithLevers(profile, levers);
   let carries = openingCarries(profile);
   let lots = openingLots(profile);
   const years: YearResult[] = [];
   let mortgage: MortgageYear[] | null = null;
   let mortgageKey = "";
   for (const [i, year] of planYears(profile).entries()) {
-    const p = profileInYear(profile, year);
+    const p = profileInYear(base, year);
     // Re-amortize only when the loan itself changes on the timeline.
     const key = JSON.stringify(p.home?.mortgage ?? null);
     if (key !== mortgageKey) {

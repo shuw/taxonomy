@@ -39,7 +39,7 @@ export function EquityKnobs({ profile, levers, edit, onOpenFacts }: KnobsProps) 
             <span className="company-name">{c.name}</span>
             <span className="company-price"><MoneyInput value={c.sharePrice} onChange={(n) => setCompany(i, { sharePrice: n })} decimals={2} suffix="/sh" /></span>
           </div>
-          <div className="company-sub muted">grows {pct(c.growth ?? profile.assumptions.fmvGrowth)}/yr{c.liquidityYear ? ` · liquidity ${c.liquidityYear}` : ""}</div>
+          <div className="company-sub muted">grows {pct(c.growth ?? profile.assumptions.fmvGrowth)}/yr{(() => { const l = levers.liquidity?.[c.id] ?? levers.liquidity?.["*"]; return l ? ` · liquidity ${l.year} (event)` : c.liquidityYear ? ` · liquidity ${c.liquidityYear}` : ""; })()}</div>
         </div>
       ))}
       {grants.length === 0 && <p className="muted small">No grants yet. Add them under "Edit my information", or fill from documents.</p>}

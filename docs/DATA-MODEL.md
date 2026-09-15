@@ -25,7 +25,7 @@ everything that *changes on a date* lives in `timeline`.
 | `home` | the mortgage as a loan (balance, rate, origination, original amount, term), property tax, or a direct interest figure when there is no loan | interest is amortized month by month; the $750k acquisition-debt cap applies by average balance |
 | `deductions` | charitable by kind (cash, appreciated stock, DAF), state income tax, medical | cash and DAF up to 60% of AGI, stock up to 30%, excess carried forward |
 | `timeline` | `{ year, path, value, note? }` | applied cumulatively before each year is computed; growth assumptions still compound from the plan start |
-| `scenarios`, `activeScenario` | named lists of decisions: `{ events: [...] }` | an event has an id, a kind (`exercise`, `sell`), a year, an optional date, and its own fields: shares and option type for an exercise; shares, an optional price and optional lot picks for a sale. The engine collapses events into a per-year lever table. Files that stored the table directly are read and mapped |
+| `scenarios`, `activeScenario` | named lists of decisions: `{ events: [...] }` | an event has an id, a kind (`exercise`, `sell`, `liquidity`), a year, an optional date, and its own fields: shares and option type for an exercise; shares, an optional price and optional lot picks for a sale; an optional company and price for a liquidity event, which settles double-trigger RSUs that year and pins the share price. The engine collapses events into a per-year lever table. Files that stored the table directly are read and mapped |
 | `sources` | provenance keyed by path; grants and holdings by id (`grants.g1`), companies by id | a string, or `{ doc, asOf, note }` |
 
 ## Identity
