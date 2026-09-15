@@ -85,3 +85,43 @@ export function sharesToCover(profile: Profile, leverOverrides: Partial<Levers> 
   }
   return hi;
 }
+
+export interface CreditRecovery {
+  year: number;
+  company: string;
+  shares: number;
+  /** Credit this exercise adds in its year. */
+  generated: number;
+  /** Per later plan year: credit from this exercise used that year, and what is still unrecovered after it. */
+  path: { year: number; recovered: number; remaining: number }[];
+  /** Still unrecovered at the end of the plan. */
+  leftover: number;
+  /** Year it would clear at the recent pace, when that is beyond the plan; null when nothing comes back. */
+  projectedYear: number | null;
+}
+
+/** How the AMT credit from one year's ISO exercise comes back: the plan with the exercise against the plan without it. */
+export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): CreditRecovery | null {
+  const levers = resolveLevers(profile, leverOverrides);
+  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const shares = exercisedIn(profile, levers, "iso", year, resolveCompany(profile, c));
+  if (shares <= 0) return null;
+  const withIt = runPlan(profile, levers).years;
+  const without = runPlan(profile, withIso(levers, year, c, 0)).years;
+  const at = (ys: typeof withIt, y: number, id: string) => ys.find((r) => r.year === y)?.lines[id]?.value ?? 0;
+  const generated = at(withIt, year, "amtCreditGenerated") - at(without, year, "amtCreditGenerated");
+  if (generated <= 0) return null;
+  let remaining = generated;
+  const path: CreditRecovery["path"] = [];
+  for (const r of withIt) {
+    if (r.year <= year) continue;
+    const recovered = Math.max(0, Math.min(remaining, at(withIt, r.year, "amtCreditUsed") - at(without, r.year, "amtCreditUsed")));
+    remaining -= recovered;
+    path.push({ year: r.year, recovered, remaining });
+  }
+  const recent = path.slice(-2).map((p) => p.recovered);
+  const pace = recent.length ? recent.reduce((s, n) => s + n, 0) / recent.length : 0;
+  const lastYear = withIt[withIt.length - 1]!.year;
+  const projectedYear = remaining <= 0 ? (path.find((p) => p.remaining <= 0)?.year ?? year) : pace > 0 ? lastYear + Math.ceil(remaining / pace) : null;
+  return { year, company: c, shares, generated, path, leftover: Math.max(0, remaining), projectedYear };
+}

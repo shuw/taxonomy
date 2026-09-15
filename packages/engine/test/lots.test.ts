@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { parseProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
 import { applySale, lotMilestones, lowestTaxOrder, longTermFrom, type Lot } from "../src/lots.ts";
-import { amtCrossover, sharesToCover } from "../src/thresholds.ts";
+import { amtCrossover, creditRecovery, sharesToCover } from "../src/thresholds.ts";
 import type { Profile, ScenarioEvent } from "../src/types.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
@@ -147,5 +147,18 @@ describe("cash", () => {
     expect(y26.lines.netCash!.value).toBeCloseTo(y26.lines.cashIn!.value - y26.lines.exerciseCost!.value - y26.lines.totalTax!.value);
     const y27 = year(p, 2027);
     expect(y27.lines.cashIn!.value).toBeGreaterThan(y27.inputs.salarySelf);
+  });
+});
+
+describe("credit recovery", () => {
+  test("credit from an exercise comes back in later years, and the path sums", () => {
+    const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 20_000 }]);
+    const r = creditRecovery(p, undefined, 2026)!;
+    expect(r.generated).toBeGreaterThan(0);
+    expect(r.path.map((x) => x.year)).toEqual([2027, 2028, 2029, 2030]);
+    const back = r.path.reduce((s, x) => s + x.recovered, 0);
+    expect(back + r.leftover).toBeCloseTo(r.generated, 0);
+    expect(r.path[0]!.recovered).toBeGreaterThan(0);
+    expect(creditRecovery(withEvents([]), undefined, 2026)).toBeNull();
   });
 });

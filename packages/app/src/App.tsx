@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, companiesWithGrants, exercisedIn, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
+import { activeScenario, amtCrossover, companiesWithGrants, creditRecovery, exercisedIn, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
 import { Segmented } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
@@ -19,6 +19,7 @@ import { ExplainPanel } from "./components/ExplainPanel.tsx";
 import { Mark, Wordmark } from "./components/Mark.tsx";
 import { IntakeModal } from "./components/IntakeModal.tsx";
 import { CalibrationCard } from "./components/CalibrationCard.tsx";
+import { CreditRecoveryView } from "./components/CreditRecovery.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
@@ -129,6 +130,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
   // The AMT chart follows the focused year; selecting anything on the timeline focuses its year.
   const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
+  const recoveries = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name, r: creditRecovery(profile, levers, sweepYear, c) })).filter((x) => x.r), [profile, levers, sweepYear, isoCompanies]);
   const sweeps = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name ?? c, sweep: sweepIsoExercise(profile, levers, sweepYear, 40, c), crossover: crossovers.find((x) => x.year === sweepYear && x.company === c)! })), [profile, levers, sweepYear, isoCompanies, crossovers]);
 
   const writeEvents = (next: ScenarioEvent[]) => {
@@ -226,6 +228,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <h2>AMT credit bank</h2>
               <div className="sub">Credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}.</div>
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+              {recoveries.map((x) => <CreditRecoveryView key={x.company} r={x.r!} companyName={isoCompanies.length > 1 ? x.name : undefined} />)}
+              {recoveries.length === 0 && hasIso && <p className="muted small" style={{ margin: "8px 0 0" }}>Select or add an ISO exercise in {sweepYear} to see how its credit comes back.</p>}
             </section>
             {sweeps.map((s) => (
               <section className="card" key={s.company}>

@@ -593,3 +593,9 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .facts-pane > .link, .facts-pane .add-grant { align-self: flex-start; }
 .company-line .link.danger { margin-left: auto; padding: 0; }
 .cap-label.neg { fill: var(--bad); }
+.recovery { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.recovery-head { font-size: 13px; color: var(--ink-2); }
+.recovery-bar { display: flex; height: 22px; border-radius: 7px; overflow: hidden; background: var(--surface-2); }
+.rec-slice { display: flex; align-items: center; justify-content: center; background: var(--series-amt); color: #fff; font: 600 11px/1 var(--display); min-width: 0; overflow: hidden; border-right: 1px solid var(--surface); }
+.rec-slice > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.rec-slice.left { background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px); color: var(--ink-2); }
