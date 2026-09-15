@@ -32,7 +32,7 @@ export function HoldOrSellCard({ h, companyName }: { h: HoldOrSell; companyName?
           : better > 0
             ? `Holding nets about ${usdCompact(better)} more over the plan, if the price holds to ${h.hold.saleYear}, but needs ${usdCompact(h.hold.cashNeeded)} of cash in ${h.year}.`
             : `Selling the same day nets about ${usdCompact(-better)} more over the plan and needs ${h.sell.cashNeeded <= 0 ? "no cash up front" : `${usdCompact(h.sell.cashNeeded)} of cash`}.`}
-        {" "}The hold path assumes the sale on December 31 of {h.hold.saleYear}; move the exercise date or add your own sale on the timeline to test other timings.
+        {" "}The hold path assumes a sale at the end of {h.hold.saleYear}; move the exercise date or add your own sale on the timeline to test other timings.
       </p>
     </section>
   );
