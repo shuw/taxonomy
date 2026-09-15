@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export function Field({ label, hint, children, wide, source }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string }) {
+export function Field({ label, hint, children, wide, source, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; error?: string }) {
   return (
-    <label className={"field" + (wide ? " wide" : "")}>
+    <label className={"field" + (wide ? " wide" : "") + (error ? " invalid" : "")}>
       <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}{source && <span className="src" title={source}>source</span>}</span>
       {children}
+      {error && <span className="field-error">{error}</span>}
     </label>
   );
 }

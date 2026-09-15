@@ -48,14 +48,21 @@ export function IntakeModal(props: Props) {
   useEffect(() => { if (create) saveDraft(`${scope}.basics`, basics); }, [create, scope, basics]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameNeeded, setNameNeeded] = useState(false);
   const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
+  const nameMissing = create && basics.name.trim() === "";
 
   const baseText = useMemo(() => (create ? profileTextFrom(basics) : null), [create, basics]);
   const profile: Profile = useMemo(() => (props.mode === "fill" ? props.profile : parseProfile(baseText!)), [props, baseText]);
-  const canCreate = !create || basics.name.trim() !== "";
+  const canCreate = true;
   const onClose = props.onClose;
 
   const finish = async (edits: ProfileEdit[], provided: Set<string> = new Set()) => {
+    if (nameMissing) {
+      setNameNeeded(true);
+      document.getElementById("profile-name")?.focus();
+      return;
+    }
     if (props.mode === "fill") {
       props.onApply(edits);
       clearDraft(`${scope}.paste`);
@@ -89,18 +96,18 @@ export function IntakeModal(props: Props) {
         {create && (
           <div className="modal-body create-head">
             <div className="create-basics">
-              <Field label="Name" hint="a person, a household, or a what-if" wide><span className="input-wrap"><input autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
+              <Field label="Name" hint="a person, a household, or a what-if" wide error={nameNeeded && nameMissing ? "Name this profile to continue." : undefined}><span className="input-wrap"><input id="profile-name" autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
             </div>
           </div>
         )}
 
-        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} scope={scope} />
+        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={true} onFinish={finish} scope={scope} onInteract={() => { if (nameMissing) setNameNeeded(true); }} />
       </div>
     </div>
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[], provided?: Set<string>) => Promise<void>; scope: string }) {
+function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope, onInteract }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[], provided?: Set<string>) => Promise<void>; scope: string; onInteract?: () => void }) {
   const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
   const [pasted, setPasted] = useState(() => loadDraft(`${scope}.paste`, { text: "" }).text);
@@ -118,6 +125,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope 
   }, [review, accepted]);
 
   const copy = async () => {
+    onInteract?.();
     try { await navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked; the textarea is selectable */ }
   };
   const edits = (): ProfileEdit[] => {
@@ -164,7 +172,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope 
         </div>
         <div className="col">
           <div className="col-title"><span className="step-no">2</span> Paste the reply here</div>
-          <textarea className="paste-box" placeholder="The whole reply is fine." value={pasted} onChange={(e) => { setPasted(e.target.value); setAccepted(null); }} />
+          <textarea className="paste-box" placeholder="The whole reply is fine." value={pasted} onChange={(e) => { onInteract?.(); setPasted(e.target.value); setAccepted(null); }} />
           {parsed && parsed.problems.length > 0 && (
             <div className="error">
               Not quite the expected shape:
@@ -220,7 +228,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope 
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>{!canFinish ? "Give the profile a name first." : review?.questions.length ? "Your agent's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
+        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Your agent's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
         <span className="spacer" />
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set([...selected].filter((id) => review?.changes.find((c) => c.id === id && c.proposed !== 0 && c.proposed !== ""))))}>
           {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
