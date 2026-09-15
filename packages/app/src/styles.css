@@ -433,3 +433,6 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .field-error { font-size: 13px; color: var(--bad); font-weight: 500; }
 .notice { background: color-mix(in srgb, var(--series-amt) 12%, transparent); border-left: 3px solid var(--series-amt); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
 .grant-foot.warn { color: var(--series-amt); }
+.followups ul.gaps { gap: 6px; }
+.gap-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); line-height: 1.45; }
+.gap-actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }

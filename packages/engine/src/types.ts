@@ -54,6 +54,8 @@ export interface PriorReturn {
     isoBargainElement?: number;
     /** Form 8801 credit available at the start of that year. */
     amtCreditCarriedIn?: number;
+    /** W-2 box 5, summed across W-2s; the base for the additional Medicare tax. */
+    medicareWages?: number;
   };
   reported: {
     agi?: number;
@@ -65,6 +67,8 @@ export interface PriorReturn {
     amt?: number;
     amtCreditUsed?: number;
     niit?: number;
+    /** Form 8959 line 18. */
+    additionalMedicare?: number;
     /** 1040 line 24. */
     totalTax?: number;
   };
@@ -294,6 +298,8 @@ export interface YearInputs {
   amtCreditCarryforwardIn: number;
   /** Added to every ordinary bracket rate this year. */
   bracketRateDelta: number;
+  /** When set, the additional Medicare tax is computed on this instead of salary plus equity income (a W-2 box 5 figure). */
+  medicareWages?: number;
 }
 
 /** One number on screen, with the reason it is what it is. */

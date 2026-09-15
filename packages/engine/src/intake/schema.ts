@@ -68,6 +68,7 @@ export interface IntakePriorReturn {
   regularTax?: number;
   totalTax?: number;
   niit?: number;
+  additionalMedicare?: number;
   amt?: { amti?: number; exemption?: number; tentativeMinimumTax?: number; amt?: number; creditUsed?: number };
   amtCreditCarryforward?: number;
   capitalLossCarryforward?: { shortTerm?: number; longTerm?: number };
@@ -83,6 +84,7 @@ export interface IntakePriorReturn {
     otherIncome?: number;
     isoBargainElement?: number;
     amtCreditCarriedIn?: number;
+    medicareWages?: number;
   };
 }
 
@@ -216,6 +218,7 @@ export function parseIntake(text: string): IntakeParse {
       regularTax: num("prior_return.regularTax", pr.regularTax),
       totalTax: num("prior_return.totalTax", pr.totalTax),
       niit: num("prior_return.niit", pr.niit),
+      additionalMedicare: num("prior_return.additionalMedicare", pr.additionalMedicare),
       amt: amt ? { amti: num("prior_return.amt.amti", amt.amti), exemption: num("prior_return.amt.exemption", amt.exemption), tentativeMinimumTax: num("prior_return.amt.tentativeMinimumTax", amt.tentativeMinimumTax), amt: num("prior_return.amt.amt", amt.amt), creditUsed: num("prior_return.amt.creditUsed", amt.creditUsed) } : undefined,
       amtCreditCarryforward: num("prior_return.amtCreditCarryforward", pr.amtCreditCarryforward, { min: 0 }),
       capitalLossCarryforward: clc ? { shortTerm: num("prior_return.capitalLossCarryforward.shortTerm", clc.shortTerm, { min: 0 }), longTerm: num("prior_return.capitalLossCarryforward.longTerm", clc.longTerm, { min: 0 }) } : undefined,
@@ -227,6 +230,7 @@ export function parseIntake(text: string): IntakeParse {
         shortTermGains: num("prior_return.inputs.shortTermGains", inp.shortTermGains), longTermGains: num("prior_return.inputs.longTermGains", inp.longTermGains),
         otherIncome: num("prior_return.inputs.otherIncome", inp.otherIncome), isoBargainElement: num("prior_return.inputs.isoBargainElement", inp.isoBargainElement),
         amtCreditCarriedIn: num("prior_return.inputs.amtCreditCarriedIn", inp.amtCreditCarriedIn),
+        medicareWages: num("prior_return.inputs.medicareWages", inp.medicareWages),
       } : undefined,
     };
   }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FilingStatus, FollowUp, Profile, ProfileEdit } from "@taxonomy/engine";
+import { profileGaps, type FilingStatus, type FollowUp, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { FILING_OPTIONS, MoneyInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
 
 const SECTION_FOR: [RegExp, string][] = [
@@ -16,7 +16,9 @@ const SECTION_FOR: [RegExp, string][] = [
 export function FollowUps({ profile, edit }: { profile: Profile; edit: (edits: ProfileEdit[]) => void }) {
   const all = profile.followUps ?? [];
   const open = all.filter((f) => !f.resolved);
-  if (open.length === 0) return null;
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const gaps = profileGaps(profile).filter((g) => !dismissed.has(g.id));
+  if (open.length === 0 && gaps.length === 0) return null;
   const resolve = (id: string, extra: ProfileEdit[] = []) => edit([...extra, { path: ["followUps"], value: all.map((f) => (f.id === id ? { ...f, resolved: true } : f)) }]);
   const sectionOf = (about?: string) => about && SECTION_FOR.find(([re]) => re.test(about))?.[1];
   const missing = open.filter((f) => f.kind === "missing");
@@ -37,6 +39,22 @@ export function FollowUps({ profile, edit }: { profile: Profile; edit: (edits: P
             </li>
           ))}
         </ul>
+      )}
+      {gaps.length > 0 && (
+        <>
+          <div className="subhead" style={{ marginTop: open.length ? 12 : 0 }}>Probably missing</div>
+          <ul className="gaps">
+            {gaps.map((g) => (
+              <li key={g.id} className="gap-row">
+                <span>{g.text} <span className="where">· {g.section}</span></span>
+                <span className="gap-actions">
+                  {g.fill && <button type="button" className="btn" onClick={() => edit([{ path: g.fill!.path, value: g.fill!.value }, { path: ["sources", g.fill!.path.join(".")], value: g.fill!.source }])}>{g.fill.label}</button>}
+                  <button type="button" className="link" onClick={() => setDismissed((d) => new Set(d).add(g.id))}>Not needed</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {all.length > open.length && <div className="muted small">{all.length - open.length} done.</div>}
     </section>

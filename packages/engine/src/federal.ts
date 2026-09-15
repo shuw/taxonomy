@@ -115,9 +115,40 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     "SALT (capped) + mortgage interest + charitable + medical.", ["saltDeduction", "mortgageInterest", "charitableDeduction", "medicalDeduction"],
   );
   const standard = L.put("standardDeduction", "Standard deduction", p.standardDeduction[fs], `${p.year} standard deduction for ${statusName(fs)} filers${p.published ? "" : " (projected)"}.`);
-  const usesItemized = itemized > standard;
-  L.put("usesItemized", "Itemizing?", usesItemized ? 1 : 0, usesItemized ? `Itemized (${usd(itemized)}) beats standard (${usd(standard)}).` : `Standard (${usd(standard)}) beats itemized (${usd(itemized)}).`, ["itemizedDeductions", "standardDeduction"], "flag");
-  const deduction = L.put("deduction", "Deduction taken", Math.max(itemized, standard), usesItemized ? "Itemized deductions, since they exceed the standard deduction." : "The standard deduction, since it exceeds your itemized deductions.", ["usesItemized"]);
+
+  // Which deduction to take is decided on regular tax plus AMT together: the standard deduction is
+  // disallowed under AMT, so a smaller itemized total can still leave less tax to pay overall.
+  const brackets = p.brackets[fs];
+  const cg = p.capGains[fs];
+  const taxUnder = (deductionAmount: number, addback: number) => {
+    const taxable = Math.max(0, agi - deductionAmount);
+    const pref = Math.min(taxable, preferentialGross);
+    const ordinary = taxable - pref;
+    const regular = bracketTax(ordinary, brackets) + capGainsTax(pref, ordinary, cg);
+    const amti = taxable + addback + inputs.isoBargainElement;
+    const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * Math.max(0, amti - p.amt.phaseoutStart[fs]));
+    const base = Math.max(0, amti - exemption);
+    const prefAmt = Math.min(base, preferentialGross);
+    const ordinaryPart = base - prefAmt;
+    const rb = p.amt.rateBreak[fs];
+    const tmt = Math.min(ordinaryPart, rb) * p.amt.lowRate + Math.max(0, ordinaryPart - rb) * p.amt.highRate + capGainsTax(prefAmt, ordinaryPart, cg);
+    return regular + Math.max(0, tmt - regular);
+  };
+  const withItemized = taxUnder(itemized, saltDeduction);
+  const withStandard = taxUnder(standard, standard);
+  const usesItemized = itemized > standard ? withItemized <= withStandard : withItemized < withStandard;
+  L.put(
+    "usesItemized", "Itemizing?", usesItemized ? 1 : 0,
+    usesItemized
+      ? itemized > standard
+        ? `Itemized (${usd(itemized)}) beats standard (${usd(standard)}).`
+        : `Itemized (${usd(itemized)}) is smaller than standard (${usd(standard)}), but the standard deduction is disallowed under AMT, so itemizing leaves ${usd(withStandard - withItemized)} less tax overall.`
+      : itemized > standard
+        ? `Itemized (${usd(itemized)}) is larger, but taking it would raise regular tax plus AMT by ${usd(withItemized - withStandard)}; standard wins.`
+        : `Standard (${usd(standard)}) beats itemized (${usd(itemized)}).`,
+    ["itemizedDeductions", "standardDeduction"], "flag",
+  );
+  const deduction = L.put("deduction", "Deduction taken", usesItemized ? itemized : standard, usesItemized ? "Itemized deductions." : "The standard deduction.", ["usesItemized"]);
 
   const taxableIncome = L.put("taxableIncome", "Taxable income", Math.max(0, agi - deduction), "AGI minus the deduction taken.", ["agi", "deduction"]);
   const preferential = Math.min(taxableIncome, preferentialGross);
@@ -126,7 +157,6 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   L.put("preferentialIncome", "Income at capital gain rates", preferential, "Qualified dividends + net long-term gains, stacked on top of ordinary income.", ["taxableIncome"]);
 
   // Regular tax ---------------------------------------------------------------
-  const brackets = p.brackets[fs];
   const marginal = bracketRate(ordinaryTaxable, brackets);
   const bracketEdge = brackets.find((b) => ordinaryTaxable <= b.upTo)?.upTo ?? Infinity;
   const ordinaryTax = L.put(
@@ -136,7 +166,6 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     ["ordinaryTaxable"],
   );
   L.put("marginalBracket", "Ordinary marginal bracket", marginal, "Rate on the next dollar of ordinary income under regular tax.", ["ordinaryTaxable"], "rate");
-  const cg = p.capGains[fs];
   const capGainsTaxAmt = L.put(
     "capGainsTax", "Tax on capital gains and dividends", capGainsTax(preferential, ordinaryTaxable, cg),
     preferential > 0
@@ -226,7 +255,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
       : agi > p.niit.threshold[fs] ? "AGI is over the threshold but there is no investment income." : `AGI is under the ${usd(p.niit.threshold[fs])} threshold.`,
     ["agi", "interest", "nonqualifiedDividends", "qualifiedDividends", "netLongTermGain", "netShortTermGain"],
   );
-  const medicareBase = Math.max(0, grossWages - p.additionalMedicare.threshold[fs]);
+  const medicareBase = Math.max(0, (inputs.medicareWages ?? grossWages) - p.additionalMedicare.threshold[fs]);
   L.put("additionalMedicare", "Additional Medicare tax", medicareBase * p.additionalMedicare.rate, medicareBase > 0 ? `0.9% of Medicare wages (salary, bonus, RSU and NSO income, before pre-tax contributions) over ${usd(p.additionalMedicare.threshold[fs])}.` : `Medicare wages are under the ${usd(p.additionalMedicare.threshold[fs])} threshold.`, ["salarySelf", "rsuIncome", "nsoIncome"]);
 
   L.put("federalTotal", "Total federal tax", federalIncomeTax + L.get("niit") + L.get("additionalMedicare"), "Federal income tax + NIIT + additional Medicare tax (1040 line 24).", ["federalIncomeTax", "niit", "additionalMedicare"]);

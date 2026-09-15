@@ -25,3 +25,5 @@ export type { FieldDef, FieldType } from "./fields.ts";
 export type { IntakeChange, IntakeReview, IntakeSection } from "./intake/apply.ts";
 export { intakePrompt, knownFacts, INTAKE_SECTIONS, DOCUMENT_SECTIONS } from "./intake/prompt.ts";
 export type { PromptOptions, SectionInfo } from "./intake/prompt.ts";
+export { profileGaps } from "./gaps.ts";
+export type { Gap } from "./gaps.ts";

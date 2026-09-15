@@ -134,6 +134,20 @@ describe("wages, losses, giving and the mortgage cap", () => {
   });
 });
 
+describe("deduction choice under AMT", () => {
+  test("itemizes when a smaller itemized total leaves less regular tax plus AMT", () => {
+    // Big ISO exercise puts the filer in AMT; the standard deduction is disallowed there, so itemizing (SALT + mortgage) wins.
+    const L = fed({ filingStatus: "mfj", salarySelf: 1_100_000, propertyTax: 21_000, mortgageInterestPaid: 12_950, isoBargainElement: 385_000 });
+    expect(L.get("itemizedDeductions")).toBeLessThan(L.get("standardDeduction"));
+    expect(L.get("usesItemized")).toBe(1);
+    expect(L.lines.usesItemized!.why).toContain("disallowed under AMT");
+  });
+  test("still takes the larger standard deduction when there is no AMT", () => {
+    const L = fed({ filingStatus: "mfj", salarySelf: 300_000, propertyTax: 5_000 });
+    expect(L.get("usesItemized")).toBe(0);
+  });
+});
+
 describe("rate shift", () => {
   test("a bracket rate delta raises every ordinary rate", () => {
     const L = fed({ salarySelf: 300_000, bracketRateDelta: 0.02 });

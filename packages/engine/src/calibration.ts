@@ -29,6 +29,7 @@ const COMPARED: [keyof PriorReturn["reported"], string][] = [
   ["amt", "amt"],
   ["amtCreditUsed", "amtCreditUsed"],
   ["niit", "niit"],
+  ["additionalMedicare", "additionalMedicare"],
   ["totalTax", "federalTotal"],
 ];
 
@@ -76,6 +77,7 @@ export function calibrate(profile: Profile): Calibration | null {
     rsuIncome: 0,
     amtCreditCarryforwardIn: inp.amtCreditCarriedIn ?? 0,
     bracketRateDelta: 0,
+    medicareWages: inp.medicareWages,
   };
   const ledger = new Ledger();
   computeFederal(inputs, federalParams(pr.year, profile.assumptions.inflation), ledger);

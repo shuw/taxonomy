@@ -75,11 +75,11 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
       inputs: {
         wages: pr.inputs?.wages, interest: pr.inputs?.interest, ordinaryDividends: pr.inputs?.ordinaryDividends, qualifiedDividends: pr.inputs?.qualifiedDividends,
         shortTermGains: pr.inputs?.shortTermGains, longTermGains: pr.inputs?.longTermGains, otherIncome: pr.inputs?.otherIncome,
-        itemized: pr.itemized, isoBargainElement: pr.inputs?.isoBargainElement, amtCreditCarriedIn: pr.inputs?.amtCreditCarriedIn,
+        itemized: pr.itemized, isoBargainElement: pr.inputs?.isoBargainElement, amtCreditCarriedIn: pr.inputs?.amtCreditCarriedIn, medicareWages: pr.inputs?.medicareWages,
       },
       reported: {
         agi: pr.agi, taxableIncome: pr.taxableIncome, regularTax: pr.regularTax, amti: pr.amt?.amti, amtExemption: pr.amt?.exemption,
-        tentativeMinimumTax: pr.amt?.tentativeMinimumTax, amt: pr.amt?.amt, amtCreditUsed: pr.amt?.creditUsed, niit: pr.niit, totalTax: pr.totalTax,
+        tentativeMinimumTax: pr.amt?.tentativeMinimumTax, amt: pr.amt?.amt, amtCreditUsed: pr.amt?.creditUsed, niit: pr.niit, additionalMedicare: pr.additionalMedicare, totalTax: pr.totalTax,
       },
     }) as PriorReturn;
     const existing = (profile.returns ?? []).find((r) => r.year === pr.year);

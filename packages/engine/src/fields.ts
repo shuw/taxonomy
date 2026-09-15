@@ -58,6 +58,8 @@ export const FIELDS: FieldDef[] = [
   { path: "returns.reported.regularTax", intake: "prior_return.regularTax", label: "Regular tax", section: "prior_return", type: "usd", hint: "1040 line 16", review: false },
   { path: "returns.reported.totalTax", intake: "prior_return.totalTax", label: "Total tax", section: "prior_return", type: "usd", hint: "1040 line 24", review: false, required: true },
   { path: "returns.reported.niit", intake: "prior_return.niit", label: "NIIT", section: "prior_return", type: "usd", hint: "Form 8960 line 17, if any", review: false },
+  { path: "returns.reported.additionalMedicare", intake: "prior_return.additionalMedicare", label: "Additional Medicare tax", section: "prior_return", type: "usd", hint: "Form 8959 line 18, if any", review: false },
+  { path: "returns.inputs.medicareWages", intake: "prior_return.inputs.medicareWages", label: "Medicare wages that year", section: "prior_return", type: "usd", hint: "W-2 box 5, all W-2s added", review: false },
   { path: "returns.reported.amti", intake: "prior_return.amt.amti", label: "AMTI", section: "prior_return", type: "usd", hint: "Form 6251 line 4; omit the amt block if no 6251 was filed", review: false },
   { path: "returns.reported.amtExemption", intake: "prior_return.amt.exemption", label: "AMT exemption", section: "prior_return", type: "usd", hint: "Form 6251 line 5", review: false },
   { path: "returns.reported.tentativeMinimumTax", intake: "prior_return.amt.tentativeMinimumTax", label: "Tentative minimum tax", section: "prior_return", type: "usd", hint: "Form 6251 line 9", review: false },
