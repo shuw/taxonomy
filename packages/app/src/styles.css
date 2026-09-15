@@ -527,7 +527,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ev-add-wrap { position: relative; display: flex; justify-content: center; }
 .ev-add { width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--muted); background: transparent; color: var(--muted); font: 700 16px/1 var(--display); cursor: pointer; transition: all .12s ease; }
 .ev-add:hover, .ev-add.on { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--focus); }
-.ev-menu { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; animation: fade-in .12s ease; }
+.ev-menu { position: absolute; top: 30px; left: 50%; translate: -50% 0; z-index: 3; display: flex; flex-direction: column; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; animation: fade-in .12s ease; }
 .ev-menu button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; color: inherit; font-weight: 500; white-space: nowrap; }
 .ev-menu button:hover { background: var(--surface-2); }
 .event-inspector { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--focus); display: flex; flex-direction: column; gap: 10px; animation: fade-in .15s ease; }
