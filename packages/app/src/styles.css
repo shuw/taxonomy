@@ -545,7 +545,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .card-head { display: flex; align-items: flex-start; gap: 16px; }
 .card-head > div:first-child { flex: 1; min-width: 0; }
 .plan-years { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.plan-years .input-wrap { width: 84px; }
+.plan-years .segmented { min-width: 150px; }
 .ev-chip.sell { border-left: 3px solid var(--series-surtax); }
 .badge.sell { background: var(--series-surtax); }
 .ei-date { width: 150px; }

@@ -3,7 +3,7 @@ import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
 import { activeScenario, amtCrossover, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
-import { NumberInput } from "./components/fields.tsx";
+import { Segmented } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
@@ -205,7 +205,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <h2>Your plan, year by year</h2>
               <div className="sub">Tax above, decisions below. Press + under a year to add one; click a chip to adjust it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
             </div>
-            <label className="plan-years"><span className="muted small">Years to plan</span><NumberInput value={profile.plan.years} onChange={(n) => edit([{ path: ["plan", "years"], value: Math.max(1, Math.min(15, Math.round(n))) }])} min={1} /></label>
+            <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
           <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
