@@ -22,7 +22,7 @@ export function blankProfileText(name: string, filingStatus: FilingStatus, state
 export function IntakeModal(props: Props) {
   const create = props.mode === "create";
   const [name, setName] = useState("");
-  const [start, setStart] = useState<"agent" | "manual" | null>(create ? null : "agent");
+  const [start, setStart] = useState<"agent" | "manual">("agent");
   const [filingStatus, setFilingStatus] = useState<FilingStatus>("single");
   const [state, setState] = useState("WA");
   const [salary, setSalary] = useState(0);
@@ -53,33 +53,16 @@ export function IntakeModal(props: Props) {
         <header className="modal-head">
           <div>
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "A profile is a person, a household, or a what-if. It lives in a file you can edit." : "Your agent reads the documents; you approve every number."}</div>
+            <div className="muted small" style={{ margin: 0 }}>{create ? "Name it, hand the request to an agent that can see your documents, paste back what it finds." : "Your agent reads the documents; you approve every number."}</div>
           </div>
           {create && !onClose && <ThemeToggle />}
-          {create && start && <button type="button" className="btn" onClick={() => setStart(null)}>Back</button>}
+          {create && start === "manual" && <button type="button" className="btn" onClick={() => setStart("agent")}>Back</button>}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
         </header>
 
         {create && (
           <div className="modal-body create-head">
             <Field label="Name" wide><span className="input-wrap"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" /></span></Field>
-          </div>
-        )}
-
-        {create && start === null && (
-          <div className="modal-body">
-            <div className="start-cards">
-              <button type="button" className="start-card" disabled={!canCreate} onClick={() => setStart("agent")}>
-                <strong>From my documents</strong>
-                <span>Copy one request into an agent that can see your tax return and equity portal. Paste back what it finds; approve each number.</span>
-                <em>Recommended</em>
-              </button>
-              <button type="button" className="start-card" disabled={!canCreate} onClick={() => setStart("manual")}>
-                <strong>By hand</strong>
-                <span>Four fields now. Everything else has a place in the sidebar.</span>
-              </button>
-            </div>
-            {!canCreate && <div className="muted small">Give it a name first.</div>}
           </div>
         )}
 
@@ -98,13 +81,13 @@ export function IntakeModal(props: Props) {
           </div>
         )}
 
-        {start === "agent" && <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} />}
+        {start === "agent" && <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={canCreate} onFinish={finish} onManual={create ? () => setStart("manual") : undefined} />}
       </div>
     </div>
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void> }) {
+function AgentIntake({ profile, create, busy, error, canFinish, onFinish, onManual }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[]) => Promise<void>; onManual?: () => void }) {
   const [sections, setSections] = useState<IntakeSection[]>(INTAKE_SECTIONS.map((s) => s.id));
   const [copied, setCopied] = useState(false);
   const [pasted, setPasted] = useState("");
@@ -230,7 +213,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.</span>
+        <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.{onManual && <> No documents handy? <button type="button" className="link" onClick={onManual}>Fill it in by hand</button>.</>}</span>
         <span className="spacer" />
         {create && !review && <button type="button" className="btn" disabled={!canFinish || busy} onClick={() => void onFinish([])}>{busy ? "Creating…" : "Create now, paste later"}</button>}
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped) || (create && !review)} onClick={() => void onFinish(edits())}>

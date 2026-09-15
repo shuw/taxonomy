@@ -439,3 +439,4 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .sections-details ul { list-style: none; padding: 8px 0 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .sections-details label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
 .sections-details input { accent-color: var(--accent); }
+.modal-actions .link { padding: 0; font-size: inherit; }
