@@ -41,7 +41,14 @@ export interface IntakeDocument {
   assumptions?: { fmvGrowth?: number; wageGrowth?: number; inflation?: number };
   sources?: Record<string, string>;
   unknown?: string[];
-  questions?: string[];
+  questions?: IntakeQuestion[];
+}
+
+/** Something the agent could not settle, ideally tied to the path it concerns. */
+export interface IntakeQuestion {
+  question: string;
+  about?: string;
+  proposed?: string | number;
 }
 
 export interface IntakePerson {
@@ -332,7 +339,20 @@ export function parseIntake(text: string): IntakeParse {
   const sources = obj("sources", d.sources);
   if (sources) doc.sources = Object.fromEntries(Object.entries(sources).filter(([, v]) => typeof v === "string") as [string, string][]);
   if (d.unknown !== undefined) doc.unknown = Array.isArray(d.unknown) ? d.unknown.map(String) : [];
-  if (d.questions !== undefined) doc.questions = Array.isArray(d.questions) ? d.questions.map(String) : [];
+  if (d.questions !== undefined) {
+    doc.questions = Array.isArray(d.questions)
+      ? d.questions.map((q): IntakeQuestion | null => {
+          if (typeof q === "string") return q.trim() ? { question: q.trim() } : null;
+          if (q && typeof q === "object") {
+            const o = q as Record<string, unknown>;
+            const question = String(o.question ?? o.text ?? "").trim();
+            if (!question) return null;
+            return { question, about: typeof o.about === "string" ? o.about : undefined, proposed: typeof o.proposed === "number" || typeof o.proposed === "string" ? o.proposed : undefined };
+          }
+          return null;
+        }).filter((q): q is IntakeQuestion => q !== null)
+      : [];
+  }
 
   const known = new Set(["taxonomy_intake", "as_of", "basics", "people", "prior_return", "income", "equity", "home", "deductions", "assumptions", "sources", "unknown", "questions"]);
   for (const k of Object.keys(d)) if (!known.has(k)) warnings.push({ path: k, message: "not a known section; ignored" });
@@ -340,7 +360,8 @@ export function parseIntake(text: string): IntakeParse {
   return { doc: problems.length ? null : doc, problems, warnings };
 }
 
-function normalizeFiling(s: string): FilingStatus | undefined {
+function normalizeFiling(raw: string): FilingStatus | undefined {
+  const s = raw.replace(/[_-]+/g, " ").trim();
   const map: Record<string, FilingStatus> = {
     single: "single", s: "single",
     mfj: "mfj", "married filing jointly": "mfj", joint: "mfj", married: "mfj",

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseProfile, editProfileText } from "../src/profile.ts";
 import { parseIntake, unfence } from "../src/intake/schema.ts";
-import { reviewIntake, changesToEdits, toGrant } from "../src/intake/apply.ts";
+import { reviewIntake, changesToEdits, followUpEdits, toGrant } from "../src/intake/apply.ts";
 import { intakePrompt, INTAKE_SECTIONS } from "../src/intake/prompt.ts";
 import { runPlan } from "../src/plan.ts";
 import { calibrate } from "../src/calibration.ts";
@@ -63,6 +63,7 @@ describe("intake review and apply", () => {
     expect(byId["returns.2025"]!.status).toBe("new");
     expect(review.unknown.map((u) => u.path)).toContain("people.self.expectedBonus");
     expect(review.questions).toHaveLength(1);
+    expect(review.questions[0]!.question).toContain("Form 3921");
   });
   test("grants convert with unexercised as shares and vested net of exercised", () => {
     const iso = toGrant(doc.equity!.grants![0]!, "g1", "c1");
@@ -98,6 +99,32 @@ describe("intake review and apply", () => {
     expect(plan.years[0]!.lines.amtCreditCarryforwardIn!.value).toBe(18_960);
     const cal = calibrate(p)!;
     expect(cal.rows.find((r) => r.id === "agi")!.reported).toBe(402_113);
+  });
+});
+
+describe("follow-ups", () => {
+  test("structured and plain questions become follow-ups tied to profile paths", () => {
+    const r = parseIntake(`taxonomy_intake: 1
+prior_return: { year: 2025, filingStatus: married_filing_jointly, amtCreditCarryforward: 67148 }
+equity:
+  grants:
+    - { name: New-hire ISO, type: iso, granted: 100, strike: 1 }
+questions:
+  - { about: prior_return.amtCreditCarryforward, proposed: 67148, question: "No Form 8801; used the CPA worksheet." }
+  - { about: "equity.grants[0]", question: "Vesting read from portal counts only." }
+  - "The 78-share lot origin is unknown."
+`);
+    expect(r.problems).toEqual([]);
+    expect(r.doc!.prior_return!.filingStatus).toBe("mfj");
+    const review = reviewIntake(r.doc!, profile);
+    const edits = followUpEdits(review, profile);
+    const list = edits[0]!.value as { text: string; about?: string }[];
+    expect(list).toHaveLength(3);
+    expect(list[0]!.about).toBe("carryforwards.amtCredit");
+    expect(list[1]!.about).toBe("grants.g3");
+    expect(list[2]!.about).toBeUndefined();
+    const text = editProfileText(example, [...changesToEdits(review.changes, profile), ...edits]);
+    expect(parseProfile(text).followUps).toHaveLength(3);
   });
 });
 

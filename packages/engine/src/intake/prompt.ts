@@ -165,7 +165,8 @@ Everything else in the shape below is optional: fill it when a document shows it
 - Whole dollars; prices per share; dates as YYYY-MM-DD; rates as fractions (0.0575, not 5.75%).
 - Base salary is base pay only. RSU vests and option exercises are added by the tool from the grants.
 - Options: report granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO and NSO are the same type: \`nso\`. Omit the \`spouse\` block if there is no spouse.
-- Optional items you couldn't find go under \`unknown\`; \`questions\` is only for what stayed open after we talked.${opts.onlyPaths?.length ? `\n- This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}.` : ""}
+- Optional items you couldn't find go under \`unknown\`.
+- \`questions\` is for judgment calls I should double-check later, not for restating what you found: a value you derived rather than read, two sources that disagree, something a document hints at but doesn't show. One sentence each, with \`about\` set to the path it concerns and \`proposed\` to the value you went with. The tool shows these to me as a checklist after the numbers are in.${opts.onlyPaths?.length ? `\n- This is a follow-up. Only report these paths: ${opts.onlyPaths.join(", ")}.` : ""}
 
 ## The shape
 
@@ -179,7 +180,8 @@ sources:
   prior_return.agi: "2025 Form 1040 line 11 (file name)"
 unknown:
   - people.self.expectedBonus
-questions: []
+questions:
+  - { about: prior_return.amtCreditCarryforward, proposed: 0, question: "No Form 8801 in the return package; used 0. Confirm no AMT credit was carried." }
 \`\`\``);
 
   if (opts.profile) {

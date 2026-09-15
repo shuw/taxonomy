@@ -2,8 +2,8 @@ import { newId } from "../equity.ts";
 import { fieldByIntake, FIELDS } from "../fields.ts";
 import type { ProfileEdit, ProfilePath } from "../profile.ts";
 import { getPath } from "../timeline.ts";
-import type { Company, EquityGrant, Holding, PriorReturn, Profile } from "../types.ts";
-import type { IntakeDocument, IntakeGrant } from "./schema.ts";
+import type { Company, EquityGrant, FollowUp, Holding, PriorReturn, Profile } from "../types.ts";
+import type { IntakeDocument, IntakeGrant, IntakeQuestion } from "./schema.ts";
 
 export type IntakeSection = "basics" | "prior_return" | "income" | "equity" | "home" | "assumptions";
 
@@ -21,13 +21,15 @@ export interface IntakeChange {
   note?: string;
   /** Key under `sources` when applied (grants and holdings use ids). */
   sourceKey: string;
+  /** The intake path this row came from, for matching the agent's questions. */
+  intakeKey?: string;
 }
 
 export interface IntakeReview {
   changes: IntakeChange[];
   /** Paths the agent reported as not found, with a readable label. */
   unknown: { path: string; label: string }[];
-  questions: string[];
+  questions: IntakeQuestion[];
   asOf?: string;
 }
 
@@ -96,7 +98,7 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
         if (!hit) taken.push(id);
         const proposed = toGrant(g, id, hit?.grant.company ?? profile.equity.companies[0]?.id ?? "c1");
         const index = hit ? hit.index : profile.equity.grants.length + added++;
-        add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}` });
+        add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}`, intakeKey: `equity.grants[${i}]` });
       });
     }
     if (eq.holdings) {
@@ -179,6 +181,30 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
     edits.unshift({ path: ["equity", "companies"], value: [{ id: "c1", name: "Company", sharePrice: 0 }] });
   }
   return edits;
+}
+
+/** The agent's open questions as follow-ups to keep on the profile, tied to the profile path they concern when it can be worked out. */
+export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEdit[] {
+  if (review.questions.length === 0) return [];
+  const existing = profile.followUps ?? [];
+  const taken = existing.map((f) => f.id);
+  const grantKeys = new Map(review.changes.filter((c) => c.intakeKey).map((c) => [c.intakeKey!, c.sourceKey]));
+  const added = new Date().toISOString().slice(0, 10);
+  const fresh: FollowUp[] = review.questions.map((q) => {
+    const id = newId("f", taken);
+    taken.push(id);
+    let about: string | undefined;
+    if (q.about) {
+      const m = q.about.match(/^equity\.grants\[(\d+)\]/);
+      if (m) about = grantKeys.get(m[0]) ?? `grants.${m[1]}`;
+      else if (/^equity\.holdings/.test(q.about)) about = "holdings";
+      else if (/^home\.mortgage/.test(q.about)) about = "home.mortgage";
+      else if (/^prior_return\.(?!amtCreditCarryforward|capitalLossCarryforward|charitableCarryforward)/.test(q.about)) about = "returns";
+      else about = fieldByIntake(q.about)?.path ?? q.about;
+    }
+    return { id, text: q.question, about, added };
+  });
+  return [{ path: ["followUps"], value: [...existing, ...fresh] }];
 }
 
 /** Where an intake path lands in the profile, for values the user types in by hand. */

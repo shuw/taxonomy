@@ -14,6 +14,7 @@ import { ExplainPanel } from "./components/ExplainPanel.tsx";
 import { Mark, Wordmark } from "./components/Mark.tsx";
 import { IntakeModal } from "./components/IntakeModal.tsx";
 import { CalibrationCard } from "./components/CalibrationCard.tsx";
+import { FollowUps } from "./components/FollowUps.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -136,6 +137,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       <main className="main">
         {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
+        <FollowUps profile={profile} edit={edit} />
         <CalibrationCard profile={profile} />
         <section className="card">
           <h2>Tax by year</h2>

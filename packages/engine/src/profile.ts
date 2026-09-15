@@ -37,6 +37,7 @@ interface RawProfile {
   activeScenario?: string;
   timeline?: Profile["timeline"];
   sources?: Record<string, Source>;
+  followUps?: Profile["followUps"];
 }
 
 /** Parse a profile file of any version into the current shape; fail loudly on anything the engine cannot work with. */
@@ -87,6 +88,7 @@ export function parseProfile(text: string): Profile {
     scenarios,
     activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
     sources: rekeySources(raw.sources, equity),
+    followUps: raw.followUps,
   };
 }
 
@@ -175,6 +177,7 @@ const COMMENTS: Record<string, string> = {
   timeline: "dated changes to any value above, in force from that year on: { year, path, value }",
   scenarios: "named lever settings; activeScenario picks one",
   sources: "where each number came from, keyed by path (grants and holdings by id)",
+  followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
 };
 
 /** Emit a profile as YAML with a comment on each top-level section. */

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { FILING_OPTIONS, Field, MoneyInput, NumberInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -138,6 +138,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       out.push({ path, value: n ?? raw.trim() });
       out.push({ path: ["sources", path.join(".")], value: "typed in during intake" });
     }
+    out.push(...followUpEdits(review, profile));
     return out;
   };
 
@@ -183,55 +184,53 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish }: { pr
       </div>
 
       {review && (
-        <>
-          <div className="review-summary">
-            <strong>{review.changes.filter((c) => c.status !== "same").length} {create ? "values found" : "changes"}</strong>
-            {sameCount > 0 && <button type="button" className="link" onClick={() => setShowSame((v) => !v)}>{showSame ? "hide" : "show"} {sameCount} unchanged</button>}
-            {review.asOf && <span className="muted">as of {review.asOf}</span>}
+        <div className="found">
+          <div className="found-head">
+            <strong>Found {review.changes.filter((c) => c.status !== "same").length} values</strong>
+            <span className="muted">{INTAKE_SECTIONS.map((s) => ({ s, n: review.changes.filter((c) => c.section === s.id && c.status !== "same").length })).filter((x) => x.n).map((x) => `${x.s.title} ${x.n}`).join(" · ")}{review.asOf ? ` · as of ${review.asOf}` : ""}</span>
+            {review.questions.length > 0 && <span className="pill">{review.questions.length} to confirm afterward</span>}
           </div>
-          {review.questions.length > 0 && (
-            <div className="questions">
-              <div className="subhead">Still open after your agent asked</div>
-              <ul>{review.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
-            </div>
-          )}
-          <div className="table-wrap">
-            <table className="review">
-              <thead><tr><th></th><th>Field</th><th>{create ? "Default" : "Now"}</th><th>{create ? "From your documents" : "Proposed"}</th><th>Source</th></tr></thead>
-              <tbody>
-                {grouped.map((g) => [
-                  <tr key={g.section.id} className="group"><td colSpan={5}>{g.section.title}</td></tr>,
-                  ...g.rows.map((c) => (
-                    <tr key={c.id} className={c.status}>
-                      <td><input type="checkbox" checked={selected.has(c.id)} disabled={c.status === "same"} onChange={() => setAccepted((prev) => { const next = new Set(prev ?? selected); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next; })} /></td>
-                      <td>{c.label}{c.note && <span className="muted"> · {c.note}</span>}</td>
-                      <td className="mono">{fmt(c.current, c.format)}</td>
-                      <td className="mono proposed">{fmt(c.proposed, c.format)}</td>
-                      <td className="source-cell">{c.source ?? <span className="muted">no source given</span>}</td>
+          <details className="found-details">
+            <summary>Check the values{sameCount > 0 ? ` (${sameCount} unchanged hidden)` : ""}</summary>
+            {sameCount > 0 && <button type="button" className="link" onClick={() => setShowSame((v) => !v)}>{showSame ? "hide" : "show"} unchanged</button>}
+            <div className="table-wrap">
+              <table className="review">
+                <thead><tr><th></th><th>Field</th><th>{create ? "Default" : "Now"}</th><th>{create ? "From your documents" : "Proposed"}</th><th>Source</th></tr></thead>
+                <tbody>
+                  {grouped.map((g) => [
+                    <tr key={g.section.id} className="group"><td colSpan={5}>{g.section.title}</td></tr>,
+                    ...g.rows.map((c) => (
+                      <tr key={c.id} className={c.status}>
+                        <td><input type="checkbox" checked={selected.has(c.id)} disabled={c.status === "same"} onChange={() => setAccepted((prev) => { const next = new Set(prev ?? selected); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next; })} /></td>
+                        <td>{c.label}{c.note && <span className="muted"> · {c.note}</span>}</td>
+                        <td className="mono">{fmt(c.current, c.format)}</td>
+                        <td className="mono proposed">{fmt(c.proposed, c.format)}</td>
+                        <td className="source-cell">{c.source ?? <span className="muted">no source given</span>}</td>
+                      </tr>
+                    )),
+                  ])}
+                  {review.unknown.length > 0 && <tr className="group"><td colSpan={5}>Not found in your documents</td></tr>}
+                  {review.unknown.map((u) => (
+                    <tr key={u.path} className="unknown">
+                      <td></td>
+                      <td>{u.label}</td>
+                      <td className="muted">unknown</td>
+                      <td><span className="input-wrap"><input placeholder="type it" value={typed[u.path] ?? ""} onChange={(e) => setTyped((t) => ({ ...t, [u.path]: e.target.value }))} /></span></td>
+                      <td className="muted">{profilePathForIntake(u.path) ? "typed by you" : "not a profile field"}</td>
                     </tr>
-                  )),
-                ])}
-                {review.unknown.length > 0 && <tr className="group"><td colSpan={5}>Not found in your documents</td></tr>}
-                {review.unknown.map((u) => (
-                  <tr key={u.path} className="unknown">
-                    <td></td>
-                    <td>{u.label}</td>
-                    <td className="muted">unknown</td>
-                    <td><span className="input-wrap"><input placeholder="type it" value={typed[u.path] ?? ""} onChange={(e) => setTyped((t) => ({ ...t, [u.path]: e.target.value }))} /></span></td>
-                    <td className="muted">{profilePathForIntake(u.path) ? "typed by you" : "not a profile field"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>Sources are kept with each number.</span>
+        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Your agent's questions will be waiting on the main screen." : "Sources are kept with each number."}</span>
         <span className="spacer" />
         <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits())}>
-          {busy ? "Creating…" : create ? (review ? `Create profile with ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Create profile") : `Apply ${changeCount} change${changeCount === 1 ? "" : "s"}`}
+          {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
         </button>
       </div>
     </div>

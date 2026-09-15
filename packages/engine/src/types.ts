@@ -204,6 +204,16 @@ export interface Assumptions {
 
 export type Source = string | { doc: string; asOf?: string; note?: string };
 
+/** Something the intake agent asked you to confirm, kept until you mark it done. */
+export interface FollowUp {
+  id: string;
+  text: string;
+  /** Profile path it concerns, when known ("carryforwards.amtCredit", "grants.g1"). */
+  about?: string;
+  resolved?: boolean;
+  added?: string;
+}
+
 /** The human-edited profile file (data/profiles/<id>.yaml). */
 export interface Profile {
   version: 3;
@@ -234,6 +244,7 @@ export interface Profile {
   activeScenario?: string;
   /** Where numbers came from, keyed by profile path ("people.self.salary"); grants and holdings by id ("grants.g1"). */
   sources?: Record<string, Source>;
+  followUps?: FollowUp[];
 }
 
 /** Fully resolved inputs for one tax year, after profile defaults, growth, the timeline and levers are applied. */
