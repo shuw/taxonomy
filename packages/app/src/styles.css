@@ -590,3 +590,5 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .company .row2 .input-wrap { background: var(--surface); }
 .legend .sw.dashed { background: none; border-top: 2px dashed var(--ink-2); height: 0; width: 14px; border-radius: 0; vertical-align: 3px; }
 .sweep-reading { margin: 8px 0 0; max-width: 70ch; }
+.facts-pane > .link, .facts-pane .add-grant { align-self: flex-start; }
+.company-line .link.danger { margin-left: auto; padding: 0; }

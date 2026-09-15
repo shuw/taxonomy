@@ -93,7 +93,6 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
         return (
           <CompanyRow key={c.id} company={c} profile={profile} years={years}
             hasDoubleTrigger={grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && owns(g))}
-            removeLabel={grantCount || holdingCount ? `Remove company and its ${grantCount || holdingCount ? [grantCount && "grants", holdingCount && "holdings"].filter(Boolean).join(" and ") : ""}` : "Remove company"}
             onChange={(patch) => setCompany(i, patch)} onRemove={remove} />
         );
       })}
@@ -130,7 +129,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
   );
 }
 
-function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removeLabel, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; removeLabel: string; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
+function CompanyRow({ company: c, profile, years, hasDoubleTrigger, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
   const source = sourceOf(profile, ["companies", c.id, "sharePrice"]);
   const pathEntries = Object.entries(c.pricePath ?? {}).map(([y, p]) => [Number(y), p] as const).sort((a, b) => a[0] - b[0]);
   const updatePath = (list: (readonly [number, number])[]) => onChange({ pricePath: list.length ? Object.fromEntries(list) : undefined });
@@ -138,20 +137,20 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removeLabel,
     <div className="company open">
       <div className="company-line">
         <input className="grant-name" value={c.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Company name" />
-        <span className="company-price"><MoneyInput value={c.sharePrice} onChange={(n) => onChange({ sharePrice: n })} decimals={2} suffix="/sh" /></span>
         {source && <span className="src" title={source}>source</span>}
-        <button type="button" className="link danger" onClick={onRemove}>{removeLabel}</button>
+        <button type="button" className="link danger" onClick={onRemove}>Remove</button>
       </div>
       <div className="company-more">
         <div className="row3">
-          <Field label="Price as of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => onChange({ sharePriceAsOf: e.target.value || undefined })} /></span></Field>
-          <Field label="Growth" hint={c.growth === undefined ? `default ${pct(profile.assumptions.fmvGrowth)}` : "/yr"}><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => onChange({ growth: n })} /></Field>
-          {hasDoubleTrigger && (
-            <Field label="Liquidity event" hint="settles double-trigger RSUs">
-              <Select options={[{ value: "", label: "none in the plan" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} value={c.liquidityYear ? String(c.liquidityYear) : ""} onChange={(v) => onChange({ liquidityYear: v ? Number(v) : undefined })} />
-            </Field>
-          )}
+          <Field label="Price now" hint="per share"><MoneyInput value={c.sharePrice} onChange={(n) => onChange({ sharePrice: n })} decimals={2} /></Field>
+          <Field label="As of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => onChange({ sharePriceAsOf: e.target.value || undefined })} /></span></Field>
+          <Field label="Growth" hint="/yr"><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => onChange({ growth: n })} /></Field>
         </div>
+        {hasDoubleTrigger && (
+          <Field label="Liquidity event" hint="settles double-trigger RSUs; a liquidity event on the timeline overrides this" wide>
+            <Select options={[{ value: "", label: "none in the plan" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} value={c.liquidityYear ? String(c.liquidityYear) : ""} onChange={(v) => onChange({ liquidityYear: v ? Number(v) : undefined })} />
+          </Field>
+        )}
         {pathEntries.map(([y, p], i) => (
           <div className="row3" key={i}>
             <Field label="Known price in"><NumberInput value={y} onChange={(n) => updatePath(pathEntries.map((e, j) => (j === i ? [Math.round(n), e[1]] as const : e)))} grouping={false} /></Field>
@@ -159,7 +158,9 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removeLabel,
             <button type="button" className="link danger" style={{ alignSelf: "end", paddingBottom: 8 }} onClick={() => updatePath(pathEntries.filter((_, j) => j !== i))}>Remove</button>
           </div>
         ))}
-        <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
+        <div className="add-grant">
+          <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
+        </div>
       </div>
     </div>
   );
