@@ -84,15 +84,49 @@ export function vestedThrough(profile: Profile, grant: EquityGrant, year: number
   return Math.min(sharesOutstanding(grant), total);
 }
 
-const grantsOf = (profile: Profile, type: GrantType) => profile.equity.grants.filter((g) => g.type === type);
+const grantsOf = (profile: Profile, type: GrantType, company?: string) =>
+  profile.equity.grants.filter((g) => g.type === type && (company === undefined || companyOf(profile, g)?.id === company));
 
-const exercisedBefore = (levers: Levers, type: "iso" | "nso", year: number) =>
-  Object.entries(levers.exercises[type]).reduce((s, [y, n]) => (Number(y) < year ? s + n : s), 0);
+/** The company an exercise lever key refers to: "*" (unscoped) means the first company. */
+export const resolveCompany = (profile: Profile, key: string): string | undefined => (key === "*" ? profile.equity.companies[0]?.id : key);
 
-/** Option shares of a type exercisable in `year`: vested through that year, less exercises in earlier plan years. */
-export function sharesExercisable(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): number {
-  const vested = grantsOf(profile, type).reduce((s, g) => s + vestedThrough(profile, g, year), 0);
-  return Math.max(0, vested - exercisedBefore(levers, type, year));
+/** Shares of a type exercised in a year for one company (the "*" key counts toward the first company). */
+export function exercisedIn(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, company: string | undefined): number {
+  return Object.entries(levers.exercises[type][year] ?? {}).reduce((s, [k, n]) => (resolveCompany(profile, k) === company ? s + n : s), 0);
+}
+
+const exercisedBefore = (profile: Profile, levers: Levers, type: "iso" | "nso", year: number, company: string | undefined) =>
+  Object.keys(levers.exercises[type]).reduce((s, y) => (Number(y) < year ? s + exercisedIn(profile, levers, type, Number(y), company) : s), 0);
+
+const companiesWith = (profile: Profile, type: GrantType): (string | undefined)[] =>
+  [...new Set(grantsOf(profile, type).map((g) => companyOf(profile, g)?.id))];
+
+/**
+ * Option shares of a type exercisable in `year`, for one company or all: vested through that
+ * year, less exercises in earlier plan years.
+ */
+export function sharesExercisable(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, company?: string): number {
+  if (company === undefined) return companiesWith(profile, type).reduce((s, c) => s + sharesExercisable(profile, levers, type, year, c ?? "*"), 0);
+  const c = resolveCompany(profile, company);
+  const vested = grantsOf(profile, type, c).reduce((s, g) => s + vestedThrough(profile, g, year), 0);
+  return Math.max(0, vested - exercisedBefore(profile, levers, type, year, c));
+}
+
+/** One line per grant drawn on by this year's exercises of a type: each company's shares come from its own grants in profile order. */
+export function exerciseDraws(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): { grant: EquityGrant; shares: number; fmv: number; company: string | undefined }[] {
+  const out: { grant: EquityGrant; shares: number; fmv: number; company: string | undefined }[] = [];
+  for (const c of companiesWith(profile, type)) {
+    let alreadyUsed = exercisedBefore(profile, levers, type, year, c);
+    let remaining = Math.min(exercisedIn(profile, levers, type, year, c), sharesExercisable(profile, levers, type, year, c ?? "*"));
+    for (const g of grantsOf(profile, type, c)) {
+      const vested = vestedThrough(profile, g, year);
+      const skip = Math.min(vested, alreadyUsed);
+      alreadyUsed -= skip;
+      const take = Math.min(vested - skip, remaining);
+      if (take > 0) { out.push({ grant: g, shares: take, fmv: grantFmv(profile, g, year), company: c }); remaining -= take; }
+    }
+  }
+  return out;
 }
 
 /** Shares still in play across grants of a type. */
@@ -100,25 +134,14 @@ export function sharesGranted(profile: Profile, type: GrantType): number {
   return grantsOf(profile, type).reduce((s, g) => s + sharesOutstanding(g), 0);
 }
 
-/**
- * Spread (FMV - strike) on `shares` exercised in `year`, drawing from grants of that type in
- * profile order, each limited to what it has vested and not already been drawn down.
- */
-export function exerciseSpread(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, shares: number): number {
-  let alreadyUsed = exercisedBefore(levers, type, year);
-  let remaining = shares;
-  let spread = 0;
-  for (const g of grantsOf(profile, type)) {
-    const vested = vestedThrough(profile, g, year);
-    const skip = Math.min(vested, alreadyUsed);
-    alreadyUsed -= skip;
-    const take = Math.min(vested - skip, remaining);
-    if (take > 0) {
-      spread += take * Math.max(0, grantFmv(profile, g, year) - (g.strike ?? 0));
-      remaining -= take;
-    }
-  }
-  return spread;
+/** Spread (FMV - strike) on this year's exercises of a type, summed over the grants drawn. */
+export function exerciseSpread(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): number {
+  return exerciseDraws(profile, levers, type, year).reduce((s, d) => s + d.shares * Math.max(0, d.fmv - (d.grant.strike ?? 0)), 0);
+}
+
+/** Shares of a type actually exercised this year after availability caps, across companies. */
+export function sharesExercised(profile: Profile, levers: Levers, type: "iso" | "nso", year: number): number {
+  return exerciseDraws(profile, levers, type, year).reduce((s, d) => s + d.shares, 0);
 }
 
 /**
@@ -150,10 +173,15 @@ export function grantsMissingVesting(profile: Profile): EquityGrant[] {
   return profile.equity.grants.filter((g) => !g.schedule && !g.vesting && g.granted - (g.vestedToDate ?? 0) > 0);
 }
 
-/** Spread per share for the next share exercised of a type in a year (for display). */
-export function nextShareSpread(profile: Profile, type: "iso" | "nso", year: number): number {
-  const g = grantsOf(profile, type)[0];
+/** Spread per share for the next share exercised of a type in a year (for display), for one company or the first. */
+export function nextShareSpread(profile: Profile, type: "iso" | "nso", year: number, company?: string): number {
+  const g = grantsOf(profile, type, company === undefined ? undefined : resolveCompany(profile, company))[0];
   return g ? Math.max(0, grantFmv(profile, g, year) - (g.strike ?? 0)) : 0;
+}
+
+/** Ids of companies that have grants of a type, in profile order. */
+export function companiesWithGrants(profile: Profile, type: GrantType): string[] {
+  return companiesWith(profile, type).filter((c): c is string => c !== undefined);
 }
 
 /** A short unique id for a new grant, holding or company. */

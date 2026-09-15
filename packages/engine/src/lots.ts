@@ -1,4 +1,4 @@
-import { companyOf, companyPrice, grantFmv, rsuVesting, vestedThrough } from "./equity.ts";
+import { companyPrice, exerciseDraws, rsuVesting } from "./equity.ts";
 import type { Holding, Levers, Owner, Profile, SaleLever } from "./types.ts";
 
 /** Shares you hold, by acquisition, with the two bases that matter when they are sold. */
@@ -101,33 +101,19 @@ export function openingLots(profile: Profile): Lot[] {
  * order exerciseSpread draws them. ISO lots keep the strike as basis and the value at
  * exercise as AMT basis; NSO lots start at the value at exercise, since the spread was wages.
  */
-export function lotsFromExercise(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, shares: number, date: string): Lot[] {
-  const grants = profile.equity.grants.filter((g) => g.type === type);
-  let alreadyUsed = Object.entries(levers.exercises[type]).reduce((s, [y, n]) => (Number(y) < year ? s + n : s), 0);
-  let remaining = shares;
-  const out: Lot[] = [];
-  for (const g of grants) {
-    const vested = vestedThrough(profile, g, year);
-    const skip = Math.min(vested, alreadyUsed);
-    alreadyUsed -= skip;
-    const take = Math.min(vested - skip, remaining);
-    if (take <= 0) continue;
-    const fmv = grantFmv(profile, g, year);
-    out.push({
-      id: `x-${g.id}-${year}`,
-      label: `${type.toUpperCase()} exercise ${year} (${g.name})`,
-      company: companyOf(profile, g)?.id,
-      owner: g.owner,
-      quantity: take,
-      acquired: date,
-      via: type === "iso" ? "iso_exercise" : "nso_exercise",
-      costBasis: type === "iso" ? (g.strike ?? 0) : fmv,
-      amtBasis: fmv,
-      grantDate: g.grantDate,
-    });
-    remaining -= take;
-  }
-  return out;
+export function lotsFromExercise(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, date: string): Lot[] {
+  return exerciseDraws(profile, levers, type, year).map(({ grant: g, shares, fmv, company }) => ({
+    id: `x-${g.id}-${year}`,
+    label: `${type.toUpperCase()} exercise ${year} (${g.name})`,
+    company,
+    owner: g.owner,
+    quantity: shares,
+    acquired: date,
+    via: type === "iso" ? "iso_exercise" : "nso_exercise",
+    costBasis: type === "iso" ? (g.strike ?? 0) : fmv,
+    amtBasis: fmv,
+    grantDate: g.grantDate,
+  }));
 }
 
 /** The lot RSU units settling in `year` become; their value was wages, so it is the basis. */

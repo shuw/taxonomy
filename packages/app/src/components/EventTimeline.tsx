@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type FieldDef, type IntakeSection, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
+import { companiesWithGrants, companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type FieldDef, type IntakeSection, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
 import { MAX_BAND } from "./Strips.tsx";
@@ -29,7 +29,7 @@ const FACT_CATEGORIES: { key: IntakeSection[]; label: string }[] = [
   { key: ["assumptions"], label: "Assumptions" },
 ];
 
-export type AddKind = { kind: "exercise"; type: "iso" | "nso" } | { kind: "sell" } | { kind: "liquidity" };
+export type AddKind = { kind: "exercise"; type: "iso" | "nso"; company?: string } | { kind: "sell" } | { kind: "liquidity" };
 
 interface Props {
   profile: Profile;
@@ -58,11 +58,13 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   const fields = [...timelineFields()].sort((x, y) => likelyRank(x.path) - likelyRank(y.path));
   const openMenu = (y: number | null) => { setMenuYear(y); setMenuCat(null); };
   const menuRef = useRef<HTMLDivElement>(null);
-  const has = (t: "iso" | "nso") => profile.equity.grants.some((g) => g.type === t);
+  const multi = profile.equity.companies.length > 1;
+  const companyName = (id: string | undefined) => profile.equity.companies.find((c) => c.id === id)?.name ?? profile.equity.companies[0]?.name ?? "";
   const canSell = profile.equity.grants.length > 0 || (profile.equity.holdings?.length ?? 0) > 0;
+  const exerciseKinds = (type: "iso" | "nso") => companiesWithGrants(profile, type).map((c) => ({ key: `${type}:${c}`, label: `Exercise ${type.toUpperCase()}s${multi ? ` · ${companyName(c)}` : ""}`, what: { kind: "exercise", type, company: multi ? c : undefined } as AddKind }));
   const kinds: { key: string; label: string; what: AddKind }[] = [
-    ...(has("iso") ? [{ key: "iso", label: "Exercise ISOs", what: { kind: "exercise", type: "iso" } as AddKind }] : []),
-    ...(has("nso") ? [{ key: "nso", label: "Exercise NSOs", what: { kind: "exercise", type: "nso" } as AddKind }] : []),
+    ...exerciseKinds("iso"),
+    ...exerciseKinds("nso"),
     ...(canSell ? [{ key: "sell", label: "Sell shares", what: { kind: "sell" } as AddKind }] : []),
     ...(profile.equity.companies.length > 0 ? [{ key: "liquidity", label: "Liquidity event (IPO, tender)", what: { kind: "liquidity" } as AddKind }] : []),
   ];
@@ -130,7 +132,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
               {here.map((e) => (
                 <button type="button" key={e.id} data-id={e.id} className={"ev-chip " + e.kind + " " + (e.kind === "exercise" ? e.type : "") + (e.id === selectedId ? " on" : "") + (drag?.id === e.id && drag.moved ? " dragging" : "")}
                   onPointerDown={startDrag(e.id)} onPointerMove={moveDrag} onPointerUp={endDrag(e)} onPointerCancel={() => setDrag(null)} title="Drag to another year">
-                  <span className="ev-kind">{chipKind(e, saleResult)}</span>
+                  <span className="ev-kind">{chipKind(e, saleResult)}{e.kind === "exercise" && multi ? ` · ${companyName(e.company)}` : ""}</span>
                   <span className="ev-val">{chipValue(e, profile, saleResult)}</span>
                 </button>
               ))}
@@ -168,7 +170,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       {drag?.moved && (() => { const e = events.find((x) => x.id === drag.id); return e ? <div className="ev-ghost" style={{ left: drag.x + 10, top: drag.y - 10 }}>{chipKind(e, saleResult)} → {drag.target ?? "…"}</div> : null; })()}
       <div className="inspector-slot" style={anchorStyle}>
       {selected && selected.kind === "exercise" && (
-        <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
+        <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} companyLabel={multi ? companyName(selected.company) : ""} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
       )}
       {selected && selected.kind === "liquidity" && (
         <LiquidityInspector profile={profile} plan={plan} years={years} event={selected} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
@@ -280,15 +282,16 @@ function DateField({ value, fallback, onChange }: { value?: string; fallback: st
   return <span className="input-wrap ei-date"><input type="date" value={value ?? fallback} onChange={(e) => onChange(e.target.value && e.target.value !== fallback ? e.target.value : undefined)} /></span>;
 }
 
-function ExerciseInspector({ profile, levers, years, event: e, crossovers, onChange, onRemove }: { profile: Profile; levers: Levers; years: number[]; event: Extract<ScenarioEvent, { kind: "exercise" }>; crossovers: AmtCrossover[]; onChange: (patch: Partial<ScenarioEvent>) => void; onRemove: () => void }) {
-  const cross = crossovers.find((c) => c.year === e.year);
-  const available = e.type === "iso" ? (cross?.available ?? 0) : sharesExercisable(profile, levers, "nso", e.year);
+function ExerciseInspector({ profile, levers, years, event: e, crossovers, companyLabel, onChange, onRemove }: { profile: Profile; levers: Levers; years: number[]; event: Extract<ScenarioEvent, { kind: "exercise" }>; crossovers: AmtCrossover[]; companyLabel: string; onChange: (patch: Partial<ScenarioEvent>) => void; onRemove: () => void }) {
+  const company = e.company ?? profile.equity.companies[0]?.id ?? "*";
+  const cross = crossovers.find((c) => c.year === e.year && c.company === company);
+  const available = e.type === "iso" ? (cross?.available ?? 0) : sharesExercisable(profile, levers, "nso", e.year, company);
   const value = Math.min(e.shares, available);
   const hasMark = e.type === "iso" && !!cross && cross.available > 0 && cross.sharesBeforeAmt < cross.available;
   return (
     <div className="event-inspector">
       <div className="ei-head">
-        <strong>Exercise {e.type.toUpperCase()}s</strong>
+        <strong>Exercise {e.type.toUpperCase()}s{companyLabel ? ` · ${companyLabel}` : ""}</strong>
         <span className="muted">on</span>
         <DateField value={e.date} fallback={`${e.year}-01-01`} onChange={(d) => onChange({ date: d, ...(d ? { year: Number(d.slice(0, 4)) } : {}) })} />
         <span className="ei-year"><Select options={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(e.year)} onChange={(y) => onChange({ year: Number(y), date: undefined })} /></span>
@@ -297,7 +300,7 @@ function ExerciseInspector({ profile, levers, years, event: e, crossovers, onCha
       </div>
       <LeverRow label={e.type.toUpperCase()} hint={e.type === "iso" ? "spread goes to AMT" : "spread is wage income"} available={available} value={value}
         mark={hasMark ? cross!.sharesBeforeAmt : null} over={e.type === "iso" && !!cross && value > cross.sharesBeforeAmt} sharesBeforeAmt={cross?.sharesBeforeAmt ?? 0}
-        spread={nextShareSpread(profile, e.type, e.year)} onChange={(n) => onChange({ shares: Math.max(0, Math.round(n)) })} />
+        spread={nextShareSpread(profile, e.type, e.year, company)} onChange={(n) => onChange({ shares: Math.max(0, Math.round(n)) })} />
       {e.shares > available && <p className="muted small">Only {shares(available)} are exercisable in {e.year}; the rest of this event is ignored.</p>}
     </div>
   );

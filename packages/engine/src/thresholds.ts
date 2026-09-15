@@ -1,9 +1,11 @@
-import { sharesExercisable } from "./equity.ts";
+import { exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
 import { resolveLevers, runPlan } from "./plan.ts";
 import type { Levers, Profile } from "./types.ts";
 
 export interface AmtCrossover {
   year: number;
+  /** Company id the sweep varies; other companies' exercises that year stay as they are. */
+  company: string;
   /** ISO shares exercisable in this year given vesting and earlier years' exercises. */
   available: number;
   /** Largest number of ISO shares exercisable this year with zero AMT (holding other years fixed). */
@@ -12,15 +14,17 @@ export interface AmtCrossover {
   overCrossover: boolean;
 }
 
-const withIso = (levers: Levers, year: number, shares: number): Partial<Levers> => ({
-  exercises: { iso: { ...levers.exercises.iso, [year]: shares }, nso: levers.exercises.nso },
+const withIso = (levers: Levers, year: number, company: string, shares: number): Partial<Levers> => ({
+  ...levers,
+  exercises: { iso: { ...levers.exercises.iso, [year]: { ...(levers.exercises.iso[year] ?? {}), [company]: shares } }, nso: levers.exercises.nso },
 });
 
-/** Binary-search the ISO exercise count in `year` at which AMT first appears. */
-export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number): AmtCrossover {
+/** Binary-search the ISO exercise count in `year` for one company at which AMT first appears. */
+export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): AmtCrossover {
   const levers = resolveLevers(profile, leverOverrides);
-  const available = sharesExercisable(profile, levers, "iso", year);
-  const amtAt = (shares: number): number => runPlan(profile, withIso(levers, year, shares)).years.find((y) => y.year === year)?.lines.amt?.value ?? 0;
+  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const available = sharesExercisable(profile, levers, "iso", year, c);
+  const amtAt = (shares: number): number => runPlan(profile, withIso(levers, year, c, shares)).years.find((y) => y.year === year)?.lines.amt?.value ?? 0;
   let lo = 0;
   let hi = available;
   if (amtAt(hi) <= 0) lo = hi;
@@ -31,8 +35,8 @@ export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> |
       else lo = mid;
     }
   }
-  const current = Math.min(levers.exercises.iso[year] ?? 0, available);
-  return { year, available, sharesBeforeAmt: lo, overCrossover: current > lo };
+  const current = Math.min(exercisedIn(profile, levers, "iso", year, resolveCompany(profile, c)), available);
+  return { year, company: c, available, sharesBeforeAmt: lo, overCrossover: current > lo };
 }
 
 export interface SweepPoint {
@@ -44,13 +48,14 @@ export interface SweepPoint {
 }
 
 /** Vary this year's ISO exercise count from 0 to available and record what moves, for charting. */
-export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, steps = 40): SweepPoint[] {
+export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, steps = 40, company?: string): SweepPoint[] {
   const levers = resolveLevers(profile, leverOverrides);
-  const available = sharesExercisable(profile, levers, "iso", year);
+  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const available = sharesExercisable(profile, levers, "iso", year, c);
   const points: SweepPoint[] = [];
   for (let i = 0; i <= steps; i++) {
     const shares = Math.round((available * i) / steps);
-    const res = runPlan(profile, withIso(levers, year, shares));
+    const res = runPlan(profile, withIso(levers, year, c, shares));
     const y = res.years.find((r) => r.year === year);
     if (!y) return [];
     points.push({ shares, amt: y.lines.amt!.value, totalTax: y.lines.totalTax!.value, planTotalTax: res.totals.totalTax, amtCreditCarryforwardEnd: res.totals.amtCreditCarryforwardEnd });

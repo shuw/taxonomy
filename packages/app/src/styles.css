@@ -586,10 +586,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ei-value .input-wrap { width: 160px; }
 .ei-note { width: 240px; }
 .inspector-slot { position: relative; }
-.inspector-slot:has(.event-inspector)::before { content: ""; position: absolute; top: 4px; left: var(--caret, 40px); width: 14px; height: 14px; background: var(--focus); border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: translateX(-50%) rotate(45deg); }
-.inspector-slot:has(.event-inspector.fact)::before { background: var(--surface-2); }
 .event-inspector { border: 1px solid var(--border); position: relative; z-index: 1; }
-.inspector-slot::before { z-index: 0; top: 6px; }
 .company .row2 .input-wrap { background: var(--surface); }
 .legend .sw.dashed { background: none; border-top: 2px dashed var(--ink-2); height: 0; width: 14px; border-radius: 0; vertical-align: 3px; }
 .sweep-reading { margin: 8px 0 0; max-width: 70ch; }

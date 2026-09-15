@@ -14,7 +14,7 @@ const hasType = (profile: Profile, t: GrantType) => profile.equity.grants.some((
 export function equitySummary(profile: Profile, levers: Levers): string {
   const { companies, grants } = profile.equity;
   if (grants.length === 0) return "no grants yet";
-  const exercisedIso = Object.values(levers.exercises.iso).reduce((s, n) => s + n, 0);
+  const exercisedIso = Object.values(levers.exercises.iso).reduce((s, byCompany) => s + Object.values(byCompany).reduce((t, n) => t + n, 0), 0);
   return [hasType(profile, "iso") && `${shares(exercisedIso)} ISO exercised`, hasType(profile, "rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType(profile, "nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
 }
 
@@ -75,12 +75,28 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
   return (
     <>
       <div className="subhead">Companies</div>
-      {companies.map((c, i) => (
-        <CompanyRow key={c.id} company={c} profile={profile} years={years}
-          hasDoubleTrigger={grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && (g.company ?? companies[0]?.id) === c.id)}
-          removable={companies.length > 1 && !grants.some((g) => (g.company ?? companies[0]?.id) === c.id)}
-          onChange={(patch) => setCompany(i, patch)} onRemove={() => set(["equity", "companies"], companies.filter((_, j) => j !== i))} />
-      ))}
+      {companies.map((c, i) => {
+        const owns = (ref: { company?: string }) => (ref.company ?? companies[0]?.id) === c.id;
+        const grantCount = grants.filter(owns).length;
+        const holdingCount = (profile.equity.holdings ?? []).filter(owns).length;
+        const remove = () => {
+          const what = [grantCount && `${grantCount} grant${grantCount === 1 ? "" : "s"}`, holdingCount && `${holdingCount} holding${holdingCount === 1 ? "" : "s"}`].filter(Boolean).join(" and ");
+          if (what && !window.confirm(`Remove ${c.name} and its ${what}? Decisions about them on the timeline go too.`)) return;
+          const scenarios = Object.fromEntries(Object.entries(profile.scenarios ?? {}).map(([k, s]) => [k, { events: s.events.filter((e) => !("company" in e && e.company === c.id) && !(e.kind === "exercise" && e.company === undefined && i === 0 && grantCount > 0)) }]));
+          edit([
+            { path: ["equity", "companies"], value: companies.filter((_, j) => j !== i) },
+            { path: ["equity", "grants"], value: grants.filter((g) => !owns(g)) },
+            { path: ["equity", "holdings"], value: (profile.equity.holdings ?? []).filter((h) => !owns(h)) },
+            { path: ["scenarios"], value: scenarios },
+          ]);
+        };
+        return (
+          <CompanyRow key={c.id} company={c} profile={profile} years={years}
+            hasDoubleTrigger={grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && owns(g))}
+            removeLabel={grantCount || holdingCount ? `Remove company and its ${grantCount || holdingCount ? [grantCount && "grants", holdingCount && "holdings"].filter(Boolean).join(" and ") : ""}` : "Remove company"}
+            onChange={(patch) => setCompany(i, patch)} onRemove={remove} />
+        );
+      })}
       <button type="button" className="link" onClick={addCompany}>+ Add company</button>
 
       {missing.length > 0 && (
@@ -114,7 +130,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
   );
 }
 
-function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removable, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; removable: boolean; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
+function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removeLabel, onChange, onRemove }: { company: Company; profile: Profile; years: number[]; hasDoubleTrigger: boolean; removeLabel: string; onChange: (patch: Partial<Company>) => void; onRemove: () => void }) {
   const source = sourceOf(profile, ["companies", c.id, "sharePrice"]);
   const pathEntries = Object.entries(c.pricePath ?? {}).map(([y, p]) => [Number(y), p] as const).sort((a, b) => a[0] - b[0]);
   const updatePath = (list: (readonly [number, number])[]) => onChange({ pricePath: list.length ? Object.fromEntries(list) : undefined });
@@ -124,7 +140,7 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, removable, o
         <input className="grant-name" value={c.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Company name" />
         <span className="company-price"><MoneyInput value={c.sharePrice} onChange={(n) => onChange({ sharePrice: n })} decimals={2} suffix="/sh" /></span>
         {source && <span className="src" title={source}>source</span>}
-        {removable && <button type="button" className="link danger" onClick={onRemove}>Remove</button>}
+        <button type="button" className="link danger" onClick={onRemove}>{removeLabel}</button>
       </div>
       <div className="company-more">
         <div className="row3">

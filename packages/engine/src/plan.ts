@@ -1,5 +1,5 @@
 import { computeFederal } from "./federal.ts";
-import { exerciseSpread, rsuVesting, sharesExercisable } from "./equity.ts";
+import { exerciseSpread, rsuVesting, sharesExercised } from "./equity.ts";
 import { Ledger, pct, usd } from "./ledger.ts";
 import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
@@ -17,8 +17,8 @@ export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Le
   const base = activeLevers(profile);
   return {
     exercises: {
-      iso: { ...base.exercises.iso, ...(overrides?.exercises?.iso ?? {}) },
-      nso: { ...base.exercises.nso, ...(overrides?.exercises?.nso ?? {}) },
+      iso: mergeYears(base.exercises.iso, overrides?.exercises?.iso),
+      nso: mergeYears(base.exercises.nso, overrides?.exercises?.nso),
     },
     exerciseDates: overrides?.exerciseDates ?? base.exerciseDates,
     sales: overrides?.sales ?? base.sales,
@@ -36,6 +36,14 @@ export function profileWithLevers(profile: Profile, levers: Levers): Profile {
     return { ...c, liquidityYear: l.year, pricePath: l.price !== undefined ? { ...(c.pricePath ?? {}), [l.year]: l.price } : c.pricePath };
   });
   return { ...profile, equity: { ...profile.equity, companies } };
+}
+
+/** Override a year's per-company counts without dropping the other companies. */
+function mergeYears(base: Record<number, Record<string, number>>, over?: Record<number, Record<string, number>>): Record<number, Record<string, number>> {
+  const out: Record<number, Record<string, number>> = {};
+  for (const [y, v] of Object.entries(base)) out[Number(y)] = { ...v };
+  for (const [y, v] of Object.entries(over ?? {})) out[Number(y)] = { ...(out[Number(y)] ?? {}), ...v };
+  return out;
 }
 
 /** Balances that flow from one plan year into the next. */
@@ -66,8 +74,8 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
   const inc = profile.income;
   const ded = profile.deductions ?? {};
   const ch = ded.charitable ?? {};
-  const iso = Math.min(levers.exercises.iso[year] ?? 0, sharesExercisable(profile, levers, "iso", year));
-  const nso = Math.min(levers.exercises.nso[year] ?? 0, sharesExercisable(profile, levers, "nso", year));
+  const iso = sharesExercised(profile, levers, "iso", year);
+  const nso = sharesExercised(profile, levers, "nso", year);
   const rsu = rsuVesting(profile, year);
   const ordinaryDividends = inc.ordinaryDividends ?? inc.qualifiedDividends ?? 0;
   const qualified = inc.qualifiedDividends ?? 0;
@@ -94,9 +102,9 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     charitableCarryIn: carries.charitable,
     medical: ded.medical ?? 0,
     isoSharesExercised: iso,
-    isoBargainElement: exerciseSpread(profile, levers, "iso", year, iso),
+    isoBargainElement: exerciseSpread(profile, levers, "iso", year),
     nsoSharesExercised: nso,
-    nsoIncome: exerciseSpread(profile, levers, "nso", year, nso),
+    nsoIncome: exerciseSpread(profile, levers, "nso", year),
     rsuSharesVested: rsu.shares,
     rsuIncome: rsu.income,
     sharesSold: 0,
@@ -163,8 +171,8 @@ export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): Pla
     // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on January 1.
     lots = [
       ...lots,
-      ...lotsFromExercise(p, levers, "iso", year, inputs.isoSharesExercised, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
-      ...lotsFromExercise(p, levers, "nso", year, inputs.nsoSharesExercised, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
+      ...lotsFromExercise(p, levers, "iso", year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
+      ...lotsFromExercise(p, levers, "nso", year, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
     ];
     const rsuLot = lotFromRsu(p, year, `${year}-01-01`);
     if (rsuLot) lots.push(rsuLot);

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
+import { activeScenario, amtCrossover, companiesWithGrants, exercisedIn, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
 import { Segmented } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
@@ -123,13 +123,13 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const scenario = useMemo(() => activeScenario(profile), [profile]);
   const events = scenario.events;
   const plan = useMemo(() => runPlan(profile, levers), [profile, levers]);
-  const crossovers = useMemo(() => years.map((y) => amtCrossover(profile, levers, y)), [profile, levers, yearsKey]);
-  const hasIso = profile.equity.grants.some((g) => g.type === "iso");
+  const isoCompanies = useMemo(() => companiesWithGrants(profile, "iso"), [profile]);
+  const crossovers = useMemo(() => years.flatMap((y) => isoCompanies.map((c) => amtCrossover(profile, levers, y, c))), [profile, levers, yearsKey, isoCompanies]);
+  const hasIso = isoCompanies.length > 0;
   const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
   // The AMT chart follows the focused year; selecting anything on the timeline focuses its year.
   const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
-  const sweep = useMemo(() => sweepIsoExercise(profile, levers, sweepYear, 40), [profile, levers, sweepYear]);
-  const sweepCrossover = crossovers.find((c) => c.year === sweepYear) ?? crossovers[0]!;
+  const sweeps = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name ?? c, sweep: sweepIsoExercise(profile, levers, sweepYear, 40, c), crossover: crossovers.find((x) => x.year === sweepYear && x.company === c)! })), [profile, levers, sweepYear, isoCompanies, crossovers]);
 
   const writeEvents = (next: ScenarioEvent[]) => {
     const edits: ProfileEdit[] = [];
@@ -144,11 +144,11 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
     if (year !== undefined) setFocusYear(year);
   };
   const addEvent = (what: AddKind, year: number) => {
-    const existing = what.kind === "exercise" ? events.find((e) => e.kind === "exercise" && e.type === what.type && e.year === year) : undefined;
+    const existing = what.kind === "exercise" ? events.find((e) => e.kind === "exercise" && e.type === what.type && e.year === year && (e.company ?? profile.equity.companies[0]?.id) === (what.company ?? profile.equity.companies[0]?.id)) : undefined;
     if (existing) { selectEvent(existing.id); return; }
     const id = newEventId(events);
     if (what.kind === "liquidity") { const dup = events.find((e) => e.kind === "liquidity"); if (dup) { changeEvent(dup.id, { year }); selectEvent(dup.id); return; } }
-    const event: ScenarioEvent = what.kind === "exercise" ? { id, kind: "exercise", type: what.type, year, shares: 0 } : what.kind === "sell" ? { id, kind: "sell", year, shares: 0 } : { id, kind: "liquidity", year };
+    const event: ScenarioEvent = what.kind === "exercise" ? { id, kind: "exercise", type: what.type, year, shares: 0, ...(what.company ? { company: what.company } : {}) } : what.kind === "sell" ? { id, kind: "sell", year, shares: 0 } : { id, kind: "liquidity", year };
     writeEvents([...events, event]);
     setSelectedEvent(id);
     setFocusYear(year);
@@ -165,7 +165,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   };
   const removeEvent = (id: string) => { writeEvents(events.filter((e) => e.id !== id)); if (selectedEvent === id) setSelectedEvent(null); };
   /** The sweep chart sets the ISO count for its year directly. */
-  const setIsoShares = (year: number, n: number) => { const r = setExerciseEvent(events, "iso", year, n); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
+  const setIsoShares = (year: number, n: number, company: string) => { const r = setExerciseEvent(events, "iso", year, n, profile.equity.companies.length > 1 ? company : undefined); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
+  const [ledgerOpen, setLedgerOpen] = usePersisted<boolean>("ledgerOpen", true, (v): v is boolean => typeof v === "boolean");
   const timeline = profile.timeline ?? [];
   const addFact = (path: string, year: number) => {
     const f = timelineFields().find((x) => x.path === path);
@@ -221,17 +222,22 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <div className="sub">Credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}.</div>
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
             </section>
-            <section className="card">
-              <h2>AMT in {sweepYear} vs ISO shares exercised</h2>
-              <div className="sub">Other years held as they are. Click the curve to set the exercise.</div>
-              <SweepChart sweep={sweep} crossover={sweepCrossover} current={levers.exercises.iso[sweepYear] ?? 0} onChange={(n) => setIsoShares(sweepYear, n)} />
-            </section>
+            {sweeps.map((s) => (
+              <section className="card" key={s.company}>
+                <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${s.name} ` : ""}ISO shares exercised</h2>
+                <div className="sub">Other years{isoCompanies.length > 1 ? " and other companies" : ""} held as they are. Click the curve to set the exercise.</div>
+                <SweepChart sweep={s.sweep} crossover={s.crossover} current={exercisedIn(profile, levers, "iso", sweepYear, s.company)} onChange={(n) => setIsoShares(sweepYear, n, s.company)} />
+              </section>
+            ))}
           </div>
         )}
-        <section className="card">
-          <h2>Ledger</h2>
-          <div className="sub">Click any number for the reason behind it.</div>
-          <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={select} />
+        <section className={"card" + (ledgerOpen ? "" : " folded")}>
+          <button type="button" className="card-fold" onClick={() => setLedgerOpen((o) => !o)} aria-expanded={ledgerOpen}>
+            <h2>Ledger</h2>
+            <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <div className="sub">{ledgerOpen ? "Click any number for the reason behind it." : "Every line of every year, with its reason."}</div>
+          {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={select} />}
         </section>
         <CalibrationCard profile={profile} />
       </main>

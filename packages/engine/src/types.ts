@@ -197,7 +197,8 @@ export type ScenarioEvent =
       /** YYYY-MM-DD when it matters for holding periods; defaults to January 1 of the year. */
       date?: string;
       type: "iso" | "nso";
-      /** Shares drawn from grants of that type in profile order. */
+      /** Company id; defaults to the first company. Shares are drawn from that company's grants of this type, in profile order. */
+      company?: string;
       shares: number;
     }
   | {
@@ -239,8 +240,8 @@ export interface Scenario {
 
 /** The per-year lever table the engine computes from; derived from a scenario's events. */
 export interface Levers {
-  /** Option shares exercised per year, by grant type. */
-  exercises: { iso: Record<number, number>; nso: Record<number, number> };
+  /** Option shares exercised per year, by grant type, then by company id. */
+  exercises: { iso: Record<number, Record<string, number>>; nso: Record<number, Record<string, number>> };
   /** Exercise dates per year and type when set on the event; January 1 otherwise. */
   exerciseDates?: { iso: Record<number, string>; nso: Record<number, string> };
   /** Sales per year, in date order. */

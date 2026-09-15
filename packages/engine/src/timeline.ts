@@ -60,5 +60,5 @@ export function emptyLevers(): Levers {
 
 /** The lever table of the active scenario, derived from its events. */
 export function activeLevers(profile: Profile): Levers {
-  return leversOf(activeScenario(profile));
+  return leversOf(activeScenario(profile), profile.equity.companies[0]?.id);
 }

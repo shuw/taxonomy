@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { editProfileText, isLegacyProfileText, migrateProfileText, parseProfile, stringifyProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
 import { activeLevers } from "../src/timeline.ts";
+import { exercisedTotal } from "../src/events.ts";
 
 const example = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
 
@@ -16,7 +17,7 @@ describe("profile editing", () => {
     const p = parseProfile(out);
     expect(p.people.self.salary).toBe(410_000);
     expect(p.filer.filingStatus).toBe("mfj");
-    expect(activeLevers(p).exercises.iso[2026]).toBe(1_500);
+    expect(exercisedTotal(activeLevers(p), "iso", 2026)).toBe(1_500);
     expect(out).toContain("# Taxonomy profile");
     expect(out).toContain("# already exercised");
   });
@@ -46,7 +47,7 @@ describe("profile editing", () => {
     const old = example.replace(/scenarios:[\s\S]*?activeScenario/, "scenarios:\n  default:\n    exercises:\n      iso:\n        2026: 4000\n      nso: { 2027: 10 }\nactiveScenario");
     const p = parseProfile(old);
     expect(p.scenarios?.default?.events).toEqual([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 4000 }, { id: "e2", kind: "exercise", type: "nso", year: 2027, shares: 10 }]);
-    expect(activeLevers(p).exercises.nso[2027]).toBe(10);
+    expect(exercisedTotal(activeLevers(p), "nso", 2027)).toBe(10);
   });
   test("version 1 files parse into the current shape and migrate to a fresh document", () => {
     const legacy = `version: 1
@@ -76,7 +77,7 @@ levers:
     expect(p.home?.propertyTax).toBe(9000);
     expect(p.home?.mortgageInterest).toBe(15000);
     expect(p.deductions?.charitable).toEqual({ cash: 1200 });
-    expect(activeLevers(p).exercises.iso[2026]).toBe(100);
+    expect(exercisedTotal(activeLevers(p), "iso", 2026)).toBe(100);
     expect(p.activeScenario).toBe("default");
     const migrated = migrateProfileText(legacy);
     expect(isLegacyProfileText(migrated)).toBe(false);

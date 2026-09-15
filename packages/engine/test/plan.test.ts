@@ -12,7 +12,7 @@ const profile = parseProfile(readFileSync(new URL("../../../data/profile.example
 
 describe("multi-year plan", () => {
   test("credit generated in an exercise year is recovered in later years", () => {
-    const plan = runPlan(profile, { exercises: { iso: { 2026: 20_000 }, nso: {} } });
+    const plan = runPlan(profile, { exercises: { iso: { 2026: { c1: 20_000 } }, nso: {} } });
     const [y0, y1] = plan.years;
     expect(y0!.lines.amt!.value).toBeGreaterThan(0);
     expect(y1!.lines.amtCreditCarryforwardIn!.value).toBeCloseTo(y0!.lines.amtCreditCarryforwardOut!.value);
@@ -21,15 +21,16 @@ describe("multi-year plan", () => {
     for (let i = 1; i < carries.length; i++) expect(carries[i]!).toBeLessThanOrEqual(carries[i - 1]! + 1e-6);
   });
   test("exercising nothing means no AMT anywhere", () => {
-    const plan = runPlan(profile, { exercises: { iso: { 2026: 0 }, nso: {} } });
+    const plan = runPlan(profile, { exercises: { iso: { 2026: { c1: 0 } }, nso: {} } });
     expect(plan.totals.amt).toBe(0);
   });
   test("shares are drawn from grants in order and cannot exceed what is left", () => {
-    const levers = resolveLevers(profile, { exercises: { iso: { 2026: 30_000, 2027: 30_000 }, nso: {} } });
+    const levers = resolveLevers(profile, { exercises: { iso: { 2026: { c1: 30_000 }, 2027: { c1: 30_000 } }, nso: {} } });
     expect(sharesExercisable(profile, levers, "iso", 2027)).toBe(10_000);
-    expect(exerciseSpread(profile, levers, "iso", 2026, 1_000)).toBeCloseTo(1_000 * 16);
-    expect(exerciseSpread(profile, levers, "iso", 2027, 1_000)).toBeCloseTo(1_000 * (18 * 1.15 - 2));
-    const plan = runPlan(profile, { exercises: { iso: { 2026: 30_000, 2027: 30_000 }, nso: {} } });
+    const thousand = (year: number) => resolveLevers(profile, { exercises: { iso: { [year]: { c1: 1_000 } }, nso: {} } });
+    expect(exerciseSpread(profile, thousand(2026), "iso", 2026)).toBeCloseTo(1_000 * 16);
+    expect(exerciseSpread(profile, thousand(2027), "iso", 2027)).toBeCloseTo(1_000 * (18 * 1.15 - 2));
+    const plan = runPlan(profile, { exercises: { iso: { 2026: { c1: 30_000 }, 2027: { c1: 30_000 } }, nso: {} } });
     expect(plan.years[1]!.inputs.isoSharesExercised).toBe(10_000);
   });
   test("RSU schedule vests through the plan and creates wage income", () => {
@@ -49,7 +50,7 @@ describe("multi-year plan", () => {
   });
   test("NSO exercises are ordinary income, not an AMT preference", () => {
     const withNso = { ...profile, equity: { ...profile.equity, grants: [...profile.equity.grants, { id: "g9", name: "NSO", type: "nso" as const, granted: 5_000, vestedToDate: 5_000, strike: 1 }] } };
-    const plan = runPlan(withNso, { exercises: { iso: { 2026: 0 }, nso: { 2026: 5_000 } } });
+    const plan = runPlan(withNso, { exercises: { iso: { 2026: { c1: 0 } }, nso: { 2026: { c1: 5_000 } } } });
     const y = plan.years[0]!;
     expect(y.lines.nsoIncome!.value).toBeCloseTo(5_000 * 17);
     expect(y.lines.isoBargainElement!.value).toBe(0);
@@ -200,10 +201,10 @@ describe("timeline, scenarios and companies", () => {
 
 describe("thresholds", () => {
   test("crossover finds the last AMT-free share count", () => {
-    const c = amtCrossover(profile, { exercises: { iso: { 2026: 0 }, nso: {} } }, 2026);
+    const c = amtCrossover(profile, { exercises: { iso: { 2026: { c1: 0 } }, nso: {} } }, 2026);
     expect(c.sharesBeforeAmt).toBeGreaterThan(0);
     expect(c.sharesBeforeAmt).toBeLessThan(c.available);
-    const at = (n: number) => runPlan(profile, { exercises: { iso: { 2026: n }, nso: {} } }).years[0]!.lines.amt!.value;
+    const at = (n: number) => runPlan(profile, { exercises: { iso: { 2026: { c1: n } }, nso: {} } }).years[0]!.lines.amt!.value;
     expect(at(c.sharesBeforeAmt)).toBe(0);
     expect(at(c.sharesBeforeAmt + 1)).toBeGreaterThan(0);
   });

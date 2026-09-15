@@ -11,12 +11,17 @@ export function activeScenario(profile: Profile): Scenario {
   return profile.scenarios?.[name] ?? profile.scenarios?.[DEFAULT_SCENARIO] ?? emptyScenario();
 }
 
+/** Company key used when an exercise event names none: the profile's first company. */
+export const ANY_COMPANY = "*";
+
 /** Collapse a scenario's events into the per-year lever table the engine computes from. */
-export function leversOf(scenario: Scenario | undefined): Levers {
+export function leversOf(scenario: Scenario | undefined, defaultCompany: string = ANY_COMPANY): Levers {
   const levers: Levers = { exercises: { iso: {}, nso: {} }, exerciseDates: { iso: {}, nso: {} }, sales: {} };
   for (const e of sortedEvents(scenario?.events ?? [])) {
     if (e.kind === "exercise") {
-      levers.exercises[e.type][e.year] = (levers.exercises[e.type][e.year] ?? 0) + e.shares;
+      const c = e.company ?? defaultCompany;
+      const year = (levers.exercises[e.type][e.year] ??= {});
+      year[c] = (year[c] ?? 0) + e.shares;
       if (e.date) levers.exerciseDates![e.type][e.year] = e.date;
     } else if (e.kind === "sell") {
       (levers.sales![e.year] ??= []).push({ id: e.id, shares: e.shares, date: e.date, price: e.price, lots: e.lots });
@@ -27,8 +32,8 @@ export function leversOf(scenario: Scenario | undefined): Levers {
   return levers;
 }
 
-/** One exercise event per year and type with shares, for files that stored the lever table directly. */
-export function eventsFromLevers(levers: Levers): ScenarioEvent[] {
+/** One exercise event per year and type with shares, for files that stored the lever table directly (a plain number per year). */
+export function eventsFromLevers(levers: { exercises: { iso: Record<number, number>; nso: Record<number, number> } }): ScenarioEvent[] {
   const events: ScenarioEvent[] = [];
   for (const type of ["iso", "nso"] as const) {
     for (const [y, shares] of Object.entries(levers.exercises[type] ?? {})) {
@@ -36,6 +41,11 @@ export function eventsFromLevers(levers: Levers): ScenarioEvent[] {
     }
   }
   return events;
+}
+
+/** Shares of a type exercised in a year, across companies. */
+export function exercisedTotal(levers: Levers, type: "iso" | "nso", year: number): number {
+  return Object.values(levers.exercises[type][year] ?? {}).reduce((s, n) => s + n, 0);
 }
 
 export function newEventId(events: ScenarioEvent[]): string {
@@ -47,16 +57,16 @@ export function newEventId(events: ScenarioEvent[]): string {
  * Set the ISO or NSO shares exercised in a year: updates the year's exercise event of that type,
  * adds one, or removes it when shares drop to zero. Returns the new event list and the event touched.
  */
-export function setExerciseEvent(events: ScenarioEvent[], type: "iso" | "nso", year: number, shares: number): { events: ScenarioEvent[]; id: string | null } {
+export function setExerciseEvent(events: ScenarioEvent[], type: "iso" | "nso", year: number, shares: number, company?: string): { events: ScenarioEvent[]; id: string | null } {
   const n = Math.max(0, Math.round(shares));
-  const existing = events.find((e) => e.kind === "exercise" && e.type === type && e.year === year);
+  const existing = events.find((e) => e.kind === "exercise" && e.type === type && e.year === year && (company === undefined || (e.company ?? company) === company));
   if (existing) {
     if (n === 0) return { events: events.filter((e) => e.id !== existing.id), id: null };
     return { events: events.map((e) => (e.id === existing.id ? { ...e, shares: n } : e)), id: existing.id };
   }
   if (n === 0) return { events, id: null };
   const id = newEventId(events);
-  return { events: [...events, { id, kind: "exercise", type, year, shares: n }], id };
+  return { events: [...events, { id, kind: "exercise", type, year, shares: n, ...(company ? { company } : {}) }], id };
 }
 
 /** Events in chronological order: by year, then by date within the year, then by insertion. */

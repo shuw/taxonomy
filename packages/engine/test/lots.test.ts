@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { parseProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
 import { applySale, lotMilestones, lowestTaxOrder, longTermFrom, type Lot } from "../src/lots.ts";
-import { sharesToCover } from "../src/thresholds.ts";
+import { amtCrossover, sharesToCover } from "../src/thresholds.ts";
 import type { Profile, ScenarioEvent } from "../src/types.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
@@ -108,5 +108,33 @@ describe("liquidity events", () => {
     expect(y28.inputs.rsuSharesVested).toBeGreaterThan(0);
     expect(y28.inputs.rsuIncome / y28.inputs.rsuSharesVested).toBeCloseTo(60, 6);
     expect(ipo.years.find((y) => y.year === 2027)!.inputs.rsuSharesVested).toBe(0);
+  });
+});
+
+describe("two companies", () => {
+  const two: Profile = {
+    ...profile,
+    equity: {
+      ...profile.equity,
+      companies: [...profile.equity.companies, { id: "c2", name: "Beta", sharePrice: 5 }],
+      grants: [...profile.equity.grants, { id: "gb", name: "Beta ISO", type: "iso", company: "c2", granted: 10_000, vestedToDate: 10_000, exercisedToDate: 0, strike: 1 }],
+    },
+  };
+  test("an exercise event scoped to a company draws only from that company's grants", () => {
+    const p = { ...two, scenarios: { default: { events: [{ id: "e1", kind: "exercise" as const, type: "iso" as const, year: 2026, company: "c2", shares: 4_000 }] } }, activeScenario: "default" };
+    const y = runPlan(p).years[0]!;
+    expect(y.inputs.isoSharesExercised).toBe(4_000);
+    expect(y.inputs.isoBargainElement).toBeCloseTo(4_000 * (5 - 1));
+    expect(y.lotsEnd!.find((l) => l.id === "x-gb-2026")?.quantity).toBe(4_000);
+    expect(y.lotsEnd!.find((l) => l.id === "x-g1-2026")).toBeUndefined();
+  });
+  test("an unscoped event means the first company, and each company has its own AMT-free count", () => {
+    const p = { ...two, scenarios: { default: { events: [{ id: "e1", kind: "exercise" as const, type: "iso" as const, year: 2026, shares: 1_000 }] } }, activeScenario: "default" };
+    expect(runPlan(p).years[0]!.inputs.isoBargainElement).toBeCloseTo(1_000 * 16);
+    const a = amtCrossover(p, undefined, 2026, "c1");
+    const b = amtCrossover(p, undefined, 2026, "c2");
+    expect(a.available).toBe(40_000);
+    expect(b.available).toBe(10_000);
+    expect(b.sharesBeforeAmt).toBeGreaterThan(a.sharesBeforeAmt);
   });
 });

@@ -1,7 +1,10 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
 import { eventsFromLevers } from "./events.ts";
-import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, Levers, PriorReturn, Profile, Source, Scenario } from "./types.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PriorReturn, Profile, Source, Scenario } from "./types.ts";
+
+/** The per-year lever table older files stored directly: a share count per year. */
+type LegacyLevers = { exercises: { iso: Record<number, number>; nso: Record<number, number> } };
 
 export const FILING_STATUSES: FilingStatus[] = ["single", "mfj", "mfs", "hoh"];
 const GRANT_TYPES: GrantType[] = ["iso", "nso", "rsu"];
@@ -33,8 +36,8 @@ interface RawProfile {
     isoGrants?: { name: string; strike: number; fmv: number; shares: number }[];
     amtCreditCarryforward?: number;
   };
-  levers?: Partial<Levers> & { isoExercises?: Record<number, number> };
-  scenarios?: Record<string, Partial<Levers> & Partial<Scenario>>;
+  levers?: Partial<LegacyLevers> & { isoExercises?: Record<number, number> };
+  scenarios?: Record<string, Partial<LegacyLevers> & Partial<Scenario>>;
   activeScenario?: string;
   timeline?: Profile["timeline"];
   sources?: Record<string, Source>;
@@ -94,12 +97,12 @@ export function parseProfile(text: string): Profile {
   };
 }
 
-function normalizeLevers(l: NonNullable<RawProfile["levers"]>): Levers {
+function normalizeLevers(l: NonNullable<RawProfile["levers"]>): LegacyLevers {
   return { exercises: { iso: { ...(l.isoExercises ?? {}), ...(l.exercises?.iso ?? {}) }, nso: { ...(l.exercises?.nso ?? {}) } } };
 }
 
 /** A scenario is a list of events; older files stored the per-year lever table instead. */
-function normalizeScenario(raw: Partial<Levers> & Partial<Scenario> | null | undefined): Scenario {
+function normalizeScenario(raw: Partial<LegacyLevers> & Partial<Scenario> | null | undefined): Scenario {
   if (raw && Array.isArray(raw.events)) return { events: raw.events };
   if (raw && raw.exercises) return { events: eventsFromLevers(normalizeLevers(raw)) };
   return { events: [] };
