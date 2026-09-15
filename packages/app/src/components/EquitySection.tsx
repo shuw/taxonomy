@@ -1,4 +1,4 @@
-import { companyOf, grantFmv, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { companyOf, grantFmv, grantsMissingVesting, newId, nextShareSpread, rsuVesting, sharesExercisable, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type AmtCrossover, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd, usdCompact } from "../format.ts";
 import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
 import { Section } from "./Section.tsx";
@@ -26,6 +26,7 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
   const setCompany = (i: number, patch: Partial<Company>) => set(["equity", "companies"], companies.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const hasType = (t: GrantType) => grants.some((g) => g.type === t);
   const exercisedIso = Object.values(levers.exercises.iso).reduce((s, n) => s + n, 0);
+  const missing = grantsMissingVesting(profile);
   const summary = grants.length === 0
     ? "no grants yet"
     : [hasType("iso") && `${shares(exercisedIso)} ISO exercised`, hasType("rsu") && `${shares(sharesGranted(profile, "rsu"))} RSU`, hasType("nso") && `${shares(sharesGranted(profile, "nso"))} NSO`].filter(Boolean).join(" · ") + (companies[0] ? ` · ${usd(companies[0].sharePrice)}/sh` : "");
@@ -43,6 +44,11 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
 
   return (
     <Section id="equity" title="Equity" color="var(--series-amt)" defaultOpen summary={summary}>
+      {missing.length > 0 && (
+        <div className="notice">
+          <strong>{missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule</strong>, so nothing more of them vests in the plan: {missing.map((g) => g.name).join(", ")}. Set "Vesting" on each grant card below.
+        </div>
+      )}
       {hasType("iso") && (
         <>
           <div className="subhead">Exercise ISOs</div>
@@ -85,6 +91,11 @@ export function EquitySection({ profile, levers, crossovers, years, focusYear, o
             <Field label="As of"><span className="input-wrap"><input type="date" value={c.sharePriceAsOf ?? ""} onChange={(e) => setCompany(i, { sharePriceAsOf: e.target.value || undefined })} /></span></Field>
             <Field label="Growth" hint={c.growth === undefined ? `default ${pct(profile.assumptions.fmvGrowth)}` : "/yr"}><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => setCompany(i, { growth: n })} /></Field>
           </div>
+          {grants.some((g) => g.type === "rsu" && g.settlement === "liquidity" && (g.company ?? companies[0]?.id) === c.id) && (
+            <Field label="Liquidity event" hint="year double-trigger RSUs settle; blank means none in the plan" wide>
+              <Select options={[{ value: "", label: "none in the plan" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} value={c.liquidityYear ? String(c.liquidityYear) : ""} onChange={(v) => setCompany(i, { liquidityYear: v ? Number(v) : undefined })} />
+            </Field>
+          )}
           <PricePath company={c} years={years} onChange={(pricePath) => setCompany(i, { pricePath })} />
         </div>
       ))}
@@ -142,6 +153,7 @@ function clean(g: EquityGrant): EquityGrant {
   if (g.type !== "rsu" && g.exercisedToDate !== undefined) out.exercisedToDate = g.exercisedToDate;
   if (g.type !== "rsu" && g.strike !== undefined) out.strike = g.strike;
   if (g.expires) out.expires = g.expires;
+  if (g.type === "rsu" && g.settlement === "liquidity") out.settlement = "liquidity";
   if (g.schedule) out.schedule = g.schedule;
   else if (g.vesting) out.vesting = g.vesting;
   return out;
@@ -185,6 +197,11 @@ function GrantCard({ grant: g, profile, levers, onChange, onRemove }: { grant: E
           ? <Field label="Company"><Select options={companies.map((c) => ({ value: c.id, label: c.name }))} value={g.company ?? companies[0]!.id} onChange={(c) => onChange({ company: c })} /></Field>
           : <span />}
       </div>
+      {g.type === "rsu" && (
+        <Field label="Settles" hint="double-trigger RSUs need a liquidity event before they are income" wide>
+          <Segmented options={[{ value: "vest", label: "When units vest" }, { value: "liquidity", label: "At a liquidity event (double-trigger)" }]} value={g.settlement ?? "vest"} onChange={(v) => onChange({ settlement: v === "liquidity" ? "liquidity" : undefined })} />
+        </Field>
+      )}
       <Field label="Vesting" wide>
         <Segmented options={[{ value: "schedule", label: "Schedule" }, { value: "years", label: "By year" }, { value: "none", label: "None" }]} value={mode}
           onChange={(m) => {
@@ -206,8 +223,9 @@ function GrantCard({ grant: g, profile, levers, onChange, onRemove }: { grant: E
           {years.map((y) => <Field key={y} label={String(y)}><NumberInput value={g.vesting?.[y] ?? 0} onChange={(n) => onChange({ vesting: { ...g.vesting, [y]: Math.max(0, Math.round(n)) } })} min={0} /></Field>)}
         </div>
       )}
-      <div className="grant-foot muted">
+      <div className={"grant-foot " + (mode === "none" && g.granted - (g.vestedToDate ?? 0) > 0 ? "warn" : "muted")}>
         {g.type === "rsu" ? `${shares(outstanding - (g.vestedToDate ?? v.vestedAtStart))} unvested.` : `${shares(outstanding)} outstanding, ${shares(exercisableNow ?? 0)} exercisable now.`}
+        {mode === "none" && g.granted - (g.vestedToDate ?? 0) > 0 && " No schedule, so the unvested part never vests here."}
         {mode !== "none" && upcoming.some((n) => n > 0) ? ` Vests ${years.map((y, i) => upcoming[i] ? `${shares(upcoming[i]!)} in ${y}` : null).filter(Boolean).join(", ")}.` : ""}
         {spread !== null && ` Spread ${usd(spread)}/sh today${companyOf(profile, g) && companies.length > 1 ? ` (${companyOf(profile, g)!.name})` : ""}.`}
       </div>

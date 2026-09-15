@@ -119,12 +119,14 @@ questions:
     const review = reviewIntake(r.doc!, profile);
     const edits = followUpEdits(review, profile);
     const list = edits[0]!.value as { text: string; about?: string }[];
-    expect(list).toHaveLength(3);
-    expect(list[0]!.about).toBe("carryforwards.amtCredit");
-    expect(list[1]!.about).toBe("grants.g3");
-    expect(list[2]!.about).toBeUndefined();
+    expect(list).toHaveLength(4);
+    expect(list[0]!.text).toContain("no vesting schedule");
+    expect(list[0]!.about).toBe("grants.g3");
+    expect(list[1]!.about).toBe("carryforwards.amtCredit");
+    expect(list[2]!.about).toBe("grants.g3");
+    expect(list[3]!.about).toBeUndefined();
     const text = editProfileText(example, [...changesToEdits(review.changes, profile), ...edits]);
-    expect(parseProfile(text).followUps).toHaveLength(3);
+    expect(parseProfile(text).followUps).toHaveLength(4);
   });
 });
 

@@ -431,3 +431,5 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 /* Field errors --------------------------------------------------------------------- */
 .field.invalid .input-wrap { border-color: var(--bad); background: var(--surface); box-shadow: 0 0 0 3px var(--bad-bg); }
 .field-error { font-size: 13px; color: var(--bad); font-weight: 500; }
+.notice { background: color-mix(in srgb, var(--series-amt) 12%, transparent); border-left: 3px solid var(--series-amt); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45; }
+.grant-foot.warn { color: var(--series-amt); }

@@ -137,6 +137,7 @@ export function toGrant(g: IntakeGrant, id: string, companyId?: string): EquityG
   const out: EquityGrant = {
     id, name: g.name, type, company: companyId, owner: g.owner, grantDate: g.grantDate, granted,
     vestedToDate: g.vested, exercisedToDate: exercised, strike: type === "rsu" ? undefined : g.strike, expires: g.expires,
+    settlement: type === "rsu" && g.trigger === "double" ? "liquidity" : undefined,
   };
   if (Array.isArray(g.vesting)) {
     const byYear: Record<number, number> = {};
@@ -195,26 +196,31 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
 
 /** The agent's open questions as follow-ups to keep on the profile, tied to the profile path they concern when it can be worked out. */
 export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEdit[] {
-  if (review.questions.length === 0) return [];
   const existing = profile.followUps ?? [];
   const taken = existing.map((f) => f.id);
   const grantKeys = new Map(review.changes.filter((c) => c.intakeKey).map((c) => [c.intakeKey!, c.sourceKey]));
   const added = new Date().toISOString().slice(0, 10);
-  const fresh: FollowUp[] = review.questions.map((q) => {
+  // Grants that arrived with unvested shares but no schedule will never vest in the plan; say so.
+  const scheduleGaps: FollowUp[] = review.changes
+    .filter((c) => c.format === "grant")
+    .map((c) => c.proposed as EquityGrant)
+    .filter((g) => !g.schedule && !g.vesting && g.granted - (g.vestedToDate ?? 0) > 0)
+    .map((g) => ({ id: "", text: `${g.name}: ${Math.round(g.granted - (g.vestedToDate ?? 0)).toLocaleString("en-US")} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Add the schedule on the grant card.`, about: `grants.${g.id}` }));
+  const fresh: FollowUp[] = [...scheduleGaps, ...review.questions.map((q) => ({ id: "", text: q.question, about: q.about ?? undefined }))].map((f) => {
     const id = newId("f", taken);
     taken.push(id);
-    let about: string | undefined;
-    if (q.about) {
-      const m = q.about.match(/^equity\.grants\[(\d+)\]/);
+    let about = f.about;
+    if (about && !about.startsWith("grants.")) {
+      const m = about.match(/^equity\.grants\[(\d+)\]/);
       if (m) about = grantKeys.get(m[0]) ?? `grants.${m[1]}`;
-      else if (/^equity\.holdings/.test(q.about)) about = "holdings";
-      else if (/^home\.mortgage/.test(q.about)) about = "home.mortgage";
-      else if (/^prior_return\.(?!amtCreditCarryforward|capitalLossCarryforward|charitableCarryforward)/.test(q.about)) about = "returns";
-      else about = fieldByIntake(q.about)?.path ?? q.about;
+      else if (/^equity\.holdings/.test(about)) about = "holdings";
+      else if (/^home\.mortgage/.test(about)) about = "home.mortgage";
+      else if (/^prior_return\.(?!amtCreditCarryforward|capitalLossCarryforward|charitableCarryforward)/.test(about)) about = "returns";
+      else about = fieldByIntake(about)?.path ?? about;
     }
-    return { id, text: q.question, about, added };
+    return { id, text: f.text, about, added };
   });
-  return [{ path: ["followUps"], value: [...existing, ...fresh] }];
+  return fresh.length ? [{ path: ["followUps"], value: [...existing, ...fresh] }] : [];
 }
 
 /** Where an intake path lands in the profile, for values the user types in by hand. */

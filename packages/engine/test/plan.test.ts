@@ -91,6 +91,20 @@ describe("mortgage, carryforwards and calibration", () => {
   });
 });
 
+describe("double-trigger RSUs", () => {
+  test("liquidity-settled units are income in the liquidity year, then per vest", () => {
+    const rsu = { ...profile.equity.grants.find((g) => g.type === "rsu")!, settlement: "liquidity" as const };
+    const grants = profile.equity.grants.map((g) => (g.id === rsu.id ? rsu : g));
+    const none = runPlan({ ...profile, equity: { ...profile.equity, grants } });
+    expect(none.years.every((y) => y.lines.rsuIncome!.value === 0)).toBe(true);
+    const c = { ...profile.equity.companies[0]!, liquidityYear: 2028 };
+    const plan = runPlan({ ...profile, equity: { companies: [c], grants, holdings: [] } });
+    expect(plan.years[0]!.inputs.rsuSharesVested).toBe(0);
+    expect(plan.years[2]!.inputs.rsuSharesVested).toBe(3_500 + 2_000 + 2_000);
+    expect(plan.years[3]!.inputs.rsuSharesVested).toBe(500);
+  });
+});
+
 describe("timeline, scenarios and companies", () => {
   test("a timeline entry changes the facts from its year on", () => {
     const p = { ...profile, timeline: [{ year: 2028, path: "people.self.salary", value: 500_000 }, { year: 2027, path: "filer.filingStatus", value: "mfj" }] };

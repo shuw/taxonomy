@@ -66,7 +66,8 @@ Per grant, from Shareworks, Carta, E*Trade, Schwab, Fidelity, or the grant notic
 |---|---|---|
 | name, company, type (iso, nso, rsu, espp) | tax treatment | NQSO and NSO are the same |
 | grant date, total granted | history | |
-| vesting: start, length, cliff, cadence, or explicit dates and counts | per-year vests and what is exercisable | portals usually show both a schedule and a table of vest events; the table wins |
+| vesting: start, length, cliff, cadence, or explicit dates and counts | per-year vests and what is exercisable | required whenever shares are unvested; counts alone leave the future empty |
+| single- or double-trigger (RSUs) | when units become income | double-trigger units settle at the company's liquidity event, a year you set in the app |
 | strike (options) | spread | per share |
 | vested, exercised, and unexercised counts today | what the sliders may move | for options: unexercised = shares still available |
 | expiration date | later: forced exercise | |

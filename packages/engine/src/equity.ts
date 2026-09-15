@@ -120,16 +120,33 @@ export function exerciseSpread(profile: Profile, levers: Levers, type: "iso" | "
   return spread;
 }
 
-/** RSU units vesting in `year` and the ordinary income they create. */
+/**
+ * RSU units that become taxable income in `year`. Single-trigger units count when they vest.
+ * Double-trigger units (settlement: liquidity) count in the company's liquidity year, all
+ * units time-vested by then at once, and per vest after that; with no liquidity year they
+ * produce no income in the plan.
+ */
 export function rsuVesting(profile: Profile, year: number): { shares: number; income: number } {
   let shares = 0;
   let income = 0;
   for (const g of grantsOf(profile, "rsu")) {
-    const n = vestingOf(profile, g).byYear[year] ?? 0;
+    const v = vestingOf(profile, g);
+    let n: number;
+    if (g.settlement === "liquidity") {
+      const ly = companyOf(profile, g)?.liquidityYear;
+      if (ly === undefined || year < ly) n = 0;
+      else if (year === ly) n = v.vestedAtStart + Object.entries(v.byYear).reduce((s, [y, k]) => (Number(y) <= year ? s + k : s), 0);
+      else n = v.byYear[year] ?? 0;
+    } else n = v.byYear[year] ?? 0;
     shares += n;
     income += n * grantFmv(profile, g, year);
   }
   return { shares, income };
+}
+
+/** Grants with unvested shares but no schedule or vest dates: nothing more of them will vest in the plan. */
+export function grantsMissingVesting(profile: Profile): EquityGrant[] {
+  return profile.equity.grants.filter((g) => !g.schedule && !g.vesting && g.granted - (g.vestedToDate ?? 0) > 0);
 }
 
 /** Spread per share for the next share exercised of a type in a year (for display). */

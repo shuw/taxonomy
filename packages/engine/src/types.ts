@@ -81,6 +81,8 @@ export interface Company {
   growth?: number;
   /** Known or assumed prices in specific years (an IPO, a tender). Later years grow from the last point. */
   pricePath?: Record<number, number>;
+  /** Year of the liquidity event that settles double-trigger RSUs (an IPO or acquisition). Unset means none in the plan. */
+  liquidityYear?: number;
 }
 
 export type GrantType = "iso" | "nso" | "rsu";
@@ -121,6 +123,8 @@ export interface EquityGrant {
   /** Derive per-year vesting from a schedule instead. */
   schedule?: VestingSchedule;
   expires?: string;
+  /** RSUs only. "vest" (default): income when units vest. "liquidity": double-trigger; time-vested units become income in the company's liquidity year. */
+  settlement?: "vest" | "liquidity";
 }
 
 /** Shares already owned, kept for the sales lever. */

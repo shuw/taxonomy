@@ -73,6 +73,7 @@ const STRUCTURED: Partial<Record<IntakeSection, string>> = {
       exercised: 0             # options only, to date
       unexercised: 0           # options only: vested-unexercised + unvested
       expires: 2033-02-01
+      trigger: single          # RSUs only: double if a liquidity event is also required to settle
   holdings:                    # shares already owned, one lot per acquisition
     - lot: ""
       owner: self
@@ -84,7 +85,7 @@ const STRUCTURED: Partial<Record<IntakeSection, string>> = {
 };
 
 const REQUIRED_STRUCTURED: Partial<Record<IntakeSection, string[]>> = {
-  equity: ["every grant: name, type, granted, strike (options), and either a vesting schedule or vested/exercised/unexercised counts", "for shares already owned: quantity, acquisition date, cost basis (and AMT basis for ISO shares, from Form 3921)"],
+  equity: ["every grant: name, type, granted, strike (options), vested and exercised counts", "every grant with unvested shares: its vesting schedule (start, years, cliff, cadence) or a list of vest dates. Counts alone are not enough; without the schedule the tool cannot project any future vesting", "RSUs: whether they are single- or double-trigger", "for shares already owned: quantity, acquisition date, cost basis (and AMT basis for ISO shares, from Form 3921)"],
   home: ["if there is a mortgage: balance, rate and origination date"],
 };
 

@@ -19,8 +19,8 @@ everything that *changes on a date* lives in `timeline`.
 | `income` | household interest, total and qualified dividends, realized gains, other ordinary | |
 | `carryforwards` | AMT credit (Form 8801), capital losses by term, unused charitable gifts | balances entering the first plan year; the plan loop threads them forward |
 | `returns` | filed returns: the inputs as reported and the figures to reproduce | newest is used for calibration |
-| `equity.companies` | id, name, share price and its date, optional growth override, optional `pricePath` | a price path pins known or assumed prices in specific years (an IPO); growth resumes from the last point |
-| `equity.grants` | id, name, type (`iso`, `nso`, `rsu`), company, owner, granted, vestedToDate, exercisedToDate, strike, vesting schedule or per-year counts, expiry | the three counts are what every portal shows; outstanding and exercisable shares are derived |
+| `equity.companies` | id, name, share price and its date, optional growth override, optional `pricePath`, optional `liquidityYear` | a price path pins known or assumed prices in specific years (an IPO); growth resumes from the last point; the liquidity year settles double-trigger RSUs |
+| `equity.grants` | id, name, type (`iso`, `nso`, `rsu`), company, owner, granted, vestedToDate, exercisedToDate, strike, vesting schedule or per-year counts, expiry, `settlement` for RSUs | the three counts are what every portal shows; outstanding and exercisable shares are derived. A grant with unvested shares and no schedule vests nothing in the plan, and the app says so |
 | `equity.holdings` | lots owned: id, quantity, acquisition date, how acquired, cost basis, AMT basis | for the sales lever; not in the tax math yet |
 | `home` | the mortgage as a loan (balance, rate, origination, original amount, term), property tax, or a direct interest figure when there is no loan | interest is amortized month by month; the $750k acquisition-debt cap applies by average balance |
 | `deductions` | charitable by kind (cash, appreciated stock, DAF), state income tax, medical | cash and DAF up to 60% of AGI, stock up to 30%, excess carried forward |
