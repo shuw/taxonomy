@@ -91,6 +91,24 @@ describe("mortgage, carryforwards and calibration", () => {
   });
 });
 
+describe("counts read mid-year", () => {
+  test("portal counts as of a date do not double count that year's vests", () => {
+    // 48 monthly vests from 2024-10-02, 12-month cliff; 24 vested as of 2026-10-01 per the portal.
+    const g = { id: "x", name: "x", type: "iso" as const, granted: 30_816, vestedToDate: 15_408, exercisedToDate: 15_408, strike: 12.98, countsAsOf: "2026-10-01", schedule: { start: "2024-10-02", years: 4, cliffMonths: 12, cadence: "monthly" as const } };
+    const p = { ...profile, plan: { startYear: 2026, years: 4 }, equity: { ...profile.equity, grants: [g] } };
+    const v = vestingOf(p, g);
+    expect(v.vestedAtStart).toBe(0);
+    const total = Object.values(v.byYear).reduce((a, b) => a + b, 0);
+    expect(total).toBe(15_408);
+    expect(v.byYear[2026]).toBe(15_408 / 24 * 3); // Oct, Nov, Dec
+    expect(v.byYear[2027]).toBe(15_408 / 2);
+    expect(sharesExercisable(p, { exercises: { iso: {}, nso: {} } }, "iso", 2027)).toBe(15_408 / 24 * 15);
+    // Without an as-of date the counts are taken as of Jan 1 and the whole year's vests are added.
+    const noAsOf = { ...g, countsAsOf: undefined };
+    expect(vestingOf({ ...p, equity: { ...p.equity, grants: [noAsOf] } }, noAsOf).byYear[2026]).toBe(15_408 / 24 * 12);
+  });
+});
+
 describe("double-trigger RSUs", () => {
   test("liquidity-settled units are income in the liquidity year, then per vest", () => {
     const rsu = { ...profile.equity.grants.find((g) => g.type === "rsu")!, settlement: "liquidity" as const };

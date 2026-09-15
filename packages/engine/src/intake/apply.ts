@@ -102,7 +102,7 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
         const hit = byName.get(g.name);
         const id = hit?.grant.id ?? newId("g", taken);
         if (!hit) taken.push(id);
-        const proposed = toGrant(g, id, hit?.grant.company ?? profile.equity.companies[0]?.id ?? "c1");
+        const proposed = toGrant(g, id, hit?.grant.company ?? profile.equity.companies[0]?.id ?? "c1", doc.as_of);
         const index = hit ? hit.index : profile.equity.grants.length + added++;
         add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}`, intakeKey: `equity.grants[${i}]` });
       });
@@ -130,13 +130,14 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
 }
 
 /** An intake grant as the profile stores it: the portal's three counts, verbatim. */
-export function toGrant(g: IntakeGrant, id: string, companyId?: string): EquityGrant {
+export function toGrant(g: IntakeGrant, id: string, companyId?: string, countsAsOf?: string): EquityGrant {
   const type = g.type === "nqso" ? "nso" : g.type;
   const exercised = type === "rsu" ? undefined : g.exercised;
   const granted = g.granted ?? (g.unexercised !== undefined ? g.unexercised + (exercised ?? 0) : 0);
   const out: EquityGrant = {
     id, name: g.name, type, company: companyId, owner: g.owner, grantDate: g.grantDate, granted,
-    vestedToDate: g.vested, exercisedToDate: exercised, strike: type === "rsu" ? undefined : g.strike, expires: g.expires,
+    vestedToDate: g.vested, exercisedToDate: exercised, countsAsOf: g.vested !== undefined ? countsAsOf : undefined,
+    strike: type === "rsu" ? undefined : g.strike, expires: g.expires,
     settlement: type === "rsu" && g.trigger === "double" ? "liquidity" : undefined,
   };
   if (Array.isArray(g.vesting)) {

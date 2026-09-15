@@ -150,6 +150,7 @@ function clean(g: EquityGrant): EquityGrant {
   if (g.owner) out.owner = g.owner;
   if (g.grantDate) out.grantDate = g.grantDate;
   if (g.vestedToDate !== undefined) out.vestedToDate = g.vestedToDate;
+  if (g.countsAsOf) out.countsAsOf = g.countsAsOf;
   if (g.type !== "rsu" && g.exercisedToDate !== undefined) out.exercisedToDate = g.exercisedToDate;
   if (g.type !== "rsu" && g.strike !== undefined) out.strike = g.strike;
   if (g.expires) out.expires = g.expires;
@@ -187,16 +188,15 @@ function GrantCard({ grant: g, profile, levers, onChange, onRemove }: { grant: E
           : <Field label="Value at vest"><span className="static">{usd(grantFmv(profile, g, profile.plan.startYear))}/sh</span></Field>}
       </div>
       <div className="row3">
-        <Field label="Vested to date" hint={`by ${profile.plan.startYear}`}>
+        <Field label="Vested to date" hint={g.countsAsOf ? `as of ${g.countsAsOf}` : `as of Jan 1, ${profile.plan.startYear}`}>
           <NumberInput value={g.vestedToDate ?? v.vestedAtStart + (g.type === "rsu" ? 0 : g.exercisedToDate ?? 0)} onChange={(n) => onChange({ vestedToDate: Math.max(0, Math.min(g.granted, Math.round(n))) })} min={0} />
         </Field>
         {g.type !== "rsu"
           ? <Field label="Exercised to date"><NumberInput value={g.exercisedToDate ?? 0} onChange={(n) => onChange({ exercisedToDate: Math.max(0, Math.min(g.granted, Math.round(n))) })} min={0} /></Field>
           : <span />}
-        {companies.length > 1
-          ? <Field label="Company"><Select options={companies.map((c) => ({ value: c.id, label: c.name }))} value={g.company ?? companies[0]!.id} onChange={(c) => onChange({ company: c })} /></Field>
-          : <span />}
+        <Field label="Counts as of" hint="the date you read them"><span className="input-wrap"><input type="date" value={g.countsAsOf ?? ""} onChange={(e) => onChange({ countsAsOf: e.target.value || undefined })} /></span></Field>
       </div>
+      {companies.length > 1 && <Field label="Company" wide><Select options={companies.map((c) => ({ value: c.id, label: c.name }))} value={g.company ?? companies[0]!.id} onChange={(c) => onChange({ company: c })} /></Field>}
       {g.type === "rsu" && (
         <Field label="Settles" hint="double-trigger RSUs need a liquidity event before they are income" wide>
           <Segmented options={[{ value: "vest", label: "When units vest" }, { value: "liquidity", label: "At a liquidity event (double-trigger)" }]} value={g.settlement ?? "vest"} onChange={(v) => onChange({ settlement: v === "liquidity" ? "liquidity" : undefined })} />

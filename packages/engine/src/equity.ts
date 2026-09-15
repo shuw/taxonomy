@@ -25,19 +25,21 @@ export function sharesOutstanding(g: EquityGrant): number {
 }
 
 /**
- * Expand a grant's vesting into {vestedAtStart, byYear}, where vestedAtStart is what has vested
- * and is still in play at the plan's first day (options: vested and unexercised; RSUs: already
- * delivered). `vestedToDate` overrides the schedule for the past.
+ * Expand a grant's vesting into {vestedAtStart, byYear}. vestedAtStart is what had vested (and,
+ * for options, was still unexercised) as of the counts' date, which defaults to the plan's first
+ * day; byYear holds schedule vests after that date. `vestedToDate` overrides the schedule for
+ * everything up to the counts' date, so portal numbers read mid-year do not double count.
  */
 export function vestingOf(profile: Profile, grant: EquityGrant): { vestedAtStart: number; byYear: Record<number, number> } {
   const start = profile.plan.startYear;
   const end = start + profile.plan.years - 1;
   const byYear: Record<number, number> = {};
   let before = 0;
+  const asOf = grant.countsAsOf && grant.vestedToDate !== undefined ? new Date(grant.countsAsOf + "T00:00:00Z") : new Date(Date.UTC(start, 0, 1));
   if (grant.vesting) {
     for (const [y, n] of Object.entries(grant.vesting)) {
       const year = Number(y);
-      if (year < start) before += n;
+      if (year < asOf.getUTCFullYear() || year < start) before += n;
       else if (year <= end) byYear[year] = (byYear[year] ?? 0) + n;
     }
   } else if (grant.schedule) {
@@ -48,7 +50,6 @@ export function vestingOf(profile: Profile, grant: EquityGrant): { vestedAtStart
     const perPeriod = grant.granted / periods;
     const cliff = s.cliffMonths ?? 0;
     const startDate = new Date(s.start + "T00:00:00Z");
-    const planStart = new Date(Date.UTC(start, 0, 1));
     let vestedSoFar = 0;
     for (let i = 1; i <= periods; i++) {
       const month = i * step;
@@ -58,7 +59,7 @@ export function vestingOf(profile: Profile, grant: EquityGrant): { vestedAtStart
       vestedSoFar = target;
       if (amount <= 0) continue;
       const d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + month, startDate.getUTCDate()));
-      if (d < planStart) before += amount;
+      if (d <= asOf || d.getUTCFullYear() < start) before += amount;
       else if (d.getUTCFullYear() <= end) byYear[d.getUTCFullYear()] = (byYear[d.getUTCFullYear()] ?? 0) + amount;
     }
   }

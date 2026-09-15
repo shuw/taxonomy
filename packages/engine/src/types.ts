@@ -112,10 +112,12 @@ export interface EquityGrant {
   grantDate?: string;
   /** Shares or units originally granted. */
   granted: number;
-  /** Shares vested by the start of the plan (for RSUs: already delivered and taxed). Overrides the schedule for the past. */
+  /** Shares vested as of `countsAsOf` (for RSUs: already delivered). Overrides the schedule for the past. */
   vestedToDate?: number;
-  /** Option shares exercised before the plan; gone from this grant (their shares live in holdings). */
+  /** Option shares exercised as of `countsAsOf`; gone from this grant (their shares live in holdings). */
   exercisedToDate?: number;
+  /** The date the counts above were read (a portal shows today's numbers). Defaults to the plan's first day. Schedule vests after this date are added on top. */
+  countsAsOf?: string;
   /** Exercise price per share. Options only. */
   strike?: number;
   /** Shares vesting in each plan year, when you would rather state it than derive it. */
