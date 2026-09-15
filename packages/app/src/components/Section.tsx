@@ -1,19 +1,14 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { usePersisted } from "../persist.ts";
 
 interface Props { id: string; title: string; color: string; summary: ReactNode; defaultOpen?: boolean; children: ReactNode; }
 
-/** A collapsible sidebar section that shrinks to a one-line summary. Open state sticks per browser. */
+/** A collapsible sidebar section that shrinks to a one-line summary. Open state is remembered per profile. */
 export function Section({ id, title, color, summary, defaultOpen = false, children }: Props) {
-  const key = `taxonomy.section.${id}`;
-  const [open, setOpen] = useState<boolean>(() => {
-    try { const v = localStorage.getItem(key); return v === null ? defaultOpen : v === "1"; } catch { return defaultOpen; }
-  });
-  const toggle = () => {
-    setOpen((o) => { try { localStorage.setItem(key, o ? "0" : "1"); } catch {} return !o; });
-  };
+  const [open, setOpen] = usePersisted<boolean>(`section.${id}`, defaultOpen, (v): v is boolean => typeof v === "boolean");
   return (
     <section className={"section" + (open ? " open" : "")}>
-      <button type="button" className="section-head" onClick={toggle} aria-expanded={open}>
+      <button type="button" className="section-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="dot" style={{ background: color }} />
         <span className="section-title">{title}</span>
         {!open && <span className="section-summary">{summary}</span>}

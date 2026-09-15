@@ -73,7 +73,11 @@ const bad = (message: string, status = 400) => Response.json({ error: message },
 function sameOrigin(req: Request): Response | null {
   const origin = req.headers.get("origin");
   const host = req.headers.get("host") ?? "";
-  if (origin !== null && new URL(origin).host !== host) return bad("cross-origin request refused", 403);
+  if (origin !== null) {
+    let ok = false;
+    try { ok = new URL(origin).host === host; } catch { ok = false; } // "null" and other opaque origins are refused, not thrown on
+    if (!ok) return bad("cross-origin request refused", 403);
+  }
   const site = req.headers.get("sec-fetch-site");
   if (site && site !== "same-origin" && site !== "none") return bad("cross-site request refused", 403);
   if (req.method !== "DELETE" && !(req.headers.get("content-type") ?? "").startsWith("application/json")) return bad("expected application/json", 415);
@@ -120,9 +124,11 @@ Bun.serve({
         if (refused) return refused;
         const { id } = req.params;
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
-        const body = (await req.json()) as { text?: string };
+        const body = (await req.json()) as { text?: string; mtime?: number };
         const problem = validate(body.text);
         if (problem) return bad(problem);
+        // A write based on an older read must not clobber a newer file: hand back the current version instead.
+        if (typeof body.mtime === "number" && statSync(fileFor(id)).mtimeMs !== body.mtime) return Response.json({ error: "the file changed on disk", ...readProfile(id) }, { status: 409 });
         writeFileSync(fileFor(id), body.text as string);
         const { path, mtime } = readProfile(id);
         return Response.json({ id, path, mtime });

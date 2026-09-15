@@ -31,7 +31,7 @@ export interface FederalParams {
   salt: {
     cap: ByStatus;
     phaseoutStart: ByStatus;
-    /** Cap lost per dollar of MAGI over phaseoutStart. */
+    /** Cap lost per dollar of AGI over phaseoutStart. */
     phaseoutRate: number;
     floor: ByStatus;
   };

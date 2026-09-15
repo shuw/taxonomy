@@ -187,7 +187,7 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
       const existing = profile.filer.dependents ?? [];
       if (c.birthYears) edits.push({ path: ["filer", "dependents"], value: c.birthYears.map((birthYear) => ({ birthYear })) });
       else {
-        const n = Number(String(c.proposed).split(",").length && !isNaN(Number(c.proposed)) ? Number(c.proposed) : String(c.proposed).split(",").length);
+        const n = Math.max(0, Math.round(Number(c.proposed) || 0));
         edits.push({ path: ["filer", "dependents"], value: existing.length >= n ? existing.slice(0, n) : [...existing, ...Array.from({ length: n - existing.length }, () => ({}))] });
       }
     } else if (c.format !== "grant" && c.format !== "priorReturn") edits.push({ path: c.path, value: c.proposed });
@@ -235,7 +235,7 @@ export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEd
 
 /** Where an intake path lands in the profile, for values the user types in by hand. */
 export function profilePathForIntake(path: string): ProfilePath | null {
-  const f = fieldByIntake(path);
+  const f = fieldByIntake(path === "basics.dependents" ? "pay.dependents" : path);
   return f && f.review !== false ? toPath(f.path) : null;
 }
 

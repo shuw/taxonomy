@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { usePersisted } from "../persist.ts";
-import { profileGaps, type FilingStatus, type FollowUp, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { fieldByPath, profileGaps, type FilingStatus, type FollowUp, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { FILING_OPTIONS, MoneyInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
 
 const SECTION_FOR: [RegExp, string][] = [
@@ -77,6 +77,7 @@ function MissingRow({ f, profile, onAnswer }: { f: FollowUp; profile: Profile; o
     f.about === "filer.filingStatus" ? <Segmented options={[...FILING_OPTIONS]} value={value as FilingStatus} onChange={setValue} />
     : f.about === "filer.state" ? <Select options={STATE_OPTIONS} value={String(value)} onChange={setValue} />
     : f.about === "filer.dependents" ? <span className="input-wrap"><input value={String(value)} placeholder="e.g. 2019, 2022" onChange={(e) => setValue(e.target.value)} /></span>
+    : fieldByPath(f.about ?? "")?.type === "text" ? <span className="input-wrap"><input value={String(value)} onChange={(e) => setValue(e.target.value)} /></span>
     : <MoneyInput value={Number(value) || 0} onChange={setValue} placeholder="0" />;
   const ready = f.about === "people.self.salary" ? Number(value) > 0 : true;
   const answer = f.about === "filer.dependents" ? String(value).split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {})) : value;

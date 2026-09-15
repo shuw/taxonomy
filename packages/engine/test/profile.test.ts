@@ -122,3 +122,31 @@ sources: { "equity.grants.1": "Shareworks", "equity.sharePrice": "409A", "people
     expect(() => parseProfile("version: 1\nfiler: { filingStatus: single }\n")).toThrow(/state/);
   });
 });
+
+describe("review fixes", () => {
+  test("dependents typed as birth years, a list of years, or a count all become entries", () => {
+    const withDeps = (v: string) => parseProfile(example.replace("dependents: []", `dependents: ${v}`)).filer.dependents;
+    expect(withDeps('"2019, 2022"')).toEqual([{ birthYear: 2019 }, { birthYear: 2022 }]);
+    expect(withDeps("[2019, 2022]")).toEqual([{ birthYear: 2019 }, { birthYear: 2022 }]);
+    expect(withDeps("2")).toEqual([{}, {}]);
+  });
+  test("legacy sources keyed by grant index land on the right grant when isoGrants came first", () => {
+    const v2 = `version: 2
+filer: { filingStatus: single, state: WA }
+plan: { startYear: 2026, years: 2 }
+assumptions: { inflation: 0.02, wageGrowth: 0, fmvGrowth: 0 }
+people: { self: { salary: 100000 } }
+income: {}
+equity:
+  sharePrice: 10
+  isoGrants:
+    - { name: old, shares: 100, strike: 1 }
+  grants:
+    - { name: rsu, type: rsu, granted: 50, vestedToDate: 0 }
+sources: { "equity.grants.0": "Shareworks RSU page" }
+`;
+    const p = parseProfile(v2);
+    expect(p.equity.grants.map((g) => g.name)).toEqual(["old", "rsu"]);
+    expect(p.sources).toEqual({ "grants.g2": "Shareworks RSU page" });
+  });
+});

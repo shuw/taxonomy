@@ -114,8 +114,14 @@ as_of: 2026-09-14
 basics:
   filingStatus: mfj
   state: WA
-  dependents: 0
-  changes: []                 # e.g. [{ year: 2027, filingStatus: mfj }]
+pay:
+  dependents: [2019, 2022]    # birth years of dependents claimed; [] if none
+people:
+  self:
+    baseSalary: 620000
+    expectedBonus: 60000
+    pretaxContributions: 23500
+    withholdingToDate: 141000
 prior_return:
   year: 2025
   agi: 402113
@@ -126,16 +132,12 @@ prior_return:
   capitalLossCarryforward: { shortTerm: 0, longTerm: 3200 }
   itemized: { salt: 10000, mortgageInterest: 24100, charitable: 5000 }
 income:
-  baseSalary: 620000
-  expectedBonus: 60000
-  pretaxContributions: 23500
   interest: 6100
   dividends: { ordinary: 4200, qualified: 3900 }
   realizedGains: { shortTerm: 0, longTerm: 0 }
-  withholdingToDate: 141000
 equity:
   company: Example Inc.
-  sharePrice: { value: 21.00, asOf: 2026-06-30, basis: 409A }
+  sharePrice: { value: 21.00, asOf: 2026-06-30 }
   grants:
     - name: 2023 ISO grant
       type: iso
@@ -160,10 +162,11 @@ equity:
       via: iso_exercise
       costBasis: 2.00
       amtBasis: 16.50           # FMV at exercise, from Form 3921
-  isoExercisesThisYear: []
+      grantDate: 2023-06-01     # ISO shares: the option's grant date, for the two-year test
 home:
   mortgage: { balance: 812000, rate: 0.0575, originated: 2022-08-01, originalAmount: 900000 }
   propertyTax: 11800
+deductions:
   charitable: { cash: 5000, appreciatedStock: 0, daf: 0 }
 assumptions:
   fmvGrowth: 0.15
@@ -283,12 +286,12 @@ screen trustworthy six months later.
 
 ## Status
 
-Built as of 2026-09-14 (schema version 3; see DATA-MODEL.md): the schema and parser (`intake/schema.ts`), the prompt
-(`intake/prompt.ts`), the review and apply mapping (`intake/apply.ts`), the modal, source chips,
-and the calibration card. The profile schema is at version 2 with people, carryforwards, prior
-return, holdings, mortgage-as-loan and charitable by kind. Not yet: the sales lever that
-holdings exist for, ESPP, withholding-based cash view, and a "future" section (deliberately: the
-future is what the levers are for).
+Built as of 2026-09-15 against profile schema version 3 (see DATA-MODEL.md): the schema and
+parser (`intake/schema.ts`), the prompt (`intake/prompt.ts`), the review and apply mapping
+(`intake/apply.ts`), the modal, source chips, follow-ups answered on the main screen, and the
+calibration card. Holdings feed the sale events on the timeline. Not yet: ESPP, and a
+withholding-based estimated-payments view. There is no "future" section by design: the future
+is what the timeline is for.
 
 ## Build plan
 

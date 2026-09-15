@@ -137,8 +137,10 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope,
       if (!raw?.trim()) continue;
       const path = profilePathForIntake(u.path);
       if (!path) continue;
-      const n = parseAmount(raw);
-      out.push({ path, value: n ?? raw.trim() });
+      const value = path.join(".") === "filer.dependents"
+        ? raw.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}))
+        : (parseAmount(raw) ?? raw.trim());
+      out.push({ path, value });
       out.push({ path: ["sources", path.join(".")], value: "typed in during intake" });
     }
     out.push(...followUpEdits(review, profile));

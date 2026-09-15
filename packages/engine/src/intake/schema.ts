@@ -27,7 +27,7 @@ export interface IntakeDocument {
   };
   equity?: {
     company?: string;
-    sharePrice?: number | { value: number; asOf?: string; basis?: string };
+    sharePrice?: number | { value: number; asOf?: string };
     grants?: IntakeGrant[];
     holdings?: IntakeHolding[];
   };
@@ -263,11 +263,11 @@ export function parseIntake(text: string): IntakeParse {
 
   const eq = obj("equity", d.equity);
   if (eq) {
-    let sharePrice: number | { value: number; asOf?: string; basis?: string } | undefined;
+    let sharePrice: number | { value: number; asOf?: string } | undefined;
     if (typeof eq.sharePrice === "object" && eq.sharePrice !== null) {
       const sp = eq.sharePrice as Record<string, unknown>;
       const value = num("equity.sharePrice.value", sp.value, { min: 0 });
-      sharePrice = value === undefined ? undefined : { value, asOf: date("equity.sharePrice.asOf", sp.asOf), basis: str("equity.sharePrice.basis", sp.basis) };
+      sharePrice = value === undefined ? undefined : { value, asOf: date("equity.sharePrice.asOf", sp.asOf) };
     } else sharePrice = num("equity.sharePrice", eq.sharePrice, { min: 0 });
     const grants: IntakeGrant[] = [];
     if (eq.grants !== undefined) {

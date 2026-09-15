@@ -122,18 +122,24 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   // disallowed under AMT, so a smaller itemized total can still leave less tax to pay overall.
   const brackets = p.brackets[fs];
   const cg = p.capGains[fs];
+  /** Tentative minimum tax from taxable income plus the AMT-only items. Shared by the deduction choice and the AMT lines below. */
+  const minimumTax = (taxable: number, addback: number, bargain: number, adjustment: number) => {
+    const amti = Math.max(0, taxable + addback + bargain + adjustment);
+    const phaseoutExcess = Math.max(0, amti - p.amt.phaseoutStart[fs]);
+    const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * phaseoutExcess);
+    const base = Math.max(0, amti - exemption);
+    const pref = Math.min(base, preferentialGross);
+    const ordinaryPart = base - pref;
+    const rb = p.amt.rateBreak[fs];
+    const tmt = Math.min(ordinaryPart, rb) * p.amt.lowRate + Math.max(0, ordinaryPart - rb) * p.amt.highRate + capGainsTax(pref, ordinaryPart, cg);
+    return { amti, phaseoutExcess, exemption, base, ordinaryPart, tmt };
+  };
   const taxUnder = (deductionAmount: number, addback: number) => {
     const taxable = Math.max(0, agi - deductionAmount);
     const pref = Math.min(taxable, preferentialGross);
     const ordinary = taxable - pref;
     const regular = bracketTax(ordinary, brackets) + capGainsTax(pref, ordinary, cg);
-    const amti = taxable + addback + inputs.isoBargainElement + inputs.amtCapitalAdjustment;
-    const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * Math.max(0, amti - p.amt.phaseoutStart[fs]));
-    const base = Math.max(0, amti - exemption);
-    const prefAmt = Math.min(base, preferentialGross);
-    const ordinaryPart = base - prefAmt;
-    const rb = p.amt.rateBreak[fs];
-    const tmt = Math.min(ordinaryPart, rb) * p.amt.lowRate + Math.max(0, ordinaryPart - rb) * p.amt.highRate + capGainsTax(prefAmt, ordinaryPart, cg);
+    const { tmt } = minimumTax(taxable, addback, inputs.isoBargainElement, inputs.amtCapitalAdjustment);
     return regular + Math.max(0, tmt - regular);
   };
   const withItemized = taxUnder(itemized, saltDeduction);
@@ -196,18 +202,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
       : "No ISO shares sold this year.",
     ["sharesSold"],
   );
-  const amtOf = (bargain: number, adjustment = inputs.amtCapitalAdjustment) => {
-    const amti = Math.max(0, taxableIncome + addback + bargain + adjustment);
-    const phaseoutExcess = Math.max(0, amti - p.amt.phaseoutStart[fs]);
-    const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * phaseoutExcess);
-    const base = Math.max(0, amti - exemption);
-    const pref = Math.min(base, preferential);
-    const ordinaryPart = base - pref;
-    const rb = p.amt.rateBreak[fs];
-    const ordinaryAmt = Math.min(ordinaryPart, rb) * p.amt.lowRate + Math.max(0, ordinaryPart - rb) * p.amt.highRate;
-    const tmt = ordinaryAmt + capGainsTax(pref, ordinaryPart, cg);
-    return { amti, phaseoutExcess, exemption, base, ordinaryPart, tmt };
-  };
+  const amtOf = (bargain: number, adjustment = inputs.amtCapitalAdjustment) => minimumTax(taxableIncome, addback, bargain, adjustment);
   const a = amtOf(inputs.isoBargainElement);
   L.put("amti", "Alternative minimum taxable income", a.amti, "Taxable income + addbacks + ISO bargain element" + (inputs.amtCapitalAdjustment !== 0 ? " + the basis adjustment on ISO shares sold" : "") + ".", ["taxableIncome", "amtAddbacks", "isoBargainElement", ...(inputs.amtCapitalAdjustment !== 0 ? ["amtCapitalAdjustment"] : [])]);
   L.put(

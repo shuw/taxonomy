@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
+import { useHashState } from "./hash.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, companiesWithGrants, creditRecovery, exercisedIn, holdOrSell, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
-import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
+import { activeScenario, exercisedIn, planYears, resolveLevers, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { EventTimeline } from "./components/timeline/EventTimeline.tsx";
+import { factMarkers } from "./components/timeline/factMarkers.ts";
+import { usePlanAnalyses } from "./hooks/usePlanAnalyses.ts";
+import { useTimelineActions } from "./hooks/useTimelineActions.ts";
 import { Segmented } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
 import { usdCompact } from "./format.ts";
@@ -34,13 +38,6 @@ function rememberedId(): string | null {
   try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
-/** Dialog state lives in the hash so a refresh lands you where you were. */
-function setHash(name: string | null) {
-  const url = new URL(location.href);
-  url.hash = name ? `#${name}` : "";
-  history.replaceState(null, "", url);
-}
-
 function remember(id: string) {
   try { localStorage.setItem(STORAGE_KEY, id); } catch {}
   const url = new URL(location.href);
@@ -51,8 +48,7 @@ function remember(id: string) {
 export function App() {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
-  const [creating, setCreatingState] = useState(() => location.hash === "#new");
-  const setCreating = (v: boolean) => { setCreatingState(v); setHash(v ? "new" : null); };
+  const [creating, setCreating] = useHashState((h) => h === "#new", (v) => (v ? "new" : null));
 
   const currentId = useMemo(() => {
     if (!list || list.length === 0) return null;
@@ -104,85 +100,55 @@ export function App() {
 
 interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
 
+type PlanView = "combined" | "tax" | "cash";
+const isPlanView = (v: unknown): v is PlanView => v === "combined" || v === "tax" || v === "cash";
+
 function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = usePersisted<number>("focusYear", years[0]!, (v): v is number => typeof v === "number");
+  const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
   const [pinned, setPinned] = useState<Pinned | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [intakeOpen, setIntakeOpenState] = useState(() => location.hash === "#intake");
-  const [factsTab, setFactsTabState] = useState<FactTab | null>(() => { const m = /^#facts(?:\/(\w+))?$/.exec(location.hash); return m ? (isFactTab(m[1]) ? m[1] : "you") : null; });
+  const [ledgerOpen, setLedgerOpen] = usePersisted<boolean>("ledgerOpen", true, (v): v is boolean => typeof v === "boolean");
+  const [planView, setPlanView] = usePersisted<PlanView>("planView", "combined", isPlanView);
+
+  // Dialogs live in the hash; opening the intake closes the information dialog.
+  const [intakeOpen, setIntakeOpenState] = useHashState((h) => h === "#intake", (v) => (v ? "intake" : null));
+  const [factsTab, setFactsTabState] = useHashState<FactTab | null>((h) => { const m = /^#facts(?:\/(\w+))?$/.exec(h); return m ? (isFactTab(m[1]) ? m[1] : "you") : null; }, (t) => (t ? `facts/${t}` : null));
   const [lastFactsTab, setLastFactsTab] = usePersisted<FactTab>("factsTab", "you", isFactTab);
-  const openFacts = (tab?: FactTab) => { const t = tab ?? lastFactsTab; setFactsTabState(t); setLastFactsTab(t); setHash(`facts/${t}`); };
-  const closeFacts = () => { setFactsTabState(null); setHash(null); };
-  const setIntakeOpen = (v: boolean) => { setIntakeOpenState(v); if (v) setFactsTabState(null); setHash(v ? "intake" : null); };
-  const select = (sel: Selection | null) => setSelected(sel);
+  const openFacts = (tab?: FactTab) => { const t = tab ?? lastFactsTab; setFactsTabState(t); setLastFactsTab(t); };
+  const closeFacts = () => setFactsTabState(null);
+  const setIntakeOpen = (v: boolean) => { if (v) setFactsTabState(null); setIntakeOpenState(v); };
 
   useEffect(() => { if (!years.includes(focusYear)) setFocusYear(years[0]!); }, [yearsKey, focusYear]);
 
   const levers = useMemo(() => resolveLevers(profile), [profile]);
-  const scenarioName = profile.activeScenario ?? "default";
   const scenario = useMemo(() => activeScenario(profile), [profile]);
   const events = scenario.events;
-  const plan = useMemo(() => runPlan(profile, levers), [profile, levers]);
-  const isoCompanies = useMemo(() => companiesWithGrants(profile, "iso"), [profile]);
-  const crossovers = useMemo(() => years.flatMap((y) => isoCompanies.map((c) => amtCrossover(profile, levers, y, c))), [profile, levers, yearsKey, isoCompanies]);
-  const hasIso = isoCompanies.length > 0;
-  const [selectedEvent, setSelectedEvent] = usePersisted<string | null>("selectedEvent", null, (v): v is string | null => v === null || typeof v === "string");
-  // The AMT chart follows the focused year; selecting anything on the timeline focuses its year.
   const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
-  const recoveries = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name, r: creditRecovery(profile, levers, sweepYear, c) })).filter((x) => x.r), [profile, levers, sweepYear, isoCompanies]);
-  const holds = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name, h: holdOrSell(profile, levers, sweepYear, c) })).filter((x) => x.h), [profile, levers, sweepYear, isoCompanies]);
-  const sweeps = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name ?? c, sweep: sweepIsoExercise(profile, levers, sweepYear, 40, c), crossover: crossovers.find((x) => x.year === sweepYear && x.company === c)! })), [profile, levers, sweepYear, isoCompanies, crossovers]);
+  const { plan, isoCompanies, crossovers, byCompany } = usePlanAnalyses(profile, levers, sweepYear);
+  const hasIso = isoCompanies.length > 0;
+  const facts = useMemo(() => factMarkers(profile, years, () => openFacts("equity")), [profile, yearsKey]);
+  const actions = useTimelineActions({ profile, levers, events, facts, edit, selectedId: selectedEvent, setSelectedId: setSelectedEvent, setFocusYear });
 
-  const writeEvents = (next: ScenarioEvent[]) => {
-    const edits: ProfileEdit[] = [];
-    if (!profile.scenarios?.[scenarioName]) edits.push({ path: ["activeScenario"], value: scenarioName });
-    edits.push(...scenarioEdits(scenarioName, next));
-    edit(edits);
-  };
-  const facts = useMemo(() => factMarkers(profile, years, () => {}, () => openFacts("equity")), [profile, yearsKey]);
-  const selectEvent = (id: string | null) => {
-    setSelectedEvent(id);
-    const year = events.find((x) => x.id === id)?.year ?? facts.find((f) => f.id === id)?.year;
-    if (year !== undefined) setFocusYear(year);
-  };
-  const addEvent = (what: AddKind, year: number) => {
-    const existing = what.kind === "exercise" ? events.find((e) => e.kind === "exercise" && e.type === what.type && e.year === year && (e.company ?? profile.equity.companies[0]?.id) === (what.company ?? profile.equity.companies[0]?.id)) : undefined;
-    if (existing) { selectEvent(existing.id); return; }
-    const id = newEventId(events);
-    if (what.kind === "liquidity") { const dup = events.find((e) => e.kind === "liquidity"); if (dup) { changeEvent(dup.id, { year }); selectEvent(dup.id); return; } }
-    const event: ScenarioEvent = what.kind === "exercise" ? { id, kind: "exercise", type: what.type, year, shares: 0, ...(what.company ? { company: what.company } : {}) } : what.kind === "sell" ? { id, kind: "sell", year, shares: 0 } : { id, kind: "liquidity", year };
-    writeEvents([...events, event]);
-    setSelectedEvent(id);
-    setFocusYear(year);
-  };
-  const sellToCover = (id: string) => {
-    const e = events.find((x) => x.id === id);
-    if (!e || e.kind !== "sell") return;
-    const n = sharesToCover(profile, levers, e.year, id);
-    writeEvents(events.map((x) => (x.id === id ? { ...x, shares: n, lots: undefined } : x)));
-  };
-  const changeEvent = (id: string, patch: Partial<ScenarioEvent>) => {
-    writeEvents(events.map((e) => (e.id === id ? ({ ...e, ...patch } as ScenarioEvent) : e)));
-    if (typeof patch.year === "number") setFocusYear(patch.year);
-  };
-  const removeEvent = (id: string) => { writeEvents(events.filter((e) => e.id !== id)); if (selectedEvent === id) setSelectedEvent(null); };
-  /** The sweep chart sets the ISO count for its year directly. */
-  const setIsoShares = (year: number, n: number, company: string) => { const r = setExerciseEvent(events, "iso", year, n, profile.equity.companies.length > 1 ? company : undefined); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
-  const [ledgerOpen, setLedgerOpen] = usePersisted<boolean>("ledgerOpen", true, (v): v is boolean => typeof v === "boolean");
-  const [planView, setPlanView] = usePersisted<"combined" | "tax" | "cash">("planView", "combined", (v): v is "combined" | "tax" | "cash" => v === "combined" || v === "tax" || v === "cash");
-  const timeline = profile.timeline ?? [];
-  const addFact = (path: string, year: number) => {
-    const f = timelineFields().find((x) => x.path === path);
-    const current = getPath(profile, path);
-    const value = current !== undefined ? current : f?.type === "bool" ? true : f?.type === "enum" ? f.enum?.[0] : 0;
-    edit([{ path: ["timeline"], value: [...timeline, { year, path, value }] }]);
-    setSelectedEvent(`t${timeline.length}`);
-    setFocusYear(year);
-  };
-  const changeFact = (i: number, entry: TimelineEntry) => { edit([{ path: ["timeline"], value: timeline.map((t, j) => (j === i ? entry : t)) }]); setFocusYear(entry.year); };
-  const removeFact = (i: number) => { edit([{ path: ["timeline"], value: timeline.filter((_, j) => j !== i) }]); setSelectedEvent(null); };
+  // A remembered selection focuses its year once on load, as a click would.
+  const reconciled = useRef(false);
+  useEffect(() => {
+    if (reconciled.current) return;
+    reconciled.current = true;
+    const year = events.find((x) => x.id === selectedEvent)?.year ?? facts.find((f) => f.id === selectedEvent)?.year;
+    if (year !== undefined && years.includes(year)) setFocusYear(year);
+  }, []);
+
+  const strip = planView === "combined"
+    ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+    : planView === "tax"
+      ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+      : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />;
+  const stripCopy = planView === "combined"
+    ? "Each bar is the year's cash in: tax at the bottom, then exercise cost, then what you keep. The number is the net."
+    : planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net.";
 
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
@@ -213,17 +179,15 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <div className="card-head">
             <div>
               <h2>Your plan, year by year</h2>
-              <div className="sub">{planView === "combined" ? "Each bar is the year's cash in: tax at the bottom, then exercise cost, then what you keep. The number is the net." : planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net."} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView !== "cash" ? "Gray columns are the pinned scenario." : ""}</div>
+              <div className="sub">{stripCopy} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView !== "cash" ? "Gray columns are the pinned scenario." : ""}</div>
             </div>
             <div className="plan-years"><Segmented options={[{ value: "combined", label: "Combined" }, { value: "tax", label: "Tax" }, { value: "cash", label: "Cash" }]} value={planView} onChange={setPlanView} /></div>
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
-          {planView === "combined"
-            ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-            : planView === "tax"
-              ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-              : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />}
-          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
+          {strip}
+          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent}
+            onSelect={actions.select} onAdd={actions.add} onChange={actions.change} onRemove={actions.remove} onSellToCover={actions.sellToCover}
+            onAddFact={actions.addFact} onChangeFact={actions.changeFact} onRemoveFact={actions.removeFact} />
         </section>
         {hasIso && (
           <div className="two-up">
@@ -231,33 +195,33 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
               <h2>AMT credit bank</h2>
               <div className="sub">Credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}.</div>
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-              {recoveries.map((x) => <CreditRecoveryView key={x.company} r={x.r!} companyName={isoCompanies.length > 1 ? x.name : undefined} />)}
-              {recoveries.length === 0 && hasIso && <p className="muted small" style={{ margin: "8px 0 0" }}>Select or add an ISO exercise in {sweepYear} to see how its credit comes back.</p>}
+              {byCompany.filter((c) => c.recovery).map((c) => <CreditRecoveryView key={c.company} r={c.recovery!} companyName={isoCompanies.length > 1 ? c.name : undefined} />)}
+              {byCompany.every((c) => !c.recovery) && <p className="muted small" style={{ margin: "8px 0 0" }}>Select or add an ISO exercise in {sweepYear} to see how its credit comes back.</p>}
             </section>
-            {sweeps.map((s) => (
-              <section className="card" key={s.company}>
-                <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${s.name} ` : ""}ISO shares exercised</h2>
+            {byCompany.map((c) => (
+              <section className="card" key={c.company}>
+                <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${c.name} ` : ""}ISO shares exercised</h2>
                 <div className="sub">Other years{isoCompanies.length > 1 ? " and other companies" : ""} held as they are. Click the curve to set the exercise.</div>
-                <SweepChart sweep={s.sweep} crossover={s.crossover} current={exercisedIn(profile, levers, "iso", sweepYear, s.company)} onChange={(n) => setIsoShares(sweepYear, n, s.company)} />
+                <SweepChart sweep={c.sweep} crossover={c.crossover} current={exercisedIn(profile, levers, "iso", sweepYear, c.company)} onChange={(n) => actions.setIsoShares(sweepYear, n, c.company)} />
               </section>
             ))}
           </div>
         )}
-        {holds.map((x) => <HoldOrSellCard key={x.company} h={x.h!} companyName={isoCompanies.length > 1 ? x.name : undefined} />)}
+        {byCompany.filter((c) => c.hold).map((c) => <HoldOrSellCard key={c.company} h={c.hold!} companyName={isoCompanies.length > 1 ? c.name : undefined} />)}
         <section className={"card" + (ledgerOpen ? "" : " folded")}>
           <button type="button" className="card-fold" onClick={() => setLedgerOpen((o) => !o)} aria-expanded={ledgerOpen}>
             <h2>Ledger</h2>
             <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <div className="sub">{ledgerOpen ? "Click any number for the reason behind it." : "Every line of every year, with its reason."}</div>
-          {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={select} />}
+          {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} />}
         </section>
         <CalibrationCard profile={profile} />
       </main>
 
       {selected && (
         <aside className="explain">
-          <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={select} onClose={() => setSelected(null)} />
+          <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={setSelected} onClose={() => setSelected(null)} />
         </aside>
       )}
       {factsTab && <FactsModal profile={profile} years={years} tab={factsTab} onTab={openFacts} edit={edit} onClose={closeFacts} onOpenIntake={() => setIntakeOpen(true)} />}

@@ -5,8 +5,6 @@ import type { FactTab } from "./FactsModal.tsx";
 import { FILING_OPTIONS, Field, MoneyInput, PercentInput, Select, STATE_OPTIONS } from "./fields.tsx";
 import { Section } from "./Section.tsx";
 
-export { sourceOf } from "../sources.ts";
-
 interface Props {
   profile: Profile;
   levers: Levers;

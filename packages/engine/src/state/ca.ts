@@ -50,14 +50,15 @@ export const california: StateModule = {
     ledger.put("stateTaxableIncome", "California taxable income", taxable, `Federal AGI (${usd(agi)}) less the larger of California's standard deduction (${usd(standard)}) and itemized deductions without state tax (${usd(itemized)}). Capital gains are ordinary income in California.`, ["agi"]);
     ledger.put("stateRegularTax", "California income tax", regular + mental, `California brackets from 1% to 12.3% on ${usd(taxable)}` + (mental > 0 ? `, plus the 1% mental health surtax on the ${usd(taxable - MENTAL_HEALTH_THRESHOLD)} over $1,000,000` : "") + ".", ["stateTaxableIncome"]);
 
-    // California AMT: 7% on AMTI above an exemption; the ISO spread counts.
-    const amti = taxable + inputs.isoBargainElement + (itemized > standard ? 0 : standard);
+    // California AMT: 7% on AMTI above an exemption; the ISO spread counts, and the higher AMT basis on ISO shares sold comes back off.
+    // California's minimum-tax credit for later years is not modeled, so AMT paid here never returns; that overstates a multi-year exercise-and-sell plan.
+    const amti = Math.max(0, taxable + inputs.isoBargainElement + inputs.amtCapitalAdjustment + (itemized > standard ? 0 : standard));
     const exemption = Math.max(0, AMT_EXEMPTION_2025[fs] * f - 0.25 * Math.max(0, amti - AMT_PHASEOUT_2025[fs] * f));
     const tmt = Math.max(0, amti - exemption) * 0.07;
     const amt = Math.max(0, tmt - regular);
     ledger.put("stateAmt", "California AMT", amt, amt > 0 ? `7% of AMTI (${usd(amti)}, including the ISO spread) above the ${usd(exemption)} exemption exceeds regular California tax by ${usd(amt)}.` : `California's 7% AMT (${usd(tmt)} tentative) is below regular tax; nothing extra.`, ["stateRegularTax", "isoBargainElement"]);
     const total = regular + mental + amt;
     ledger.put("stateIncomeTax", "California income tax paid", total, "Regular tax + surtax + AMT. This amount is used as your state income tax for the federal SALT deduction.", ["stateRegularTax", "stateAmt"]);
-    ledger.put("stateTax", "California tax", total, `Effective ${pct(agi > 0 ? total / agi : 0)} of AGI. Approximate model: no California credits, exemptions indexed by your inflation assumption.`, ["stateIncomeTax"]);
+    ledger.put("stateTax", "California tax", total, `Effective ${pct(agi > 0 ? total / agi : 0)} of AGI. Approximate model: no California credits (including the minimum-tax credit), exemptions indexed by your inflation assumption.`, ["stateIncomeTax"]);
   },
 };

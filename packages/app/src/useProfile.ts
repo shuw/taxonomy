@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editProfileText, parseProfile, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { api, type ProfileSummary } from "./api.ts";
+import { api, ConflictError, type ProfileSummary } from "./api.ts";
 
 export interface ProfileFile {
   id: string;
@@ -18,6 +18,7 @@ export interface ProfileStore {
 }
 
 const WRITE_DELAY_MS = 500;
+const RETRY_DELAY_MS = 3000;
 
 /** One profile file: loads it, polls for outside edits, and writes edits back with a short debounce. */
 export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
@@ -58,10 +59,24 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
     if (!id) return;
     setSaving(true);
     try {
-      const body = await api.put(id, text);
+      const body = await api.put(id, text, lastMtime.current >= 0 ? lastMtime.current : undefined);
       lastMtime.current = body.mtime;
     } catch (e) {
-      setFile((prev) => (prev ? { ...prev, error: `could not save: ${String((e as Error).message ?? e)}` } : prev));
+      if (e instanceof ConflictError) {
+        // Someone else changed the file since we read it: keep theirs, drop our unsaved edit, and say so.
+        lastMtime.current = e.file.mtime;
+        pendingText.current = null;
+        let profile: Profile | null = null;
+        let error = "The file changed on disk, so your last edit was dropped and the file reloaded.";
+        try { profile = parseProfile(e.file.text); } catch (pe) { error = String((pe as Error).message ?? pe); }
+        setFile((prev) => ({ id, path: e.file.path, text: e.file.text, profile: profile ?? prev?.profile ?? null, error }));
+      } else {
+        // Keep the edit pending and try again shortly; polling stays paused meanwhile.
+        pendingText.current = text;
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => { const t = pendingText.current; pendingText.current = null; if (t !== null) void write(t); }, RETRY_DELAY_MS);
+        setFile((prev) => (prev ? { ...prev, error: `could not save, retrying: ${String((e as Error).message ?? e)}` } : prev));
+      }
     } finally {
       setSaving(false);
     }

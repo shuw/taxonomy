@@ -1,6 +1,6 @@
 import { exerciseDraws, exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
 import { resolveLevers, runPlan, stateBefore, yearFrom, runPlanFrom } from "./plan.ts";
-import type { Levers, Profile } from "./types.ts";
+import type { Levers, PlanResult, Profile } from "./types.ts";
 
 export interface AmtCrossover {
   year: number;
@@ -14,6 +14,9 @@ export interface AmtCrossover {
   overCrossover: boolean;
 }
 
+/** The company an analysis is about: the one named, else the first. */
+const companyKey = (profile: Profile, company?: string) => company ?? profile.equity.companies[0]?.id ?? "*";
+
 const withIso = (levers: Levers, year: number, company: string, shares: number): Partial<Levers> => ({
   ...levers,
   exercises: { iso: { ...levers.exercises.iso, [year]: { ...(levers.exercises.iso[year] ?? {}), [company]: shares } }, nso: levers.exercises.nso },
@@ -22,7 +25,7 @@ const withIso = (levers: Levers, year: number, company: string, shares: number):
 /** Binary-search the ISO exercise count in `year` for one company at which AMT first appears. Only that year is recomputed per probe. */
 export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): AmtCrossover {
   const levers = resolveLevers(profile, leverOverrides);
-  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const c = companyKey(profile, company);
   const available = sharesExercisable(profile, levers, "iso", year, c);
   const before = stateBefore(profile, levers, year);
   const amtAt = (shares: number): number => yearFrom(profile, resolveLevers(profile, withIso(levers, year, c, shares)), year, before).lines.amt?.value ?? 0;
@@ -55,7 +58,7 @@ export interface SweepPoint {
  */
 export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, steps = 40, company?: string): SweepPoint[] {
   const levers = resolveLevers(profile, leverOverrides);
-  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const c = companyKey(profile, company);
   const available = sharesExercisable(profile, levers, "iso", year, c);
   if (!profile.plan || year < profile.plan.startYear || year >= profile.plan.startYear + profile.plan.years) return [];
   const before = stateBefore(profile, levers, year);
@@ -112,12 +115,12 @@ export interface CreditRecovery {
 }
 
 /** How the AMT credit from one year's ISO exercise comes back: the plan with the exercise against the plan without it. */
-export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): CreditRecovery | null {
+export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string, base?: PlanResult): CreditRecovery | null {
   const levers = resolveLevers(profile, leverOverrides);
-  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const c = companyKey(profile, company);
   const shares = exercisedIn(profile, levers, "iso", year, resolveCompany(profile, c));
   if (shares <= 0) return null;
-  const withIt = runPlan(profile, levers).years;
+  const withIt = (base ?? runPlan(profile, levers)).years;
   const without = runPlan(profile, withIso(levers, year, c, 0)).years;
   const at = (ys: typeof withIt, y: number, id: string) => ys.find((r) => r.year === y)?.lines[id]?.value ?? 0;
   const generated = at(withIt, year, "amtCreditGenerated") - at(without, year, "amtCreditGenerated");
@@ -156,7 +159,7 @@ export interface HoldOrSell {
  */
 export function holdOrSell(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): HoldOrSell | null {
   const levers = resolveLevers(profile, leverOverrides);
-  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const c = companyKey(profile, company);
   const draws = exerciseDraws(profile, levers, "iso", year).filter((d) => d.company === resolveCompany(profile, c));
   const shares = draws.reduce((s, d) => s + d.shares, 0);
   if (shares <= 0) return null;
@@ -166,20 +169,18 @@ export function holdOrSell(profile: Profile, leverOverrides: Partial<Levers> | u
   const withSale = (saleYearFor: number, date: string) => runPlan(profile, { ...levers, sales: { ...(levers.sales ?? {}), [saleYearFor]: [...(levers.sales?.[saleYearFor] ?? []), { id: "__compare", shares, date, lots }] } });
   const holdPlan = withSale(saleYear, `${saleYear}-12-30`);
   const sellPlan = withSale(year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`);
-  const base = runPlan(profile, levers);
-  const yr = (p: typeof base, y: number) => p.years.find((r) => r.year === y)!;
-  const summarize = (p: typeof base, saleY: number) => {
+  // Both paths are measured against the same baseline: the plan with neither the exercise nor the sale.
+  const none = runPlan(profile, withIso(levers, year, c, 0));
+  const yr = (p: typeof none, y: number) => p.years.find((r) => r.year === y)!;
+  const summarize = (p: typeof none, saleY: number) => {
     const y = yr(p, year);
     const sale = yr(p, saleY).sales?.find((s) => s.lots.some((l) => l.lotId in lots));
     const proceeds = sale?.lots.filter((l) => l.lotId in lots).reduce((s, l) => s + l.proceeds, 0) ?? 0;
-    const taxOverPlan = p.totals.totalTax - base.totals.totalTax + baseTaxOfExercise;
+    const taxOverPlan = p.totals.totalTax - none.totals.totalTax;
     return { taxInYear: y.lines.totalTax!.value, taxOverPlan, cashNeeded: y.inputs.exerciseCost + y.lines.totalTax!.value - (saleY === year ? proceeds : 0), proceeds, netOverPlan: proceeds - taxOverPlan - y.inputs.exerciseCost };
   };
-  // Tax the exercise itself costs across the plan, relative to not exercising: so both paths are measured against the same "no exercise" baseline.
-  const none = runPlan(profile, withIso(levers, year, c, 0));
-  const baseTaxOfExercise = base.totals.totalTax - none.totals.totalTax;
   const hold = summarize(holdPlan, saleYear);
   const sell = summarize(sellPlan, year);
-  const price = (p: typeof base, y: number) => { const s = yr(p, y).sales?.find((s) => s.lots.some((l) => l.lotId in lots)); const l = s?.lots.find((l) => l.lotId in lots); return l?.price ?? 0; };
+  const price = (p: typeof none, y: number) => { const s = yr(p, y).sales?.find((s) => s.lots.some((l) => l.lotId in lots)); const l = s?.lots.find((l) => l.lotId in lots); return l?.price ?? 0; };
   return { year, company: c, shares, holdPrice: price(holdPlan, saleYear), sellPrice: price(sellPlan, year), hold: { ...hold, saleYear }, sell };
 }

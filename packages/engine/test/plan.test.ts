@@ -120,6 +120,15 @@ describe("Washington switches", () => {
     expect(off.lines.stateTax!.value).toBe(0);
   });
 
+  test("Washington taxes the net long-term gain after losses, not the gross figure", () => {
+    const p = { ...profile, income: { ...profile.income, longTermGains: 500_000 }, carryforwards: { ...profile.carryforwards, capitalLoss: { shortTerm: 0, longTerm: 500_000 } } };
+    const y = runPlan(p).years[0]!;
+    expect(y.lines.netLongTermGain!.value).toBe(0);
+    expect(y.lines.stateCapitalGainsTax!.value).toBe(0);
+    const rich = { ...p, plan: { startYear: 2028, years: 1 }, people: { self: { salary: 1_500_000 } } };
+    const m = runPlan(rich).years[0]!;
+    expect(m.lines.stateMillionairesTax!.value).toBeCloseTo(0.099 * (m.lines.agi!.value - 1_000_000), 0);
+  });
   test("the millionaires' tax starts in 2028 on income over $1M, leaves long-term gains to the excise tax, and can be switched off", () => {
     const rich = { ...profile, plan: { startYear: 2027, years: 2 }, people: { self: { salary: 2_500_000 } }, income: { ...profile.income, longTermGains: 400_000 } };
     const [y2027, y2028] = runPlan(rich).years;

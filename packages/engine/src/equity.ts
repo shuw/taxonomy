@@ -184,6 +184,11 @@ export function nextShareSpread(profile: Profile, type: "iso" | "nso", year: num
   return g ? Math.max(0, grantFmv(profile, g, year) - (g.strike ?? 0)) : 0;
 }
 
+/** A company's display name by id; the first company when the id is missing. */
+export function companyName(profile: Profile, id: string | undefined): string {
+  return (profile.equity.companies.find((c) => c.id === id) ?? profile.equity.companies[0])?.name ?? "";
+}
+
 /** Ids of companies that have grants of a type, in profile order. */
 export function companiesWithGrants(profile: Profile, type: GrantType): string[] {
   return companiesWith(profile, type).filter((c): c is string => c !== undefined);

@@ -11,6 +11,17 @@ const CADENCE_OPTIONS = [{ value: "monthly", label: "monthly" }, { value: "quart
 
 const hasType = (profile: Profile, t: GrantType) => profile.equity.grants.some((g) => g.type === t);
 
+/** Edits that drop provenance and follow-ups about items being removed, so a reused id cannot inherit them. */
+function purgeRefs(profile: Profile, keys: string[]): ProfileEdit[] {
+  const refers = (k: string | undefined) => !!k && keys.some((p) => k === p || k.startsWith(p + "."));
+  const edits: ProfileEdit[] = [];
+  const sources = profile.sources ?? {};
+  if (Object.keys(sources).some(refers)) edits.push({ path: ["sources"], value: Object.fromEntries(Object.entries(sources).filter(([k]) => !refers(k))) });
+  const followUps = profile.followUps ?? [];
+  if (followUps.some((f) => refers(f.about))) edits.push({ path: ["followUps"], value: followUps.filter((f) => !refers(f.about)) });
+  return edits;
+}
+
 export function equitySummary(profile: Profile, levers: Levers): string {
   const { companies, grants } = profile.equity;
   if (grants.length === 0) return "no grants yet";
@@ -88,6 +99,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
             { path: ["equity", "grants"], value: grants.filter((g) => !owns(g)) },
             { path: ["equity", "holdings"], value: (profile.equity.holdings ?? []).filter((h) => !owns(h)) },
             { path: ["scenarios"], value: scenarios },
+            ...purgeRefs(profile, [`companies.${c.id}`, ...grants.filter(owns).map((g) => `grants.${g.id}`), ...(profile.equity.holdings ?? []).filter(owns).map((h) => `holdings.${h.id}`)]),
           ]);
         };
         return (
@@ -105,7 +117,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
       )}
 
       <div className="subhead">Grants</div>
-      {grants.map((g, i) => <GrantRow key={g.id} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => set(["equity", "grants"], grants.filter((_, j) => j !== i))} />)}
+      {grants.map((g, i) => <GrantRow key={g.id} grant={g} profile={profile} onChange={(patch) => setGrant(i, patch)} onRemove={() => edit([{ path: ["equity", "grants"], value: grants.filter((_, j) => j !== i) }, ...purgeRefs(profile, [`grants.${g.id}`])])} />)}
       <div className="add-grant">
         {TYPE_OPTIONS.map((t) => <button type="button" key={t.value} className="link" onClick={() => addGrant(t.value)}>+ {t.label}</button>)}
       </div>

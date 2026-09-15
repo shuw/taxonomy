@@ -69,7 +69,7 @@ export function parseProfile(text: string): Profile {
   const carryforwards: Profile["carryforwards"] = { ...(raw.carryforwards ?? {}) };
   if (carryforwards.amtCredit === undefined && typeof raw.equity?.amtCreditCarryforward === "number") carryforwards.amtCredit = raw.equity.amtCreditCarryforward;
   const dependentsRaw = raw.filer!.dependents;
-  const dependents: Dependent[] | undefined = Array.isArray(dependentsRaw) ? dependentsRaw : typeof dependentsRaw === "number" ? Array.from({ length: dependentsRaw }, () => ({})) : undefined;
+  const dependents = normalizeDependents(dependentsRaw);
   const returns = raw.returns ?? (raw.priorReturn ? [raw.priorReturn] : undefined);
 
   let scenarios: Record<string, Scenario> | undefined;
@@ -92,7 +92,7 @@ export function parseProfile(text: string): Profile {
     timeline: raw.timeline,
     scenarios,
     activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
-    sources: rekeySources(raw.sources, equity),
+    sources: rekeySources(raw.sources, equity, raw.equity?.isoGrants?.length ?? 0),
     followUps: raw.followUps,
   };
 }
@@ -148,14 +148,24 @@ function normalizeEquity(raw: RawProfile, problems: string[]): Profile["equity"]
   return { companies, grants, holdings };
 }
 
-/** Sources keyed by grant or holding index move to ids, so reordering never orphans them. */
-function rekeySources(sources: Record<string, Source> | undefined, equity: Profile["equity"]): Record<string, Source> | undefined {
+/** Dependents as a list of entries, from a list, a count, or a typed "2019, 2022". */
+function normalizeDependents(raw: unknown): Dependent[] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (Array.isArray(raw)) return raw.map((d) => (typeof d === "number" ? { birthYear: d } : d && typeof d === "object" ? (d as Dependent) : {}));
+  if (typeof raw === "number") return Array.from({ length: Math.max(0, Math.round(raw)) }, () => ({}));
+  if (typeof raw === "string") return raw.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}));
+  return undefined;
+}
+
+/** Sources keyed by grant or holding index move to ids, so reordering never orphans them. Legacy `isoGrants` came first in the merged list, so `grants.N` sits after them. */
+function rekeySources(sources: Record<string, Source> | undefined, equity: Profile["equity"], legacyIsoCount = 0): Record<string, Source> | undefined {
   if (!sources) return undefined;
   const out: Record<string, Source> = {};
   for (const [k, v] of Object.entries(sources)) {
     const m = k.match(/^equity\.grants\.(\d+)$/);
     const h = k.match(/^equity\.holdings$/);
-    if (m && equity.grants[Number(m[1])]) out[`grants.${equity.grants[Number(m[1])]!.id}`] = v;
+    const idx = m ? Number(m[1]) + legacyIsoCount : -1;
+    if (m && equity.grants[idx]) out[`grants.${equity.grants[idx]!.id}`] = v;
     else if (h) out["holdings"] = v;
     else if (k === "equity.sharePrice" && equity.companies[0]) out[`companies.${equity.companies[0].id}.sharePrice`] = v;
     else out[k] = v;

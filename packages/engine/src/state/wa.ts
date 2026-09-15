@@ -28,7 +28,8 @@ export const washington: StateModule = {
     const policy = ctx.policy;
     const years = Math.max(0, inputs.year - 2025);
     const deduction = Math.round((DEDUCTION_2025 * (1 + ctx.inflation) ** years) / 1000) * 1000;
-    const gains = Math.max(0, inputs.longTermGains);
+    // Washington's base is net long-term gain after capital-loss netting and carryforwards, which federal already computed.
+    const gains = Math.max(0, ledger.lines.netLongTermGain?.value ?? inputs.longTermGains);
     const taxable = Math.max(0, gains - deduction);
     const capGainsOn = policy.waCapitalGainsTax !== false;
     const surtaxOn = policy.waCapitalGainsSurtax !== false;
@@ -43,7 +44,7 @@ export const washington: StateModule = {
           : `7% of long-term gains above the ${usd(deduction)} deduction (${usd(taxable)} taxable)` +
             (surtax > 0 ? `, plus 2.9% on the ${usd(taxable - SURTAX_THRESHOLD)} over $1,000,000 (2025 surtax)` : surtaxOn ? "" : "; the 2.9% surtax is switched off") +
             `. Wages and ISO exercises are not Washington gains.`,
-      ["longTermGains"],
+      ["netLongTermGain"],
     );
     const mOn = policy.waMillionairesTax !== false;
     const mLive = mOn && inputs.year >= MILLIONAIRES_FROM;
@@ -63,6 +64,7 @@ export const washington: StateModule = {
             : `${pct(MILLIONAIRES_RATE)} of the ${usd(mBase)} of income over the ${usd(mDeduction)} household deduction. Income is AGI (${usd(ctx.agi)}) less long-term gains (${usd(gains)}), which the excise tax covers. Wages, RSU vests and NSO spread count; ISO spread does not.`,
       ["agi", "longTermGains"],
     );
-    ledger.put("stateTax", "Washington tax", base + surtax + mTax, "Capital gains excise tax" + (mLive ? " + the millionaires' tax" : "") + ".", ["stateCapitalGainsTax", "stateMillionairesTax"]);
+    // Neither tax is written as stateIncomeTax: the excise tax's federal deductibility is contested and the millionaires' tax starts in 2028, so neither feeds the SALT deduction here.
+    ledger.put("stateTax", "Washington tax", base + surtax + mTax, "Capital gains excise tax" + (mLive ? " + the millionaires' tax" : "") + ". Not counted toward the federal SALT deduction.", ["stateCapitalGainsTax", "stateMillionairesTax"]);
   },
 };
