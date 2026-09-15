@@ -108,9 +108,7 @@ export const FIELDS: FieldDef[] = [
   { path: "assumptions.bracketRateDelta", label: "Bracket rate shift", section: "assumptions", type: "pct", hint: "added to every ordinary bracket rate", timeline: true },
   { path: "assumptions.state.waCapitalGainsTax", label: "WA capital gains tax (on/off)", section: "assumptions", type: "bool", timeline: true },
   { path: "assumptions.state.waCapitalGainsSurtax", label: "WA 2.9% surtax over $1M (on/off)", section: "assumptions", type: "bool", timeline: true },
-  { path: "assumptions.state.waHighEarnerTax.enabled", label: "WA proposed high-earner tax (on/off)", section: "assumptions", type: "bool", timeline: true },
-  { path: "assumptions.state.waHighEarnerTax.rate", label: "WA proposed high-earner tax rate", section: "assumptions", type: "pct", timeline: true },
-  { path: "assumptions.state.waHighEarnerTax.threshold", label: "WA proposed high-earner tax threshold", section: "assumptions", type: "usd", timeline: true },
+  { path: "assumptions.state.waMillionairesTax", label: "WA millionaires' tax (on/off)", section: "assumptions", type: "bool", timeline: true },
 ];
 
 export const fieldByPath = (path: string): FieldDef | undefined => FIELDS.find((f) => f.path === path);

@@ -219,8 +219,8 @@ export interface StatePolicy {
   waCapitalGainsTax?: boolean;
   /** Washington's additional 2.9% on gains over $1M (SB 5813, 2025). Default on. */
   waCapitalGainsSurtax?: boolean;
-  /** A proposed Washington income tax on high earners. Not law; off by default. Set the rate and threshold to the proposal you are tracking. */
-  waHighEarnerTax?: { enabled: boolean; rate: number; threshold: number };
+  /** Washington's millionaires' tax (SB 6346, signed March 2026): 9.9% on income over a $1M household deduction, from tax year 2028. Default on; switch off to model repeal or a court loss. */
+  waMillionairesTax?: boolean;
 }
 
 export type Source = string | { doc: string; asOf?: string; note?: string };

@@ -8,7 +8,7 @@ const GROUPS: { title: string; ids: string[] }[] = [
   { title: "Regular tax", ids: ["ordinaryTax", "capGainsTax", "regularTax", "marginalBracket"] },
   { title: "AMT", ids: ["isoSharesExercised", "isoBargainElement", "amti", "amtExemption", "tentativeMinimumTax", "amt"] },
   { title: "AMT credit", ids: ["amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut"] },
-  { title: "Other", ids: ["niit", "additionalMedicare", "stateCapitalGainsTax", "stateHighEarnerTax", "stateRegularTax", "stateAmt", "stateTax"] },
+  { title: "Other", ids: ["niit", "additionalMedicare", "stateCapitalGainsTax", "stateMillionairesTax", "stateRegularTax", "stateAmt", "stateTax"] },
 ];
 const TOTALS = ["federalTotal", "totalTax", "effectiveRate"];
 

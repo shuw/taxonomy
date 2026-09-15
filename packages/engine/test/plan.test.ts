@@ -109,7 +109,7 @@ describe("other states", () => {
 });
 
 describe("Washington switches", () => {
-  test("capital gains tax and surtax can be turned off; the proposed high-earner tax can be turned on", () => {
+  test("capital gains tax and surtax can be turned off", () => {
     const gains = { ...profile, income: { ...profile.income, longTermGains: 2_000_000 } };
     const on = runPlan(gains).years[0]!;
     expect(on.lines.stateCapitalGainsTax!.value).toBeGreaterThan(0.07 * 1_700_000);
@@ -117,9 +117,17 @@ describe("Washington switches", () => {
     expect(noSurtax.lines.stateCapitalGainsTax!.value).toBeCloseTo(on.lines.stateCapitalGainsTax!.value - 0.029 * (2_000_000 - 285_000 - 1_000_000), 0);
     const off = runPlan({ ...gains, assumptions: { ...gains.assumptions, state: { waCapitalGainsTax: false } } }).years[0]!;
     expect(off.lines.stateTax!.value).toBe(0);
-    const he = runPlan({ ...profile, assumptions: { ...profile.assumptions, state: { waHighEarnerTax: { enabled: true, rate: 0.099, threshold: 250_000 } } } }).years[0]!;
-    expect(he.lines.stateHighEarnerTax!.value).toBeCloseTo(0.099 * (he.lines.agi!.value - 250_000));
-    expect(he.lines.stateTax!.value).toBeCloseTo(he.lines.stateHighEarnerTax!.value);
+  });
+
+  test("the millionaires' tax starts in 2028 on income over $1M, leaves long-term gains to the excise tax, and can be switched off", () => {
+    const rich = { ...profile, plan: { startYear: 2027, years: 2 }, people: { self: { salary: 2_500_000 } }, income: { ...profile.income, longTermGains: 400_000 } };
+    const [y2027, y2028] = runPlan(rich).years;
+    expect(y2027!.lines.stateMillionairesTax!.value).toBe(0);
+    const income = y2028!.lines.agi!.value - 400_000;
+    expect(y2028!.lines.stateMillionairesTax!.value).toBeCloseTo(0.099 * (income - 1_000_000), 0);
+    expect(y2028!.lines.stateTax!.value).toBeCloseTo(y2028!.lines.stateMillionairesTax!.value + y2028!.lines.stateCapitalGainsTax!.value, 0);
+    const off = runPlan({ ...rich, assumptions: { ...rich.assumptions, state: { waMillionairesTax: false } } }).years[1]!;
+    expect(off.lines.stateMillionairesTax!.value).toBe(0);
   });
 });
 

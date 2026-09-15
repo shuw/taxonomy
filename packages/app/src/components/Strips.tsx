@@ -12,14 +12,14 @@ const TAX_SERIES: Series[] = [
 ];
 const STATE_SERIES: Series = { id: "state", label: "State", color: "var(--series-state)", value: (y) => y.lines.stateTax!.value };
 
-/** State tax as the lines the state module wrote, so Washington's two taxes show apart (and the proposed one shows even at zero). */
+/** State tax as the lines the state module wrote, so Washington's two taxes show apart. */
 function taxSeries(plan: PlanResult): Series[] {
   const lines = plan.years[0]?.lines ?? {};
-  if (lines.stateCapitalGainsTax && lines.stateHighEarnerTax) {
+  if (lines.stateCapitalGainsTax && lines.stateMillionairesTax) {
     return [
       ...TAX_SERIES,
       { id: "stateCg", label: lines.stateCapitalGainsTax.label, color: "var(--series-state)", value: (y) => y.lines.stateCapitalGainsTax?.value ?? 0 },
-      { id: "stateHe", label: lines.stateHighEarnerTax.label, color: "var(--series-state-2)", value: (y) => y.lines.stateHighEarnerTax?.value ?? 0 },
+      { id: "stateM", label: lines.stateMillionairesTax.label, color: "var(--series-state-2)", value: (y) => y.lines.stateMillionairesTax?.value ?? 0 },
     ];
   }
   return [...TAX_SERIES, { ...STATE_SERIES, label: lines.stateTax?.label ?? "State" }];

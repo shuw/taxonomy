@@ -76,7 +76,7 @@ export function parseProfile(text: string): Profile {
     name: typeof raw.name === "string" ? raw.name : undefined,
     filer: { filingStatus: raw.filer!.filingStatus, state: raw.filer!.state, dependents },
     plan: raw.plan!,
-    assumptions: { inflation: 0.025, wageGrowth: 0, fmvGrowth: 0, ...raw.assumptions },
+    assumptions: { inflation: 0.025, wageGrowth: 0, fmvGrowth: 0, ...raw.assumptions, state: stateSwitches(raw.assumptions?.state) },
     people: people!,
     income,
     carryforwards,
@@ -244,4 +244,13 @@ function resolvePath(doc: Document, path: ProfilePath): ProfilePath {
     out.push(key);
   }
   return out;
+}
+
+/** Older files carried the millionaires' tax as a proposal with its own rate and threshold; it is now a plain switch. */
+function stateSwitches(raw: unknown): Profile["assumptions"]["state"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const { waHighEarnerTax, ...rest } = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...rest };
+  if (waHighEarnerTax && typeof waHighEarnerTax === "object" && "enabled" in waHighEarnerTax && out.waMillionairesTax === undefined && (waHighEarnerTax as { enabled: unknown }).enabled === false) out.waMillionairesTax = false;
+  return Object.keys(out).length ? (out as Profile["assumptions"]["state"]) : undefined;
 }

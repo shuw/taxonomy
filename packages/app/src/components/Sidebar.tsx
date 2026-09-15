@@ -155,13 +155,7 @@ export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus
             <div className="subhead">Washington</div>
             <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains excise tax</strong> · 7% on long-term gains over about $285k. Law since 2022.</span></label>
             <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>2.9% surtax</strong> · on gains over $1M. Law since 2025.</span></label>
-            <label className="switch"><input type="checkbox" checked={a.state?.waHighEarnerTax?.enabled === true} onChange={(e) => set(["assumptions", "state", "waHighEarnerTax"], e.target.checked ? { enabled: true, rate: a.state?.waHighEarnerTax?.rate ?? 0.099, threshold: a.state?.waHighEarnerTax?.threshold ?? 1_000_000 } : { ...(a.state?.waHighEarnerTax ?? { rate: 0.099, threshold: 1_000_000 }), enabled: false })} /><span><strong>Proposed high-earner income tax</strong> · not law. Set it to the bill you are watching.</span></label>
-            {a.state?.waHighEarnerTax?.enabled && (
-              <div className="row2">
-                <Field label="Rate"><PercentInput value={a.state.waHighEarnerTax.rate} onChange={(n) => set(["assumptions", "state", "waHighEarnerTax", "rate"], n)} /></Field>
-                <Field label="On AGI over"><MoneyInput value={a.state.waHighEarnerTax.threshold} onChange={(n) => set(["assumptions", "state", "waHighEarnerTax", "threshold"], n)} /></Field>
-              </div>
-            )}
+            <label className="switch"><input type="checkbox" checked={a.state?.waMillionairesTax !== false} onChange={(e) => set(["assumptions", "state", "waMillionairesTax"], e.target.checked ? undefined : false)} /><span><strong>Millionaires' tax</strong> · 9.9% on income over $1M per household, from 2028. Signed March 2026; facing a court challenge and a repeal initiative, so switch it off to see that outcome.</span></label>
             <p className="muted small">Any of these can start in a later year from "Changes over time".</p>
           </>
         )}

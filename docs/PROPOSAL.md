@@ -41,7 +41,7 @@ readable TypeScript model (a few hundred lines) that computes exactly what the t
   gains preserved at preferential rates, ISO bargain element as a preference.
 - The minimum tax credit: generated from deferral items (ISO), carried forward and used
   against regular tax above tentative minimum tax.
-- NIIT, additional Medicare tax, Washington capital gains excise tax.
+- NIIT, additional Medicare tax, Washington capital gains excise tax (7% plus the 2.9% tier over $1M) and, from 2028, Washington's 9.9% millionaires' tax on income over $1M; each is a switch.
 - Parameters for years after 2026 are projected from the published 2026 values using the
   profile's inflation assumption (flagged as projected).
 
