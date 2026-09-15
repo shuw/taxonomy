@@ -323,7 +323,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 /* Source chips, intake CTA, prior return ------------------------------------------ */
 .src { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--focus); padding: 1px 6px; border-radius: 999px; vertical-align: 1px; cursor: help; }
 .intake-cta { display: flex; flex-direction: column; gap: 6px; padding: 14px 20px 12px; border-bottom: 1px solid var(--border); }
-.intake-cta .btn { align-self: flex-start; }
+.intake-cta .btn { align-self: stretch; }
 .prior-return dl { display: grid; grid-template-columns: auto auto; gap: 2px 14px; margin: 6px 0 8px; font-size: 14px; }
 .prior-return dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .vest-row.holding { grid-template-columns: 1fr auto auto; font-size: 13px; cursor: default; }

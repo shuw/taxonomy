@@ -55,11 +55,11 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal wide facts" role="dialog" aria-modal="true" aria-label="Facts">
+      <div className="modal wide facts" role="dialog" aria-modal="true" aria-label="Your information">
         <div className="modal-head">
           <div>
-            <h3>Facts</h3>
-            <div className="muted small" style={{ margin: 0 }}>What the plan is computed from. Everything here lives in your profile file; the sidebar keeps what you turn.</div>
+            <h3>Your information</h3>
+            <div className="muted small" style={{ margin: 0 }}>Everything the plan is computed from, saved to your profile file as you type. What-ifs stay in the sidebar.</div>
           </div>
           <button type="button" className="btn primary" onClick={onOpenIntake}>Fill from documents</button>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>

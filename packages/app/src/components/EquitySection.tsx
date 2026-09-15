@@ -51,10 +51,10 @@ export function EquityLevers({ profile, levers, crossovers, years, focusYear, on
           <div className="company-sub muted">grows {pct(c.growth ?? profile.assumptions.fmvGrowth)}/yr{c.liquidityYear ? ` · liquidity ${c.liquidityYear}` : ""}</div>
         </div>
       ))}
-      {grants.length === 0 && <p className="muted small">No grants yet. Add them under Facts, or fill from documents.</p>}
+      {grants.length === 0 && <p className="muted small">No grants yet. Add them under "Edit my information", or fill from documents.</p>}
       {missing.length > 0 && (
         <div className="notice">
-          {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule, so nothing more of them vests here. <button type="button" className="link" onClick={onOpenFacts}>Fix in Facts</button>
+          {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule, so nothing more of them vests here. <button type="button" className="link" onClick={onOpenFacts}>Set the schedule</button>
         </div>
       )}
 
