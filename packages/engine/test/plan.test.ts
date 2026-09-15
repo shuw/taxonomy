@@ -102,6 +102,12 @@ describe("timeline, scenarios and companies", () => {
     expect(plan.years[1]!.inputs.filingStatus).toBe("mfj");
     expect(plan.years[2]!.inputs.salarySelf).toBeCloseTo(500_000 * 1.03 ** 2);
   });
+  test("unsafe timeline paths are refused", () => {
+    const p = { ...profile, timeline: [{ year: 2026, path: "__proto__.polluted", value: 1 }, { year: 2026, path: "constructor.prototype.x", value: 1 }] };
+    expect(() => runPlan(p)).not.toThrow();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(profileInYear(p, 2026).people.self.salary).toBe(320_000);
+  });
   test("the active scenario supplies the levers", () => {
     const p = { ...profile, scenarios: { default: { exercises: { iso: { 2026: 4_000 }, nso: {} } }, big: { exercises: { iso: { 2026: 30_000 }, nso: {} } } }, activeScenario: "big" };
     expect(runPlan(p).years[0]!.inputs.isoSharesExercised).toBe(30_000);

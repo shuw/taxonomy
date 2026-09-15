@@ -1,8 +1,11 @@
 import type { Levers, Profile, TimelineEntry } from "./types.ts";
 
 /** Set a dot-path value on a plain object, creating intermediate objects. */
+const UNSAFE = new Set(["__proto__", "constructor", "prototype"]);
+
 export function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
   const segs = path.split(".");
+  if (segs.some((s) => UNSAFE.has(s) || s === "")) throw new Error(`unsafe path "${path}"`);
   let node: Record<string, unknown> = target;
   for (let i = 0; i < segs.length - 1; i++) {
     const seg = segs[i]!;
@@ -37,7 +40,9 @@ export function profileInYear(profile: Profile, year: number): Profile {
   const entries = (profile.timeline ?? []).filter((e) => e.year <= year).sort((a, b) => a.year - b.year);
   if (entries.length === 0) return profile;
   const out = clone(profile) as unknown as Record<string, unknown>;
-  for (const e of entries) setPath(out, e.path, e.value);
+  for (const e of entries) {
+    try { setPath(out, e.path, e.value); } catch { /* an unsafe or malformed path is ignored, not applied */ }
+  }
   return out as unknown as Profile;
 }
 
