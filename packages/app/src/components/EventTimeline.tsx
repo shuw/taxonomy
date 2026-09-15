@@ -76,7 +76,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   };
   const startDrag = (id: string) => (ev: React.PointerEvent) => {
     if (ev.button !== 0) return;
-    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    try { (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId); } catch {}
     setDrag({ id, x: ev.clientX, y: ev.clientY, target: null, moved: false });
   };
   const moveDrag = (ev: React.PointerEvent) => {
