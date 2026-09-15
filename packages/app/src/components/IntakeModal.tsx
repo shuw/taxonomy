@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { changesToEdits, editProfileText, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type FilingStatus, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { FILING_OPTIONS, Field, MoneyInput, Segmented, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
 interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
@@ -54,6 +55,7 @@ export function IntakeModal(props: Props) {
             <h3>{create ? "New profile" : "Fill from documents"}</h3>
             <div className="muted small" style={{ margin: 0 }}>{create ? "A profile is a person, a household, or a what-if. It lives in a file you can edit." : "Your agent reads the documents; you approve every number."}</div>
           </div>
+          {create && !onClose && <ThemeToggle />}
           {create && start && <button type="button" className="btn" onClick={() => setStart(null)}>Back</button>}
           {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
         </header>

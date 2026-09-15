@@ -5,6 +5,7 @@ import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { ScenarioBar } from "./components/ScenarioBar.tsx";
+import { ThemeToggle } from "./components/ThemeToggle.tsx";
 import { ProfileSwitcher } from "./components/ProfileSwitcher.tsx";
 import { TaxStrip, CreditStrip } from "./components/Strips.tsx";
 import { SweepChart } from "./components/SweepChart.tsx";
@@ -124,6 +125,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <ScenarioBar profile={profile} levers={levers} edit={edit} />
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
+        <ThemeToggle />
         <button type="button" className="btn" onClick={() => setIntakeOpen(true)}>Fill from documents</button>
         <button type="button" className={"btn" + (assistantOpen ? " on" : "")} onClick={() => (assistantOpen ? setAssistantOpen(false) : openAssistant())}>Assistant</button>
         {pinned

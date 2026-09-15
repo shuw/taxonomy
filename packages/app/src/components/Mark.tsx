@@ -12,5 +12,5 @@ export function Mark({ size = 22 }: { size?: number }) {
 }
 
 export function Wordmark() {
-  return <span className="word">Ta<span className="x">x</span>onomy</span>;
+  return <span className="word"><span className="tax">Tax</span><span className="rest">onomy</span></span>;
 }
