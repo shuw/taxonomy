@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { parseProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
 import { applySale, lotMilestones, lowestTaxOrder, longTermFrom, type Lot } from "../src/lots.ts";
-import { amtCrossover, creditRecovery, sharesToCover } from "../src/thresholds.ts";
+import { amtCrossover, creditRecovery, holdOrSell, sharesToCover } from "../src/thresholds.ts";
 import type { Profile, ScenarioEvent } from "../src/types.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
@@ -160,5 +160,20 @@ describe("credit recovery", () => {
     expect(back + r.leftover).toBeCloseTo(r.generated, 0);
     expect(r.path[0]!.recovered).toBeGreaterThan(0);
     expect(creditRecovery(withEvents([]), undefined, 2026)).toBeNull();
+  });
+});
+
+describe("hold or sell", () => {
+  test("holding defers to long-term gain; selling the same day is ordinary income with no AMT", () => {
+    const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 20_000 }]);
+    const h = holdOrSell(p, undefined, 2026)!;
+    expect(h.shares).toBe(20_000);
+    expect(h.hold.saleYear).toBe(2027);
+    expect(h.holdPrice).toBeGreaterThan(h.sellPrice);
+    expect(h.sell.taxInYear).toBeGreaterThan(0);
+    expect(h.hold.cashNeeded).toBeGreaterThan(h.sell.cashNeeded);
+    expect(h.hold.proceeds).toBeCloseTo(20_000 * h.holdPrice, 0);
+    expect(h.sell.proceeds).toBeCloseTo(20_000 * h.sellPrice, 0);
+    expect(holdOrSell(withEvents([]), undefined, 2026)).toBeNull();
   });
 });

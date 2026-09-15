@@ -126,7 +126,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height }: Strip
 }
 
 /** Cash by year: what arrives (wages, sale proceeds) against what leaves (exercise cost, tax), with the net on top. */
-export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focusYear: number; onFocus: (y: number) => void }) {
+export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
@@ -142,6 +142,7 @@ export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focu
     tax: v(y, "totalTax"),
     net: v(y, "netCash"),
     agi: v(y, "agi"),
+    pinnedNet: pinned ? (pinned.years.find((p) => p.year === y.year)?.lines.netCash?.value ?? null) : null,
   }));
   const max = Math.max(1, ...rows.map((r) => Math.max(r.wages + r.proceeds, r.exercise + r.tax)));
   const ticks = niceTicks(max);
@@ -151,7 +152,7 @@ export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focu
   const baseY = m.top + plotH;
   const IN = [{ key: "wages", label: "Salary and bonus", color: "var(--series-regular)" }, { key: "proceeds", label: "Shares sold", color: "var(--series-surtax)" }] as const;
   const OUT = [{ key: "exercise", label: "Exercise cost", color: "var(--series-violet)" }, { key: "tax", label: "Tax", color: "var(--series-amt)" }] as const;
-  const stack = (x: number, parts: readonly { key: keyof (typeof rows)[number]; color: string }[], r: (typeof rows)[number]) => {
+  const stack = (x: number, parts: readonly { key: "wages" | "proceeds" | "exercise" | "tax"; color: string }[], r: (typeof rows)[number]) => {
     let acc = 0;
     return parts.map((p, j) => {
       const val = r[p.key];
@@ -178,7 +179,8 @@ export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focu
             <g key={y.year}>
               {stack(inX, IN, r)}
               {stack(outX, OUT, r)}
-              <text className={"cap-label" + (r.net < 0 ? " neg" : "")} x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - 5} textAnchor="middle">{r.net >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.net))}</text>
+              <text className={"cap-label" + (r.net < 0 ? " neg" : "")} x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - (r.pinnedNet !== null ? 17 : 5)} textAnchor="middle">{r.net >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.net))}</text>
+              {r.pinnedNet !== null && <text className="cap-label pinned" x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - 5} textAnchor="middle">pinned {r.pinnedNet >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.pinnedNet))}</text>}
               <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
               <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => setHover(i)} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
             </g>
@@ -192,6 +194,7 @@ export function CashStrip({ plan, focusYear, onFocus }: { plan: PlanResult; focu
           {IN.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>{usd(r[p.key])}</span></div>)}
           {OUT.map((p) => <div className="row" key={p.key}><span><span className="sw" style={{ background: p.color, display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 6 }} />{p.label}</span><span>−{usd(r[p.key])}</span></div>)}
           <div className="row total"><span>Net cash</span><span>{fmtDelta(r.net) || "$0"}</span></div>
+          {r.pinnedNet !== null && <div className="row muted"><span>vs pinned</span><span>{fmtDelta(r.net - r.pinnedNet) || "same"}</span></div>}
           <div className="row muted"><span>Income for tax (AGI)</span><span>{usd(r.agi)}</span></div>
         </div>
       ); })()}

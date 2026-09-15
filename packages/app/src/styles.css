@@ -599,3 +599,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .rec-slice { display: flex; align-items: center; justify-content: center; background: var(--series-amt); color: #fff; font: 600 11px/1 var(--display); min-width: 0; overflow: hidden; border-right: 1px solid var(--surface); }
 .rec-slice > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
 .rec-slice.left { background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, var(--surface-2) 6px 12px); color: var(--ink-2); }
+.cap-label.pinned { fill: var(--muted); font-weight: 500; }
+.card-head .plan-years + .plan-years { margin-left: 4px; }
+.ledger.compare th:not(:first-child), .ledger.compare td:not(:first-child) { text-align: right; white-space: nowrap; }
+.ledger.compare td:first-child { max-width: 46ch; }

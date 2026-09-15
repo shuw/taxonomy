@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, companiesWithGrants, creditRecovery, exercisedIn, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
+import { activeScenario, amtCrossover, companiesWithGrants, creditRecovery, exercisedIn, holdOrSell, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
 import { Segmented } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
@@ -20,6 +20,7 @@ import { Mark, Wordmark } from "./components/Mark.tsx";
 import { IntakeModal } from "./components/IntakeModal.tsx";
 import { CalibrationCard } from "./components/CalibrationCard.tsx";
 import { CreditRecoveryView } from "./components/CreditRecovery.tsx";
+import { HoldOrSellCard } from "./components/HoldOrSell.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
@@ -131,6 +132,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   // The AMT chart follows the focused year; selecting anything on the timeline focuses its year.
   const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
   const recoveries = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name, r: creditRecovery(profile, levers, sweepYear, c) })).filter((x) => x.r), [profile, levers, sweepYear, isoCompanies]);
+  const holds = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name, h: holdOrSell(profile, levers, sweepYear, c) })).filter((x) => x.h), [profile, levers, sweepYear, isoCompanies]);
   const sweeps = useMemo(() => isoCompanies.map((c) => ({ company: c, name: profile.equity.companies.find((x) => x.id === c)?.name ?? c, sweep: sweepIsoExercise(profile, levers, sweepYear, 40, c), crossover: crossovers.find((x) => x.year === sweepYear && x.company === c)! })), [profile, levers, sweepYear, isoCompanies, crossovers]);
 
   const writeEvents = (next: ScenarioEvent[]) => {
@@ -169,6 +171,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   /** The sweep chart sets the ISO count for its year directly. */
   const setIsoShares = (year: number, n: number, company: string) => { const r = setExerciseEvent(events, "iso", year, n, profile.equity.companies.length > 1 ? company : undefined); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
   const [ledgerOpen, setLedgerOpen] = usePersisted<boolean>("ledgerOpen", true, (v): v is boolean => typeof v === "boolean");
+  const [planView, setPlanView] = usePersisted<"tax" | "cash">("planView", "tax", (v): v is "tax" | "cash" => v === "tax" || v === "cash");
   const timeline = profile.timeline ?? [];
   const addFact = (path: string, year: number) => {
     const f = timelineFields().find((x) => x.path === path);
@@ -210,17 +213,15 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           <div className="card-head">
             <div>
               <h2>Your plan, year by year</h2>
-              <div className="sub">Tax above, decisions below. Press + under a year to add one; click a chip to adjust it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
+              <div className="sub">{planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net."} Press + under a year to add a decision; click a chip to adjust it. {pinned && planView === "tax" ? "Gray columns are the pinned scenario." : ""}</div>
             </div>
+            <div className="plan-years"><Segmented options={[{ value: "tax", label: "Tax" }, { value: "cash", label: "Cash" }]} value={planView} onChange={setPlanView} /></div>
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
-          <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+          {planView === "tax"
+            ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
+            : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />}
           <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
-        </section>
-        <section className="card">
-          <h2>Cash by year</h2>
-          <div className="sub">What arrives against what leaves, before living costs. Left bar in, right bar out; the number is the net.</div>
-          <CashStrip plan={plan} focusYear={focusYear} onFocus={setFocusYear} />
         </section>
         {hasIso && (
           <div className="two-up">
@@ -240,6 +241,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
             ))}
           </div>
         )}
+        {holds.map((x) => <HoldOrSellCard key={x.company} h={x.h!} companyName={isoCompanies.length > 1 ? x.name : undefined} />)}
         <section className={"card" + (ledgerOpen ? "" : " folded")}>
           <button type="button" className="card-fold" onClick={() => setLedgerOpen((o) => !o)} aria-expanded={ledgerOpen}>
             <h2>Ledger</h2>

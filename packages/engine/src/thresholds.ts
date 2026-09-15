@@ -1,4 +1,4 @@
-import { exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
+import { exerciseDraws, exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
 import { resolveLevers, runPlan } from "./plan.ts";
 import type { Levers, Profile } from "./types.ts";
 
@@ -124,4 +124,51 @@ export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers>
   const lastYear = withIt[withIt.length - 1]!.year;
   const projectedYear = remaining <= 0 ? (path.find((p) => p.remaining <= 0)?.year ?? year) : pace > 0 ? lastYear + Math.ceil(remaining / pace) : null;
   return { year, company: c, shares, generated, path, leftover: Math.max(0, remaining), projectedYear };
+}
+
+export interface HoldOrSell {
+  year: number;
+  company: string;
+  shares: number;
+  /** Price per share assumed for the sale in each path. */
+  holdPrice: number;
+  sellPrice: number;
+  hold: { taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number; saleYear: number };
+  sell: { taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number };
+}
+
+/**
+ * The two ways to handle one year's ISO exercise: hold the shares and sell them the next year
+ * (long-term and qualifying when the dates allow), or sell them the same day they are exercised
+ * (a disqualifying disposition: ordinary income, no AMT). Both paths are the current plan with
+ * a sale of exactly those shares added, so every other decision stays as it is.
+ */
+export function holdOrSell(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): HoldOrSell | null {
+  const levers = resolveLevers(profile, leverOverrides);
+  const c = company ?? profile.equity.companies[0]?.id ?? "*";
+  const draws = exerciseDraws(profile, levers, "iso", year).filter((d) => d.company === resolveCompany(profile, c));
+  const shares = draws.reduce((s, d) => s + d.shares, 0);
+  if (shares <= 0) return null;
+  const lots = Object.fromEntries(draws.map((d) => [`x-${d.grant.id}-${year}`, d.shares]));
+  const lastYear = profile.plan.startYear + profile.plan.years - 1;
+  const saleYear = Math.min(lastYear, year + 1);
+  const withSale = (saleYearFor: number, date: string) => runPlan(profile, { ...levers, sales: { ...(levers.sales ?? {}), [saleYearFor]: [...(levers.sales?.[saleYearFor] ?? []), { id: "__compare", shares, date, lots }] } });
+  const holdPlan = withSale(saleYear, `${saleYear}-12-30`);
+  const sellPlan = withSale(year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`);
+  const base = runPlan(profile, levers);
+  const yr = (p: typeof base, y: number) => p.years.find((r) => r.year === y)!;
+  const summarize = (p: typeof base, saleY: number) => {
+    const y = yr(p, year);
+    const sale = yr(p, saleY).sales?.find((s) => s.lots.some((l) => l.lotId in lots));
+    const proceeds = sale?.lots.filter((l) => l.lotId in lots).reduce((s, l) => s + l.proceeds, 0) ?? 0;
+    const taxOverPlan = p.totals.totalTax - base.totals.totalTax + baseTaxOfExercise;
+    return { taxInYear: y.lines.totalTax!.value, taxOverPlan, cashNeeded: y.inputs.exerciseCost + y.lines.totalTax!.value - (saleY === year ? proceeds : 0), proceeds, netOverPlan: proceeds - taxOverPlan - y.inputs.exerciseCost };
+  };
+  // Tax the exercise itself costs across the plan, relative to not exercising: so both paths are measured against the same "no exercise" baseline.
+  const none = runPlan(profile, withIso(levers, year, c, 0));
+  const baseTaxOfExercise = base.totals.totalTax - none.totals.totalTax;
+  const hold = summarize(holdPlan, saleYear);
+  const sell = summarize(sellPlan, year);
+  const price = (p: typeof base, y: number) => { const s = yr(p, y).sales?.find((s) => s.lots.some((l) => l.lotId in lots)); const l = s?.lots.find((l) => l.lotId in lots); return l?.price ?? 0; };
+  return { year, company: c, shares, holdPrice: price(holdPlan, saleYear), sellPrice: price(sellPlan, year), hold: { ...hold, saleYear }, sell };
 }
