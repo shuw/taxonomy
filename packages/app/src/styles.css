@@ -540,7 +540,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .badge.fact { background: var(--surface-3); color: var(--ink-2); }
 .events-empty { margin: 10px 0 0; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
-.tooltip { animation: fade-in .12s ease; }
+.tooltip { animation: fade-in .12s ease .2s both; }
 .card-head { display: flex; align-items: flex-start; gap: 16px; }
 .card-head > div:first-child { flex: 1; min-width: 0; }
 .plan-years { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
