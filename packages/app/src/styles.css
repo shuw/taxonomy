@@ -585,6 +585,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ev-menu-sep { font: 600 10.5px/1.2 var(--display); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 3px; border-top: 1px solid var(--border); margin-top: 4px; }
 .ei-value .input-wrap { width: 160px; }
 .ei-note { width: 240px; }
-.event-inspector .lever-row { max-width: 640px; }
-.event-inspector .ei-head { max-width: 640px; }
-.event-inspector .ei-row, .event-inspector .sale-summary, .event-inspector .milestones { max-width: 760px; }
+.inspector-slot { position: relative; }
+.inspector-slot:has(.event-inspector)::before { content: ""; position: absolute; top: 4px; left: var(--caret, 40px); width: 14px; height: 14px; background: var(--focus); border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: translateX(-50%) rotate(45deg); }
+.inspector-slot:has(.event-inspector.fact)::before { background: var(--surface-2); }
+.event-inspector { border: 1px solid var(--border); }

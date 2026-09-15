@@ -93,6 +93,17 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   };
   const selected = events.find((e) => e.id === selectedId) ?? null;
   const selectedFact = facts.find((f) => f.id === selectedId) ?? null;
+  // The inspector sits under the selected item's year, as wide as it needs, kept inside the strip.
+  const anchorYear = selected?.year ?? selectedFact?.year;
+  const panelWidth = Math.min(selected?.kind === "sell" ? 900 : 720, width);
+  const anchorStyle = (() => {
+    if (anchorYear === undefined) return undefined;
+    const i = years.indexOf(anchorYear);
+    const colLeft = M.left + band * i;
+    const left = Math.max(0, Math.min(colLeft, width - panelWidth));
+    const caret = colLeft + band / 2 - left;
+    return { marginLeft: left, width: panelWidth, "--caret": `${Math.round(caret)}px` } as React.CSSProperties;
+  })();
 
   useEffect(() => {
     if (menuYear === null) return;
@@ -155,6 +166,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       </div>
 
       {drag?.moved && (() => { const e = events.find((x) => x.id === drag.id); return e ? <div className="ev-ghost" style={{ left: drag.x + 10, top: drag.y - 10 }}>{chipKind(e, saleResult)} → {drag.target ?? "…"}</div> : null; })()}
+      <div className="inspector-slot" style={anchorStyle}>
       {selected && selected.kind === "exercise" && (
         <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} />
       )}
@@ -179,6 +191,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
           <p className="muted small">A fact, not a decision: it applies to every scenario. Decisions are the chips above.</p>
         </div>
       )}
+      </div>
       {!selected && !selectedFact && events.length === 0 && (
         <p className="muted small events-empty">{kinds.length ? "Nothing decided yet. Press + under a year to add an exercise, a sale, or a change like a raise." : "Press + under a year to add a change like a raise. Add option grants or shares you own under Edit my information for exercise and sale decisions."}</p>
       )}
