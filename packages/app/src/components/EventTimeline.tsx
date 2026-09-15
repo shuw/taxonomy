@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { companyPrice, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, openingLots, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
+import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, openingLots, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
 import { LeverRow } from "./LeverRow.tsx";
@@ -333,6 +333,8 @@ export function factMarkers(profile: Profile, years: number[], onEditTimeline: (
   for (const [i, t] of (profile.timeline ?? []).entries()) {
     const f = fields.find((x) => x.path === t.path);
     const v = t.value;
+    // A change to the value already in force is not a change; the sidebar still lists it for cleanup.
+    if (getPath(profile, t.path) === v) continue;
     const detail = typeof v === "number" ? (f?.type === "pct" ? `${(v * 100).toFixed(1)}%` : usdCompact(v)) : String(v);
     out.push({ id: `t${i}`, year: t.year, label: f?.label ?? t.path, detail, edit: onEditTimeline });
   }
