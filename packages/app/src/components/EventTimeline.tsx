@@ -111,7 +111,6 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   return (
     <div className="events">
       <div className="event-strip" ref={(el) => { (ref as React.MutableRefObject<HTMLDivElement | null>).current = el; stripRef.current = el; }}>
-        <span className="strip-label">You decide</span>
         {years.map((y) => {
           const here = events.filter((e) => e.year === y);
           return (
@@ -121,6 +120,11 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
                   onPointerDown={startDrag(e.id)} onPointerMove={moveDrag} onPointerUp={endDrag(e)} onPointerCancel={() => setDrag(null)} title="Drag to another year">
                   <span className="ev-kind">{chipKind(e, saleResult)}</span>
                   <span className="ev-val">{chipValue(e, profile, saleResult)}</span>
+                </button>
+              ))}
+              {facts.filter((f) => f.year === y).map((f) => (
+                <button type="button" key={f.id} className={"ev-info" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
+                  <span className="ev-dot" /><span className="ev-info-text"><span className="ev-info-label">{f.label}</span> <span className="ev-info-detail">{f.detail}</span></span>
                 </button>
               ))}
               <div className="ev-add-wrap" ref={menuYear === y ? menuRef : undefined}>
@@ -148,20 +152,6 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
           );
         })}
       </div>
-      {facts.length > 0 && (
-        <div className="event-strip info">
-          <span className="strip-label">In every scenario</span>
-          {years.map((y) => (
-            <div className="event-col" key={y} style={{ flex: `0 0 ${band}px` }}>
-              {facts.filter((f) => f.year === y).map((f) => (
-                <button type="button" key={f.id} className={"ev-info" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
-                  <span className="ev-dot" /><span className="ev-info-text"><span className="ev-info-label">{f.label}</span> <span className="ev-info-detail">{f.detail}</span></span>
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
 
       {drag?.moved && (() => { const e = events.find((x) => x.id === drag.id); return e ? <div className="ev-ghost" style={{ left: drag.x + 10, top: drag.y - 10 }}>{chipKind(e, saleResult)} → {drag.target ?? "…"}</div> : null; })()}
       {selected && selected.kind === "liquidity" && (

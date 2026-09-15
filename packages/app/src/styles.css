@@ -514,6 +514,7 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 
 /* Timeline of decisions ------------------------------------------------------------ */
 .event-strip { display: flex; align-items: flex-start; padding: 2px 12px 0 46px; min-height: 36px; }
+.event-col .ev-info { margin-top: 2px; }
 .event-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0 3px; min-width: 0; }
 .ev-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 5px 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); text-align: left; cursor: pointer; color: inherit; min-width: 0; transition: border-color .12s ease, background .12s ease; }
 .ev-chip:hover { border-color: var(--ink-2); }
