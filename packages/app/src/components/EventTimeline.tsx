@@ -1,16 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
+import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type FieldDef, type IntakeSection, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
 import { LeverRow } from "./LeverRow.tsx";
-import { MoneyInput, NumberInput, Select } from "./fields.tsx";
+import { MoneyInput, NumberInput, PercentInput, Select, parseAmount } from "./fields.tsx";
 
 /** Same margins as the tax chart, so event columns sit under their bars. */
 const M = { left: 46, right: 12 };
 export const columnBand = (width: number, n: number) => Math.min(120, (width - M.left - M.right) / n);
 
 /** A marker for something that happens in a year but is not a decision: a fact change or an RSU settlement. */
-export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; }
+export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; /** Index into profile.timeline when this marker is a dated change. */ entryIndex?: number; }
+
+const FACT_CATEGORIES: { key: IntakeSection[]; label: string }[] = [
+  { key: ["pay", "basics"], label: "Pay and household" },
+  { key: ["income"], label: "Other income" },
+  { key: ["home"], label: "Home and deductions" },
+  { key: ["assumptions"], label: "Assumptions" },
+];
 
 export type AddKind = { kind: "exercise"; type: "iso" | "nso" } | { kind: "sell" } | { kind: "liquidity" };
 
@@ -28,12 +35,18 @@ interface Props {
   onChange: (id: string, patch: Partial<ScenarioEvent>) => void;
   onRemove: (id: string) => void;
   onSellToCover: (id: string) => void;
+  onAddFact: (path: string, year: number) => void;
+  onChangeFact: (index: number, entry: TimelineEntry) => void;
+  onRemoveFact: (index: number) => void;
 }
 
-export function EventTimeline({ profile, levers, plan, years, events, facts, crossovers, selectedId, onSelect, onAdd, onChange, onRemove, onSellToCover }: Props) {
+export function EventTimeline({ profile, levers, plan, years, events, facts, crossovers, selectedId, onSelect, onAdd, onChange, onRemove, onSellToCover, onAddFact, onChangeFact, onRemoveFact }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const band = columnBand(width, years.length);
   const [menuYear, setMenuYear] = useState<number | null>(null);
+  const [menuCat, setMenuCat] = useState<number | null>(null);
+  const fields = timelineFields();
+  const openMenu = (y: number | null) => { setMenuYear(y); setMenuCat(null); };
   const menuRef = useRef<HTMLDivElement>(null);
   const has = (t: "iso" | "nso") => profile.equity.grants.some((g) => g.type === t);
   const canSell = profile.equity.grants.length > 0 || (profile.equity.holdings?.length ?? 0) > 0;
@@ -73,12 +86,13 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
 
   useEffect(() => {
     if (menuYear === null) return;
-    const close = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenuYear(null); };
+    const close = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) openMenu(null); };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [menuYear]);
 
-  const add = (year: number, what: AddKind) => { onAdd(what, year); setMenuYear(null); };
+  const add = (year: number, what: AddKind) => { onAdd(what, year); openMenu(null); };
+  const addFact = (year: number, path: string) => { onAddFact(path, year); openMenu(null); };
   const saleResult = (e: Extract<ScenarioEvent, { kind: "sell" }>): SaleResult | undefined => {
     const yr = plan.years.find((y) => y.year === e.year);
     const order = (levers.sales?.[e.year] ?? []).map((s) => s.id);
@@ -100,24 +114,34 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
                   <span className="ev-val">{chipValue(e, profile, saleResult)}</span>
                 </button>
               ))}
-              {kinds.length > 0 && (
-                <div className="ev-add-wrap" ref={menuYear === y ? menuRef : undefined}>
-                  <button type="button" className={"ev-add" + (menuYear === y ? " on" : "")} title={`Add a decision in ${y}`} aria-label={`Add a decision in ${y}`}
-                    onClick={() => (kinds.length === 1 ? add(y, kinds[0]!.what) : setMenuYear(menuYear === y ? null : y))}>+</button>
-                  {menuYear === y && (
-                    <div className="ev-menu">
-                      {kinds.map((k) => <button type="button" key={k.key} onClick={() => add(y, k.what)}>{k.label}</button>)}
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="ev-add-wrap" ref={menuYear === y ? menuRef : undefined}>
+                <button type="button" className={"ev-add" + (menuYear === y ? " on" : "")} title={`Add something in ${y}`} aria-label={`Add something in ${y}`} onClick={() => openMenu(menuYear === y ? null : y)}>+</button>
+                {menuYear === y && (
+                  <div className="ev-menu">
+                    {menuCat === null ? (
+                      <>
+                        {kinds.map((k) => <button type="button" key={k.key} onClick={() => add(y, k.what)}>{k.label}</button>)}
+                        {kinds.length > 0 && <div className="ev-menu-sep">Change from {y} on</div>}
+                        {FACT_CATEGORIES.map((c, i) => fields.some((f) => c.key.includes(f.section)) && (
+                          <button type="button" key={c.label} className="cat" onClick={() => setMenuCat(i)}>{c.label} <span className="chev">›</span></button>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="cat back" onClick={() => setMenuCat(null)}>‹ {FACT_CATEGORIES[menuCat]!.label}</button>
+                        {fields.filter((f) => FACT_CATEGORIES[menuCat]!.key.includes(f.section)).map((f) => <button type="button" key={f.path} onClick={() => addFact(y, f.path)}>{f.label}</button>)}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
       </div>
       {facts.length > 0 && (
         <div className="event-strip info">
-          <span className="strip-label">Happens anyway</span>
+          <span className="strip-label">In every scenario</span>
           {years.map((y) => (
             <div className="event-col" key={y} style={{ flex: `0 0 ${band}px` }}>
               {facts.filter((f) => f.year === y).map((f) => (
@@ -137,7 +161,10 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       {selected && selected.kind === "sell" && (
         <SaleInspector profile={profile} plan={plan} years={years} event={selected} result={saleResult(selected)} onChange={(patch) => onChange(selected.id, patch)} onRemove={() => onRemove(selected.id)} onSellToCover={() => onSellToCover(selected.id)} />
       )}
-      {selectedFact && (
+      {selectedFact && selectedFact.entryIndex !== undefined && (
+        <FactChangeInspector profile={profile} years={years} entry={profile.timeline![selectedFact.entryIndex]!} onChange={(e) => onChangeFact(selectedFact.entryIndex!, e)} onRemove={() => onRemoveFact(selectedFact.entryIndex!)} />
+      )}
+      {selectedFact && selectedFact.entryIndex === undefined && (
         <div className="event-inspector fact">
           <div className="ei-head">
             <span className="badge fact">{selectedFact.year}</span>
@@ -150,7 +177,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
         </div>
       )}
       {!selected && !selectedFact && events.length === 0 && (
-        <p className="muted small events-empty">{kinds.length ? "Nothing decided yet. Press + under a year to add an exercise or a sale." : "Add option grants or shares you own under Edit my information, and the decisions appear here."}</p>
+        <p className="muted small events-empty">{kinds.length ? "Nothing decided yet. Press + under a year to add an exercise, a sale, or a change like a raise." : "Press + under a year to add a change like a raise. Add option grants or shares you own under Edit my information for exercise and sale decisions."}</p>
       )}
     </div>
   );
@@ -195,6 +222,40 @@ function LiquidityInspector({ profile, plan, years, event: e, onChange, onRemove
         {e.price !== undefined ? `Pins ${c?.name ?? "the company"} at ${usd(e.price)} per share for ${e.year}; growth resumes from there.` : `Uses the modeled ${e.year} price, ${usd(modeled)} per share.`}
         {doubleTrigger ? ` Double-trigger RSUs settle here: ${yr && yr.inputs.rsuSharesVested > 0 ? `${shares(yr.inputs.rsuSharesVested)} units, ${usdCompact(yr.inputs.rsuIncome)} of wages in ${e.year}` : "none are time-vested by then"}.` : " No double-trigger RSUs depend on it."}
       </p>
+    </div>
+  );
+}
+
+/** Edit a dated change to a fact: what, from when, to what. */
+function FactChangeInspector({ profile, years, entry, onChange, onRemove }: { profile: Profile; years: number[]; entry: TimelineEntry; onChange: (e: TimelineEntry) => void; onRemove: () => void }) {
+  const fields = timelineFields();
+  const f: FieldDef | undefined = fields.find((x) => x.path === entry.path);
+  const now = getPath(profile, entry.path);
+  const same = now === entry.value;
+  const valueInput = f?.type === "bool"
+    ? <Select options={[{ value: "true", label: "on" }, { value: "false", label: "off" }]} value={String(entry.value === true)} onChange={(v) => onChange({ ...entry, value: v === "true" })} />
+    : f?.type === "enum"
+      ? <Select options={(f.enum ?? []).map((v) => ({ value: v, label: v }))} value={String(entry.value)} onChange={(v) => onChange({ ...entry, value: v })} />
+      : f?.type === "pct"
+        ? <PercentInput value={Number(entry.value) || 0} onChange={(n) => onChange({ ...entry, value: n })} />
+        : f?.type === "usd"
+          ? <MoneyInput value={Number(entry.value) || 0} onChange={(n) => onChange({ ...entry, value: n })} />
+          : <span className="input-wrap"><input value={String(entry.value ?? "")} onChange={(e) => onChange({ ...entry, value: parseAmount(e.target.value) ?? e.target.value })} /></span>;
+  return (
+    <div className="event-inspector fact">
+      <div className="ei-head">
+        <strong>{f?.label ?? entry.path}</strong>
+        <span className="muted">from</span>
+        <span className="ei-year"><Select options={years.map((y) => ({ value: String(y), label: String(y) }))} value={String(entry.year)} onChange={(y) => onChange({ ...entry, year: Number(y) })} /></span>
+        <span className="muted">on, becomes</span>
+        <span className="ei-value">{valueInput}</span>
+        <span className="spacer" />
+        <button type="button" className="link danger" onClick={onRemove}>Remove</button>
+      </div>
+      <div className="ei-row">
+        <span className="input-wrap ei-note"><input placeholder="note (optional)" value={entry.note ?? ""} onChange={(e) => onChange({ ...entry, note: e.target.value || undefined })} /></span>
+        <span className="muted small">{same ? "Same as the current value, so nothing changes yet." : "A fact, not a decision: it applies in every scenario. Growth assumptions still compound from the plan start."}</span>
+      </div>
     </div>
   );
 }
@@ -338,10 +399,8 @@ export function factMarkers(profile: Profile, years: number[], onEditTimeline: (
   for (const [i, t] of (profile.timeline ?? []).entries()) {
     const f = fields.find((x) => x.path === t.path);
     const v = t.value;
-    // A change to the value already in force is not a change; the sidebar still lists it for cleanup.
-    if (getPath(profile, t.path) === v) continue;
-    const detail = typeof v === "number" ? (f?.type === "pct" ? `${(v * 100).toFixed(1)}%` : usdCompact(v)) : String(v);
-    out.push({ id: `t${i}`, year: t.year, label: f?.label ?? t.path, detail, edit: onEditTimeline });
+    const detail = getPath(profile, t.path) === v ? "same as now" : typeof v === "number" ? (f?.type === "pct" ? `${(v * 100).toFixed(1)}%` : usdCompact(v)) : String(v);
+    out.push({ id: `t${i}`, year: t.year, label: f?.label ?? t.path, detail, edit: onEditTimeline, entryIndex: i });
   }
   if (profile.equity.grants.some((g) => g.type === "rsu")) {
     for (const y of years) {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent } from "@taxonomy/engine";
+import { activeScenario, amtCrossover, getPath, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, timelineFields, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
 import { NumberInput } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
@@ -160,7 +160,18 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const removeEvent = (id: string) => { writeEvents(events.filter((e) => e.id !== id)); if (selectedEvent === id) setSelectedEvent(null); };
   /** The sweep chart sets the ISO count for its year directly. */
   const setIsoShares = (year: number, n: number) => { const r = setExerciseEvent(events, "iso", year, n); writeEvents(r.events); if (r.id) setSelectedEvent(r.id); };
-  const facts = useMemo(() => factMarkers(profile, years, () => { /* timeline lives in the sidebar */ }, () => openFacts("equity")), [profile, yearsKey]);
+  const facts = useMemo(() => factMarkers(profile, years, () => {}, () => openFacts("equity")), [profile, yearsKey]);
+  const timeline = profile.timeline ?? [];
+  const addFact = (path: string, year: number) => {
+    const f = timelineFields().find((x) => x.path === path);
+    const current = getPath(profile, path);
+    const value = current !== undefined ? current : f?.type === "bool" ? true : f?.type === "enum" ? f.enum?.[0] : 0;
+    edit([{ path: ["timeline"], value: [...timeline, { year, path, value }] }]);
+    setSelectedEvent(`t${timeline.length}`);
+    setFocusYear(year);
+  };
+  const changeFact = (i: number, entry: TimelineEntry) => { edit([{ path: ["timeline"], value: timeline.map((t, j) => (j === i ? entry : t)) }]); setFocusYear(entry.year); };
+  const removeFact = (i: number) => { edit([{ path: ["timeline"], value: timeline.filter((_, j) => j !== i) }]); setSelectedEvent(null); };
 
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
@@ -196,7 +207,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
             <label className="plan-years"><span className="muted small">Years to plan</span><NumberInput value={profile.plan.years} onChange={(n) => edit([{ path: ["plan", "years"], value: Math.max(1, Math.min(15, Math.round(n))) }])} min={1} /></label>
           </div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} />
+          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} onAddFact={addFact} onChangeFact={changeFact} onRemoveFact={removeFact} />
         </section>
         {hasIso && (
           <div className="two-up">

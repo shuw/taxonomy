@@ -577,3 +577,10 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .ev-info-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-foot { padding: 14px 20px 0; }
 .link.muted { color: var(--muted); font-size: 12.5px; }
+.ev-menu { max-height: 320px; overflow-y: auto; }
+.ev-menu .cat { display: flex; justify-content: space-between; gap: 10px; }
+.ev-menu .cat .chev { color: var(--muted); }
+.ev-menu .cat.back { color: var(--accent); }
+.ev-menu-sep { font: 600 10.5px/1.2 var(--display); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 3px; border-top: 1px solid var(--border); margin-top: 4px; }
+.ei-value .input-wrap { width: 160px; }
+.ei-note { width: 240px; }
