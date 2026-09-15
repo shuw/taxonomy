@@ -150,3 +150,18 @@ sources: { "equity.grants.0": "Shareworks RSU page" }
     expect(p.sources).toEqual({ "grants.g2": "Shareworks RSU page" });
   });
 });
+
+describe("ids", () => {
+  test("dated changes get stable ids on read and keep the ones they have", () => {
+    const p = parseProfile(example.replace("timeline: []", "timeline:\n  - { year: 2027, path: people.self.salary, value: 1 }\n  - { id: t9, year: 2028, path: people.self.salary, value: 2 }\n  - { year: 2029, path: people.self.salary, value: 3 }"));
+    expect(p.timeline!.map((t) => t.id)).toEqual(["t10", "t9", "t11"]);
+  });
+  test("a new id is one past the highest in use, so a removed item's id is not reused", () => {
+    const { newId } = require("../src/equity.ts") as typeof import("../src/equity.ts");
+    expect(newId("g", ["g1", "g3"])).toBe("g4");
+    expect(newId("g", [])).toBe("g1");
+  });
+  test("a grant that names a company that does not exist is a problem, not a silent fallback", () => {
+    expect(() => parseProfile(example.replace("company: c1", "company: c9"))).toThrow(/company "c9"/);
+  });
+});

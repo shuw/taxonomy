@@ -1,3 +1,4 @@
+import { newId } from "./equity.ts";
 import type { Levers, Profile, Scenario, ScenarioEvent } from "./types.ts";
 import { DEFAULT_SCENARIO } from "./timeline.ts";
 
@@ -49,8 +50,7 @@ export function exercisedTotal(levers: Levers, type: "iso" | "nso", year: number
 }
 
 export function newEventId(events: ScenarioEvent[]): string {
-  const taken = new Set(events.map((e) => e.id));
-  for (let n = 1; ; n++) if (!taken.has(`e${n}`)) return `e${n}`;
+  return newId("e", events.map((e) => e.id));
 }
 
 /**

@@ -252,6 +252,8 @@ export interface Levers {
 
 /** A dated change to any profile value, in force from that year on. */
 export interface TimelineEntry {
+  /** Assigned on read when missing, so the app can select an entry regardless of its position. */
+  id?: string;
   year: number;
   /** Dot path into the profile, e.g. "people.self.salary" or "filer.filingStatus". */
   path: string;

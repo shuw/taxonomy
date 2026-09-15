@@ -114,28 +114,47 @@ export interface CreditRecovery {
   projectedYear: number | null;
 }
 
-/** How the AMT credit from one year's ISO exercise comes back: the plan with the exercise against the plan without it. */
+/**
+ * How the AMT credit generated in one year comes back. Credit is one pool; this treats it as
+ * used oldest first: the balance brought into the plan, then each year's new credit in order.
+ * So the tranche from `year` starts returning once everything older is gone. Read from the plan
+ * itself, so later sales and other decisions are exactly as they are. When two companies'
+ * exercises fall in the same year the tranche is that year's whole credit.
+ */
 export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string, base?: PlanResult): CreditRecovery | null {
   const levers = resolveLevers(profile, leverOverrides);
   const c = companyKey(profile, company);
   const shares = exercisedIn(profile, levers, "iso", year, resolveCompany(profile, c));
   if (shares <= 0) return null;
-  const withIt = (base ?? runPlan(profile, levers)).years;
-  const without = runPlan(profile, withIso(levers, year, c, 0)).years;
-  const at = (ys: typeof withIt, y: number, id: string) => ys.find((r) => r.year === y)?.lines[id]?.value ?? 0;
-  const generated = at(withIt, year, "amtCreditGenerated") - at(without, year, "amtCreditGenerated");
+  const years = (base ?? runPlan(profile, levers)).years;
+  const line = (y: (typeof years)[number], id: string) => y.lines[id]?.value ?? 0;
+  const tranches: { year: number; left: number }[] = [{ year: -Infinity, left: profile.carryforwards?.amtCredit ?? 0 }];
+  const generated = line(years.find((y) => y.year === year)!, "amtCreditGenerated");
   if (generated <= 0) return null;
   let remaining = generated;
   const path: CreditRecovery["path"] = [];
-  for (const r of withIt) {
-    if (r.year <= year) continue;
-    const recovered = Math.max(0, Math.min(remaining, at(withIt, r.year, "amtCreditUsed") - at(without, r.year, "amtCreditUsed")));
-    remaining -= recovered;
-    path.push({ year: r.year, recovered, remaining });
+  for (const y of years) {
+    // Credit used this year draws the oldest tranches first.
+    let used = line(y, "amtCreditUsed");
+    let recoveredHere = 0;
+    for (const t of tranches) {
+      if (used <= 0) break;
+      const take = Math.min(t.left, used);
+      t.left -= take;
+      used -= take;
+      if (t.year === year) recoveredHere += take;
+    }
+    // This year's new credit joins the pool after the year's use.
+    const gen = line(y, "amtCreditGenerated");
+    if (gen > 0) tranches.push({ year: y.year, left: gen });
+    if (y.year > year) {
+      remaining -= recoveredHere;
+      path.push({ year: y.year, recovered: recoveredHere, remaining });
+    }
   }
   const recent = path.slice(-2).map((p) => p.recovered);
   const pace = recent.length ? recent.reduce((s, n) => s + n, 0) / recent.length : 0;
-  const lastYear = withIt[withIt.length - 1]!.year;
+  const lastYear = years[years.length - 1]!.year;
   const projectedYear = remaining <= 0 ? (path.find((p) => p.remaining <= 0)?.year ?? year) : pace > 0 ? lastYear + Math.ceil(remaining / pace) : null;
   return { year, company: c, shares, generated, path, leftover: Math.max(0, remaining), projectedYear };
 }

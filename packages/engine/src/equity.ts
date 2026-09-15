@@ -194,11 +194,12 @@ export function companiesWithGrants(profile: Profile, type: GrantType): string[]
   return companiesWith(profile, type).filter((c): c is string => c !== undefined);
 }
 
-/** A short unique id for a new grant, holding or company. */
+/** A short unique id for a new grant, holding, company or change: one past the highest number in use, so a removed item's id is not handed to the next one. */
 export function newId(prefix: string, taken: Iterable<string>): string {
-  const set = new Set(taken);
-  for (let n = 1; ; n++) {
-    const id = `${prefix}${n}`;
-    if (!set.has(id)) return id;
+  let max = 0;
+  for (const id of taken) {
+    const m = id.match(new RegExp(`^${prefix}(\\d+)$`));
+    if (m) max = Math.max(max, Number(m[1]));
   }
+  return `${prefix}${max + 1}`;
 }

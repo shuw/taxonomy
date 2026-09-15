@@ -1,4 +1,4 @@
-import { getPath, newEventId, scenarioEdits, setExerciseEvent, sharesToCover, timelineFields, type Levers, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
+import { getPath, newEventId, newId, scenarioEdits, setExerciseEvent, sharesToCover, timelineFields, type Levers, type Profile, type ProfileEdit, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import type { AddKind, FactMarker } from "../components/timeline/types.ts";
 
 interface Deps {
@@ -68,8 +68,9 @@ export function useTimelineActions({ profile, levers, events, facts, edit, selec
     const f = timelineFields().find((x) => x.path === path);
     const current = getPath(profile, path);
     const value = current !== undefined ? current : f?.type === "bool" ? true : f?.type === "enum" ? f.enum?.[0] : 0;
-    edit([{ path: ["timeline"], value: [...timeline, { year, path, value }] }]);
-    setSelectedId(`t${timeline.length}`);
+    const id = newId("t", timeline.map((t) => t.id ?? ""));
+    edit([{ path: ["timeline"], value: [...timeline, { id, year, path, value }] }]);
+    setSelectedId(id);
     setFocusYear(year);
   };
   const changeFact = (i: number, entry: TimelineEntry) => { edit([{ path: ["timeline"], value: timeline.map((t, j) => (j === i ? entry : t)) }]); setFocusYear(entry.year); };

@@ -1,7 +1,7 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
 import { eventsFromLevers } from "./events.ts";
-import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PriorReturn, Profile, Source, Scenario } from "./types.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
 
 /** The per-year lever table older files stored directly: a share count per year. */
 type LegacyLevers = { exercises: { iso: Record<number, number>; nso: Record<number, number> } };
@@ -71,6 +71,9 @@ export function parseProfile(text: string): Profile {
   const dependentsRaw = raw.filer!.dependents;
   const dependents = normalizeDependents(dependentsRaw);
   const returns = raw.returns ?? (raw.priorReturn ? [raw.priorReturn] : undefined);
+  const companyIds = new Set(equity.companies.map((c) => c.id));
+  for (const g of equity.grants) if (g.company !== undefined && !companyIds.has(g.company)) problems.push(`grant ${g.id} refers to company "${g.company}", which does not exist`);
+  for (const h of equity.holdings ?? []) if (h.company !== undefined && !companyIds.has(h.company)) problems.push(`holding ${h.id} refers to company "${h.company}", which does not exist`);
 
   let scenarios: Record<string, Scenario> | undefined;
   if (raw.scenarios) scenarios = Object.fromEntries(Object.entries(raw.scenarios).map(([k, v]) => [k, normalizeScenario(v)]));
@@ -89,7 +92,7 @@ export function parseProfile(text: string): Profile {
     equity,
     home,
     deductions: { stateIncomeTax: d.stateIncomeTax, charitable: typeof d.charitable === "number" ? { cash: d.charitable } : d.charitable, medical: d.medical },
-    timeline: raw.timeline,
+    timeline: withTimelineIds(raw.timeline),
     scenarios,
     activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
     sources: rekeySources(raw.sources, equity, raw.equity?.isoGrants?.length ?? 0),
@@ -146,6 +149,18 @@ function normalizeEquity(raw: RawProfile, problems: string[]): Profile["equity"]
   const hids: string[] = [];
   const holdings = e.holdings?.map((h) => { const id = h.id ?? newId("h", hids); hids.push(id); return { ...h, id }; });
   return { companies, grants, holdings };
+}
+
+/** Every dated change gets a stable id, kept when the file has one. */
+function withTimelineIds(entries: TimelineEntry[] | undefined): TimelineEntry[] | undefined {
+  if (!entries) return undefined;
+  const taken = entries.map((e) => e.id).filter((id): id is string => typeof id === "string");
+  return entries.map((e) => {
+    if (e.id) return e;
+    const id = newId("t", taken);
+    taken.push(id);
+    return { ...e, id };
+  });
 }
 
 /** Dependents as a list of entries, from a list, a count, or a typed "2019, 2022". */
