@@ -12,6 +12,15 @@ export const columnBand = (width: number, n: number) => Math.min(120, (width - M
 /** A marker for something that happens in a year but is not a decision: a fact change or an RSU settlement. */
 export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; /** Index into profile.timeline when this marker is a dated change. */ entryIndex?: number; }
 
+/** Fields in the order people actually change them; anything unlisted follows in registry order. */
+const LIKELY_ORDER = [
+  "people.self.salary", "people.self.bonus", "people.self.pretaxContributions", "people.spouse.salary", "people.spouse.bonus", "people.spouse.pretaxContributions", "filer.filingStatus", "filer.state",
+  "income.interest", "income.ordinaryDividends", "income.qualifiedDividends", "income.longTermGains", "income.shortTermGains", "income.otherOrdinary",
+  "deductions.charitable.cash", "deductions.charitable.appreciatedStock", "deductions.charitable.daf", "home.propertyTax", "deductions.stateIncomeTax", "deductions.medical",
+  "assumptions.fmvGrowth", "assumptions.wageGrowth", "assumptions.inflation", "assumptions.bracketRateDelta",
+];
+const likelyRank = (path: string) => { const i = LIKELY_ORDER.indexOf(path); return i === -1 ? LIKELY_ORDER.length : i; };
+
 const FACT_CATEGORIES: { key: IntakeSection[]; label: string }[] = [
   { key: ["pay", "basics"], label: "Pay and household" },
   { key: ["income"], label: "Other income" },
@@ -45,7 +54,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   const band = columnBand(width, years.length);
   const [menuYear, setMenuYear] = useState<number | null>(null);
   const [menuCat, setMenuCat] = useState<number | null>(null);
-  const fields = timelineFields();
+  const fields = [...timelineFields()].sort((x, y) => likelyRank(x.path) - likelyRank(y.path));
   const openMenu = (y: number | null) => { setMenuYear(y); setMenuCat(null); };
   const menuRef = useRef<HTMLDivElement>(null);
   const has = (t: "iso" | "nso") => profile.equity.grants.some((g) => g.type === t);
