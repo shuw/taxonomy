@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, openingLots, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
+import { companyPrice, getPath, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, nextShareSpread, rsuVesting, sharesExercisable, timelineFields, type AmtCrossover, type Levers, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../format.ts";
 import { useWidth } from "../useWidth.ts";
 import { LeverRow } from "./LeverRow.tsx";
@@ -10,7 +10,7 @@ const M = { left: 46, right: 12 };
 export const columnBand = (width: number, n: number) => Math.min(120, (width - M.left - M.right) / n);
 
 /** A marker for something that happens in a year but is not a decision: a fact change or an RSU settlement. */
-export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; milestone?: boolean; }
+export interface FactMarker { id: string; year: number; label: string; detail: string; edit?: () => void; }
 
 export type AddKind = { kind: "exercise"; type: "iso" | "nso" } | { kind: "sell" } | { kind: "liquidity" };
 
@@ -121,7 +121,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
           {years.map((y) => (
             <div className="event-col" key={y} style={{ flex: `0 0 ${band}px` }}>
               {facts.filter((f) => f.year === y).map((f) => (
-                <button type="button" key={f.id} className={"ev-info" + (f.milestone ? " milestone" : "") + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
+                <button type="button" key={f.id} className={"ev-info" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
                   <span className="ev-dot" /><span className="ev-info-text"><span className="ev-info-label">{f.label}</span> <span className="ev-info-detail">{f.detail}</span></span>
                 </button>
               ))}
@@ -146,7 +146,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
             <span className="spacer" />
             {selectedFact.edit && <button type="button" className="link" onClick={selectedFact.edit}>Edit</button>}
           </div>
-          <p className="muted small">{selectedFact.milestone ? "A holding-period milestone: shares held cross into a cheaper tax treatment on this date. Sell on or after it to get that treatment." : "A fact, not a decision: it applies to every scenario. Decisions are the colored chips."}</p>
+          <p className="muted small">A fact, not a decision: it applies to every scenario. Decisions are the chips above.</p>
         </div>
       )}
       {!selected && !selectedFact && events.length === 0 && (
@@ -349,22 +349,5 @@ export function factMarkers(profile: Profile, years: number[], onEditTimeline: (
       if (v.shares > 0) out.push({ id: `rsu${y}`, year: y, label: "RSUs settle", detail: `${shares(v.shares)} · ${usdCompact(v.income)}`, edit: onEditEquity });
     }
   }
-  return out;
-}
-
-/** Holding-period milestones per year: shares held at the start of the year that turn long-term or qualifying during it. */
-export function milestoneMarkers(profile: Profile, plan: PlanResult, years: number[]): FactMarker[] {
-  const out: FactMarker[] = [];
-  years.forEach((y, i) => {
-    const lots = i === 0 ? openingLots(profile) : (plan.years[i - 1]?.lotsEnd ?? []);
-    const inYear = lotMilestones(lots, `${y}-01-01`).filter((m) => m.date.startsWith(String(y)));
-    for (const becomes of ["long-term", "qualifying"] as const) {
-      const ms = inYear.filter((m) => m.becomes === becomes);
-      if (ms.length === 0) continue;
-      const total = ms.reduce((s, m) => s + m.shares, 0);
-      const first = ms[0]!.date;
-      out.push({ id: `m-${y}-${becomes}`, year: y, label: `Turn ${becomes}`, detail: `${shares(total)} sh from ${first.slice(5)}`, milestone: true });
-    }
-  });
   return out;
 }
