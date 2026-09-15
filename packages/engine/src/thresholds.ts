@@ -56,3 +56,26 @@ export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Lever
   }
   return points;
 }
+
+/**
+ * The fewest shares a sale event must sell for its proceeds to pay the whole year's tax,
+ * including the tax on the sale itself. Returns everything held when even that falls short.
+ */
+export function sharesToCover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, saleId: string): number {
+  const levers = resolveLevers(profile, leverOverrides);
+  const sales = levers.sales?.[year] ?? [];
+  const sale = sales.find((s) => s.id === saleId);
+  if (!sale) return 0;
+  const withShares = (n: number): Partial<Levers> => ({ ...levers, sales: { ...(levers.sales ?? {}), [year]: sales.map((s) => (s.id === saleId ? { ...s, shares: n, lots: undefined } : s)) } });
+  const run = (n: number) => runPlan(profile, withShares(n)).years.find((y) => y.year === year)!;
+  const held = run(0).lotsBefore?.reduce((s, l) => s + l.quantity, 0) ?? 0;
+  const gap = (n: number) => { const y = run(n); return y.inputs.saleProceeds - y.lines.totalTax!.value; };
+  if (held === 0 || gap(held) < 0) return held;
+  let lo = 0;
+  let hi = held;
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (gap(mid) >= 0) hi = mid; else lo = mid;
+  }
+  return hi;
+}

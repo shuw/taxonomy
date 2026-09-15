@@ -41,8 +41,10 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   L.put("interest", "Interest", inputs.interest, "From the profile. Taxed as ordinary income.");
   L.put("nonqualifiedDividends", "Non-qualified dividends", inputs.nonqualifiedDividends, "Total dividends minus the qualified part. Taxed as ordinary income.");
   L.put("qualifiedDividends", "Qualified dividends", inputs.qualifiedDividends, "From the profile. Taxed at long-term capital gain rates.");
-  L.put("longTermGains", "Long-term capital gains", inputs.longTermGains, "From the profile. Gains on assets held over a year.");
-  L.put("shortTermGains", "Short-term capital gains", inputs.shortTermGains, "From the profile. Taxed as ordinary income.");
+  L.put("sharesSold", "Shares sold", inputs.sharesSold, inputs.sharesSold > 0 ? `Sold for ${usd(inputs.saleProceeds)}. Each lot's gain is its price less its basis; the character depends on how long it was held.` : "No shares sold this year.", [], "shares");
+  L.put("isoDisqualifyingIncome", "ISO disqualifying disposition income", inputs.isoDisqualifyingIncome, inputs.isoDisqualifyingIncome > 0 ? "ISO shares sold within a year of exercise or two of grant: the spread at exercise (limited to the actual gain) is ordinary income, not capital gain. It is not subject to Medicare tax." : "No ISO shares sold before their holding periods.", ["sharesSold"]);
+  L.put("longTermGains", "Long-term capital gains", inputs.longTermGains, inputs.sharesSold > 0 ? "Gains in the profile plus this year's sales of shares held over a year." : "From the profile. Gains on assets held over a year.", ["sharesSold"]);
+  L.put("shortTermGains", "Short-term capital gains", inputs.shortTermGains, inputs.sharesSold > 0 ? "Gains in the profile plus this year's sales of shares held a year or less. Taxed as ordinary income." : "From the profile. Taxed as ordinary income.", ["sharesSold"]);
   const carryInTotal = inputs.capitalLossCarryIn.shortTerm + inputs.capitalLossCarryIn.longTerm;
   L.put("capitalLossCarryIn", "Capital loss carried in", carryInTotal, carryInTotal > 0 ? `${usd(inputs.capitalLossCarryIn.shortTerm)} short-term and ${usd(inputs.capitalLossCarryIn.longTerm)} long-term losses from earlier years, netted against this year's gains first.` : "No capital loss carryforward.");
   const cap = netCapital(inputs.shortTermGains, inputs.longTermGains, inputs.capitalLossCarryIn, fs === "mfs" ? 1_500 : 3_000);
@@ -55,9 +57,9 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
 
   const ordinaryIncome = L.put(
     "ordinaryIncome", "Ordinary income",
-    wages + inputs.otherOrdinary + inputs.interest + inputs.nonqualifiedDividends + cap.ordinaryGain - cap.lossDeduction,
-    "Taxable wages + other ordinary income + interest + non-qualified dividends + net short-term gains - capital loss deduction. Taxed on the bracket schedule.",
-    ["wages", "otherOrdinary", "interest", "nonqualifiedDividends", "netShortTermGain", "capitalLossDeduction"],
+    wages + inputs.otherOrdinary + inputs.interest + inputs.nonqualifiedDividends + cap.ordinaryGain - cap.lossDeduction + inputs.isoDisqualifyingIncome,
+    "Taxable wages + other ordinary income + interest + non-qualified dividends + net short-term gains - capital loss deduction" + (inputs.isoDisqualifyingIncome > 0 ? " + ISO disqualifying disposition income" : "") + ". Taxed on the bracket schedule.",
+    ["wages", "otherOrdinary", "interest", "nonqualifiedDividends", "netShortTermGain", "capitalLossDeduction", ...(inputs.isoDisqualifyingIncome > 0 ? ["isoDisqualifyingIncome"] : [])],
   );
   const preferentialGross = inputs.qualifiedDividends + cap.preferentialGain;
   const agi = L.put(
@@ -125,7 +127,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     const pref = Math.min(taxable, preferentialGross);
     const ordinary = taxable - pref;
     const regular = bracketTax(ordinary, brackets) + capGainsTax(pref, ordinary, cg);
-    const amti = taxable + addback + inputs.isoBargainElement;
+    const amti = taxable + addback + inputs.isoBargainElement + inputs.amtCapitalAdjustment;
     const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * Math.max(0, amti - p.amt.phaseoutStart[fs]));
     const base = Math.max(0, amti - exemption);
     const prefAmt = Math.min(base, preferentialGross);
@@ -187,8 +189,15 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     ["isoSharesExercised"],
   );
 
-  const amtOf = (bargain: number) => {
-    const amti = taxableIncome + addback + bargain;
+  L.put(
+    "amtCapitalAdjustment", "AMT basis adjustment on shares sold", inputs.amtCapitalAdjustment,
+    inputs.amtCapitalAdjustment !== 0
+      ? "ISO shares carry a higher AMT basis (the value at exercise), so the AMT gain on selling them is smaller than the regular gain. This negative adjustment lowers AMTI and frees AMT credit."
+      : "No ISO shares sold this year.",
+    ["sharesSold"],
+  );
+  const amtOf = (bargain: number, adjustment = inputs.amtCapitalAdjustment) => {
+    const amti = Math.max(0, taxableIncome + addback + bargain + adjustment);
     const phaseoutExcess = Math.max(0, amti - p.amt.phaseoutStart[fs]);
     const exemption = Math.max(0, p.amt.exemption[fs] - p.amt.phaseoutRate * phaseoutExcess);
     const base = Math.max(0, amti - exemption);
@@ -200,7 +209,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     return { amti, phaseoutExcess, exemption, base, ordinaryPart, tmt };
   };
   const a = amtOf(inputs.isoBargainElement);
-  L.put("amti", "Alternative minimum taxable income", a.amti, "Taxable income + addbacks + ISO bargain element.", ["taxableIncome", "amtAddbacks", "isoBargainElement"]);
+  L.put("amti", "Alternative minimum taxable income", a.amti, "Taxable income + addbacks + ISO bargain element" + (inputs.amtCapitalAdjustment !== 0 ? " + the basis adjustment on ISO shares sold" : "") + ".", ["taxableIncome", "amtAddbacks", "isoBargainElement", ...(inputs.amtCapitalAdjustment !== 0 ? ["amtCapitalAdjustment"] : [])]);
   L.put(
     "amtExemption", "AMT exemption", a.exemption,
     a.phaseoutExcess > 0
@@ -222,7 +231,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   );
 
   // AMT credit -----------------------------------------------------------------
-  const exclusionOnlyAmt = Math.max(0, amtOf(0).tmt - regularTax);
+  const exclusionOnlyAmt = Math.max(0, amtOf(0, 0).tmt - regularTax);
   const creditGenerated = L.put(
     "amtCreditGenerated", "AMT credit generated", Math.max(0, amt - exclusionOnlyAmt),
     amt > 0

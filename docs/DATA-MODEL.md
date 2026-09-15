@@ -21,11 +21,11 @@ everything that *changes on a date* lives in `timeline`.
 | `returns` | filed returns: the inputs as reported and the figures to reproduce | newest is used for calibration |
 | `equity.companies` | id, name, share price and its date, optional growth override, optional `pricePath`, optional `liquidityYear` | a price path pins known or assumed prices in specific years (an IPO); growth resumes from the last point; the liquidity year settles double-trigger RSUs |
 | `equity.grants` | id, name, type (`iso`, `nso`, `rsu`), company, owner, granted, vestedToDate, exercisedToDate, strike, vesting schedule or per-year counts, expiry, `settlement` for RSUs | the three counts are what every portal shows; outstanding and exercisable shares are derived. A grant with unvested shares and no schedule vests nothing in the plan, and the app says so |
-| `equity.holdings` | lots owned: id, quantity, acquisition date, how acquired, cost basis, AMT basis | for the sales lever; not in the tax math yet |
+| `equity.holdings` | lots owned: id, quantity, acquisition date, how acquired, cost basis, AMT basis, grant date for ISO shares | the opening lots; exercises and RSU settlements in the plan add lots, sales consume them |
 | `home` | the mortgage as a loan (balance, rate, origination, original amount, term), property tax, or a direct interest figure when there is no loan | interest is amortized month by month; the $750k acquisition-debt cap applies by average balance |
 | `deductions` | charitable by kind (cash, appreciated stock, DAF), state income tax, medical | cash and DAF up to 60% of AGI, stock up to 30%, excess carried forward |
 | `timeline` | `{ year, path, value, note? }` | applied cumulatively before each year is computed; growth assumptions still compound from the plan start |
-| `scenarios`, `activeScenario` | named lists of decisions: `{ events: [...] }` | an event has an id, a kind (`exercise` today; `sell` and `liquidity` next), a year, an optional date, and its own fields. The engine collapses events into a per-year lever table. Files that stored the table directly are read and mapped |
+| `scenarios`, `activeScenario` | named lists of decisions: `{ events: [...] }` | an event has an id, a kind (`exercise`, `sell`), a year, an optional date, and its own fields: shares and option type for an exercise; shares, an optional price and optional lot picks for a sale. The engine collapses events into a per-year lever table. Files that stored the table directly are read and mapped |
 | `sources` | provenance keyed by path; grants and holdings by id (`grants.g1`), companies by id | a string, or `{ doc, asOf, note }` |
 
 ## Identity
@@ -48,13 +48,18 @@ review rows.
 1. `profileInYear(profile, year)` applies timeline entries dated that year or earlier.
 2. `yearInputs` resolves growth, vesting, the active scenario's exercises, and the mortgage
    year, and takes the carryforwards from the previous year.
-3. `computeFederal` writes every intermediate to the ledger with a reason; the state module
+3. Shares acquired that year (exercises on their event date, January 1 by default; RSU
+   settlements on January 1) join the lots held. Sales dated that year (December 31 by default)
+   consume lots, lowest tax first unless the event names lots: qualifying ISO and long-term lots
+   with the highest basis go first. Each lot sold yields long- or short-term gain, ordinary
+   income for a disqualifying ISO disposition, and a negative AMT adjustment for ISO shares.
+4. `computeFederal` writes every intermediate to the ledger with a reason; the state module
    adds its line; totals follow.
-4. Carryforwards out become carryforwards in for the next year.
+5. Carryforwards out become carryforwards in for the next year; lots left over carry too.
 
 ## What the schema does not yet hold
 
-- Sales of shares (the holdings exist for it), ESPP, 83(b) and early-exercise flags, QSBS.
+- ESPP, 83(b) and early-exercise flags, QSBS.
 - Estimated payments and a cash view built on withholding.
 - States beyond Washington, California, Texas, Florida and Nevada (the California model is approximate: no credits, indexed exemptions).
 - Retirement levers (Roth conversions, contribution changes) beyond pre-tax contributions.

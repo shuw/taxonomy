@@ -112,7 +112,7 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
       const proposed: Holding[] = eq.holdings.map((h) => {
         const id = newId("h", taken);
         taken.push(id);
-        return strip({ id, lot: h.lot, owner: h.owner, quantity: h.quantity, acquired: h.acquired, via: h.via, costBasis: h.costBasis, amtBasis: h.amtBasis }) as Holding;
+        return strip({ id, lot: h.lot, owner: h.owner, quantity: h.quantity, acquired: h.acquired, via: h.via, costBasis: h.costBasis, amtBasis: h.amtBasis, grantDate: h.grantDate }) as Holding;
       });
       const current = profile.equity.holdings?.length ? profile.equity.holdings : undefined;
       const unchanged = current && same(current.map(({ id: _id, ...h }) => h), proposed.map(({ id: _id, ...h }) => h));

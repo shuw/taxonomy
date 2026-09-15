@@ -146,6 +146,8 @@ export interface Holding {
   costBasis: number;
   /** AMT basis per share (FMV at exercise for ISO shares). */
   amtBasis?: number;
+  /** ISO shares: the option's grant date, for the two-year holding test. */
+  grantDate?: string;
 }
 
 export interface Equity {
@@ -197,7 +199,28 @@ export type ScenarioEvent =
       type: "iso" | "nso";
       /** Shares drawn from grants of that type in profile order. */
       shares: number;
+    }
+  | {
+      id: string;
+      kind: "sell";
+      year: number;
+      /** Defaults to December 31 of the year. */
+      date?: string;
+      shares: number;
+      /** Per-share price; defaults to the company's modeled price for the year. */
+      price?: number;
+      /** Specific lots, lot id to shares; when absent, lots are picked lowest tax first. */
+      lots?: Record<string, number>;
     };
+
+/** One sale as the engine sees it. */
+export interface SaleLever {
+  id: string;
+  shares: number;
+  date?: string;
+  price?: number;
+  lots?: Record<string, number>;
+}
 
 /** A named list of decisions. */
 export interface Scenario {
@@ -208,6 +231,10 @@ export interface Scenario {
 export interface Levers {
   /** Option shares exercised per year, by grant type. */
   exercises: { iso: Record<number, number>; nso: Record<number, number> };
+  /** Exercise dates per year and type when set on the event; January 1 otherwise. */
+  exerciseDates?: { iso: Record<number, string>; nso: Record<number, string> };
+  /** Sales per year, in date order. */
+  sales?: Record<number, SaleLever[]>;
 }
 
 /** A dated change to any profile value, in force from that year on. */
@@ -324,6 +351,13 @@ export interface YearInputs {
   rsuSharesVested: number;
   /** RSU shares vesting this year x FMV: ordinary wage income. */
   rsuIncome: number;
+  /** Shares sold this year. */
+  sharesSold: number;
+  saleProceeds: number;
+  /** ISO shares sold before the holding periods: the spread at exercise, taxed as ordinary income (not wages for Medicare). */
+  isoDisqualifyingIncome: number;
+  /** Added to AMTI for ISO shares sold: the AMT gain is smaller than the regular gain because the AMT basis is higher. Negative. */
+  amtCapitalAdjustment: number;
   amtCreditCarryforwardIn: number;
   /** Added to every ordinary bracket rate this year. */
   bracketRateDelta: number;
@@ -348,6 +382,11 @@ export interface YearResult {
   lines: Record<string, Line>;
   /** Ordered ids, in computation order, for display. */
   order: string[];
+  /** Shares held after this year's exercises and settlements, before its sales. */
+  lotsBefore?: import("./lots.ts").Lot[];
+  /** Shares held at the end of the year. */
+  lotsEnd?: import("./lots.ts").Lot[];
+  sales?: import("./lots.ts").SaleResult[];
 }
 
 export interface PlanResult {

@@ -3,10 +3,10 @@ import { fmtDelta, fmtLine } from "../format.ts";
 import type { Selection } from "../App.tsx";
 
 const GROUPS: { title: string; ids: string[] }[] = [
-  { title: "Income", ids: ["salarySelf", "salarySpouse", "rsuIncome", "nsoIncome", "pretaxContributions", "wages", "netLongTermGain", "capitalLossDeduction", "agi"] },
+  { title: "Income", ids: ["salarySelf", "salarySpouse", "rsuIncome", "nsoIncome", "pretaxContributions", "wages", "sharesSold", "isoDisqualifyingIncome", "netShortTermGain", "netLongTermGain", "capitalLossDeduction", "agi"] },
   { title: "Deductions", ids: ["saltDeduction", "mortgageInterest", "charitableDeduction", "deduction", "taxableIncome"] },
   { title: "Regular tax", ids: ["ordinaryTax", "capGainsTax", "regularTax", "marginalBracket"] },
-  { title: "AMT", ids: ["isoSharesExercised", "isoBargainElement", "amti", "amtExemption", "tentativeMinimumTax", "amt"] },
+  { title: "AMT", ids: ["isoSharesExercised", "isoBargainElement", "amtCapitalAdjustment", "amti", "amtExemption", "tentativeMinimumTax", "amt"] },
   { title: "AMT credit", ids: ["amtCreditGenerated", "amtCreditUsed", "amtCreditCarryforwardOut"] },
   { title: "Other", ids: ["niit", "additionalMedicare", "stateCapitalGainsTax", "stateMillionairesTax", "stateRegularTax", "stateAmt", "stateTax"] },
 ];

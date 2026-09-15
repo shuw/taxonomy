@@ -9,7 +9,7 @@ const base: YearInputs = {
   salarySelf: 0, salarySpouse: 0, pretaxContributions: 0, otherOrdinary: 0, interest: 0, nonqualifiedDividends: 0, qualifiedDividends: 0, longTermGains: 0, shortTermGains: 0,
   capitalLossCarryIn: { shortTerm: 0, longTerm: 0 },
   mortgageInterestPaid: 0, mortgageCapFraction: 1, propertyTax: 0, stateIncomeTax: 0, charitableCash: 0, charitableStock: 0, charitableCarryIn: 0, medical: 0,
-  isoSharesExercised: 0, isoBargainElement: 0, nsoSharesExercised: 0, nsoIncome: 0, rsuSharesVested: 0, rsuIncome: 0, amtCreditCarryforwardIn: 0, bracketRateDelta: 0,
+  isoSharesExercised: 0, isoBargainElement: 0, nsoSharesExercised: 0, nsoIncome: 0, rsuSharesVested: 0, rsuIncome: 0, sharesSold: 0, saleProceeds: 0, isoDisqualifyingIncome: 0, amtCapitalAdjustment: 0, amtCreditCarryforwardIn: 0, bracketRateDelta: 0,
 };
 
 function fed(over: Partial<YearInputs>) {

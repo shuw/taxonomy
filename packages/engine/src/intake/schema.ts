@@ -116,6 +116,8 @@ export interface IntakeHolding {
   via: "iso_exercise" | "nso_exercise" | "rsu_vest" | "espp" | "purchase" | "other";
   costBasis: number;
   amtBasis?: number;
+  /** ISO shares: the option's grant date. */
+  grantDate?: string;
 }
 
 export interface IntakeProblem { path: string; message: string }
@@ -312,6 +314,7 @@ export function parseIntake(text: string): IntakeParse {
           via: via as IntakeHolding["via"],
           costBasis: num(`${path}.costBasis`, o.costBasis, { min: 0 }) ?? 0,
           amtBasis: num(`${path}.amtBasis`, o.amtBasis, { min: 0 }),
+          grantDate: date(`${path}.grantDate`, o.grantDate),
         });
       });
     }

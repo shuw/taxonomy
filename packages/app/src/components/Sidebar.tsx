@@ -2,7 +2,7 @@ import { statusName, timelineFields, type FieldDef, type Levers, type Profile, t
 import { pct, usdCompact } from "../format.ts";
 import { EquityKnobs } from "./EquitySection.tsx";
 import type { FactTab } from "./FactsModal.tsx";
-import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
+import { FILING_OPTIONS, Field, MoneyInput, PercentInput, Select, STATE_OPTIONS, parseAmount } from "./fields.tsx";
 import { Section } from "./Section.tsx";
 
 export { sourceOf } from "../sources.ts";
@@ -32,9 +32,8 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
           <Field label="State"><Select options={STATE_OPTIONS} value={profile.filer.state} onChange={(v) => set(["filer", "state"], v)} /></Field>
           <Field label={spouse ? "Your salary" : "Base salary"}><MoneyInput value={self.salary} onChange={(n) => set(["people", "self", "salary"], n)} /></Field>
           {spouse && <Field label="Spouse's salary"><MoneyInput value={spouse.salary} onChange={(n) => set(["people", "spouse", "salary"], n)} /></Field>}
-          <Field label="Years to plan" hint={`${profile.plan.startYear}–${endYear}`}><NumberInput value={profile.plan.years} onChange={(n) => set(["plan", "years"], Math.max(1, Math.min(15, Math.round(n))))} min={1} /></Field>
         </div>
-        <button type="button" className="link" onClick={() => onOpenFacts("you")}>Bonus, pre-tax, dependents →</button>
+        <button type="button" className="link" onClick={() => onOpenFacts("you")}>Bonus, pre-tax, dependents, first plan year →</button>
       </Section>
 
       <EquityKnobs profile={profile} levers={levers} edit={edit} onOpenFacts={() => onOpenFacts("equity")} />

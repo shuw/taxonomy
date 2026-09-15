@@ -5,6 +5,7 @@ import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
 import { activeLevers, profileInYear } from "./timeline.ts";
+import { applySale, lotFromRsu, lotsFromExercise, openingLots, type SaleResult } from "./lots.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
 
 export function planYears(profile: Profile): number[] {
@@ -19,6 +20,8 @@ export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Le
       iso: { ...base.exercises.iso, ...(overrides?.exercises?.iso ?? {}) },
       nso: { ...base.exercises.nso, ...(overrides?.exercises?.nso ?? {}) },
     },
+    exerciseDates: overrides?.exerciseDates ?? base.exerciseDates,
+    sales: overrides?.sales ?? base.sales,
   };
 }
 
@@ -83,6 +86,10 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     nsoIncome: exerciseSpread(profile, levers, "nso", year, nso),
     rsuSharesVested: rsu.shares,
     rsuIncome: rsu.income,
+    sharesSold: 0,
+    saleProceeds: 0,
+    isoDisqualifyingIncome: 0,
+    amtCapitalAdjustment: 0,
     amtCreditCarryforwardIn: carries.amtCredit,
     bracketRateDelta: profile.assumptions.bracketRateDelta ?? 0,
   };
@@ -118,10 +125,14 @@ function carriesOut(result: YearResult): Carries {
   };
 }
 
-/** Run every plan year in sequence: the timeline shapes each year's facts, carryforwards thread through. */
+/**
+ * Run every plan year in sequence: the timeline shapes each year's facts, carryforwards thread
+ * through, and shares held flow from exercises and settlements into sales.
+ */
 export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): PlanResult {
   const levers = resolveLevers(profile, leverOverrides);
   let carries = openingCarries(profile);
+  let lots = openingLots(profile);
   const years: YearResult[] = [];
   let mortgage: MortgageYear[] | null = null;
   let mortgageKey = "";
@@ -134,7 +145,32 @@ export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): Pla
       mortgage = p.home?.mortgage ? amortize(p.home.mortgage, year, profile.plan.years - i) : null;
       if (mortgage) mortgage = [...Array(i).fill(undefined), ...mortgage];
     }
-    const result = computeYear(p, yearInputs(p, levers, year, carries, mortgage?.[i]));
+    const inputs = yearInputs(p, levers, year, carries, mortgage?.[i]);
+    // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on January 1.
+    lots = [
+      ...lots,
+      ...lotsFromExercise(p, levers, "iso", year, inputs.isoSharesExercised, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
+      ...lotsFromExercise(p, levers, "nso", year, inputs.nsoSharesExercised, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
+    ];
+    const rsuLot = lotFromRsu(p, year, `${year}-01-01`);
+    if (rsuLot) lots.push(rsuLot);
+    const lotsBefore = lots.map((l) => ({ ...l }));
+    const sales: SaleResult[] = [];
+    for (const sale of [...(levers.sales?.[year] ?? [])].sort((a, b) => (a.date ?? `${year}-12-31`).localeCompare(b.date ?? `${year}-12-31`))) {
+      const { remaining, result } = applySale(p, lots, sale, year);
+      lots = remaining;
+      sales.push(result);
+      inputs.sharesSold += result.shares;
+      inputs.saleProceeds += result.proceeds;
+      inputs.longTermGains += result.longTermGain;
+      inputs.shortTermGains += result.shortTermGain;
+      inputs.isoDisqualifyingIncome += result.ordinaryIncome;
+      inputs.amtCapitalAdjustment += result.amtAdjustment;
+    }
+    const result = computeYear(p, inputs);
+    result.lotsBefore = lotsBefore;
+    result.lotsEnd = lots.map((l) => ({ ...l }));
+    result.sales = sales;
     carries = carriesOut(result);
     years.push(result);
   }

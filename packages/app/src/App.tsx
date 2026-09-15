@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProfileIdContext, usePersisted } from "./persist.ts";
 import { FactsModal, isFactTab, type FactTab } from "./components/FactsModal.tsx";
-import { activeScenario, amtCrossover, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent } from "@taxonomy/engine";
-import { EventTimeline, factMarkers } from "./components/EventTimeline.tsx";
+import { activeScenario, amtCrossover, newEventId, planYears, resolveLevers, runPlan, scenarioEdits, setExerciseEvent, sharesToCover, sweepIsoExercise, statusName, type Levers, type PlanResult, type Profile, type ProfileEdit, type ScenarioEvent } from "@taxonomy/engine";
+import { EventTimeline, factMarkers, type AddKind } from "./components/EventTimeline.tsx";
+import { NumberInput } from "./components/fields.tsx";
 import { api, type ProfileSummary } from "./api.ts";
 import { useProfile, useProfileList } from "./useProfile.ts";
 import { Hero } from "./components/Hero.tsx";
@@ -136,13 +137,20 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
     edit(edits);
   };
   const selectEvent = (id: string | null) => { setSelectedEvent(id); const e = events.find((x) => x.id === id); if (e) setFocusYear(e.year); };
-  const addEvent = (kind: "exercise", type: "iso" | "nso", year: number) => {
-    const existing = events.find((e) => e.kind === kind && e.type === type && e.year === year);
+  const addEvent = (what: AddKind, year: number) => {
+    const existing = what.kind === "exercise" ? events.find((e) => e.kind === "exercise" && e.type === what.type && e.year === year) : undefined;
     if (existing) { selectEvent(existing.id); return; }
     const id = newEventId(events);
-    writeEvents([...events, { id, kind, type, year, shares: 0 }]);
+    const event: ScenarioEvent = what.kind === "exercise" ? { id, kind: "exercise", type: what.type, year, shares: 0 } : { id, kind: "sell", year, shares: 0 };
+    writeEvents([...events, event]);
     setSelectedEvent(id);
     setFocusYear(year);
+  };
+  const sellToCover = (id: string) => {
+    const e = events.find((x) => x.id === id);
+    if (!e || e.kind !== "sell") return;
+    const n = sharesToCover(profile, levers, e.year, id);
+    writeEvents(events.map((x) => (x.id === id ? { ...x, shares: n, lots: undefined } : x)));
   };
   const changeEvent = (id: string, patch: Partial<ScenarioEvent>) => {
     writeEvents(events.map((e) => (e.id === id ? ({ ...e, ...patch } as ScenarioEvent) : e)));
@@ -179,10 +187,15 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} />
         <section className="card timeline-card">
-          <h2>Your plan, year by year</h2>
-          <div className="sub">Tax above, decisions below. Press + under a year to add one; click a chip to adjust it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
+          <div className="card-head">
+            <div>
+              <h2>Your plan, year by year</h2>
+              <div className="sub">Tax above, decisions below. Press + under a year to add one; click a chip to adjust it. {pinned ? "Gray columns are the pinned scenario." : ""}</div>
+            </div>
+            <label className="plan-years"><span className="muted small">Years to plan</span><NumberInput value={profile.plan.years} onChange={(n) => edit([{ path: ["plan", "years"], value: Math.max(1, Math.min(15, Math.round(n))) }])} min={1} /></label>
+          </div>
           <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} />
-          <EventTimeline profile={profile} levers={levers} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} />
+          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} onSelect={selectEvent} onAdd={addEvent} onChange={changeEvent} onRemove={removeEvent} onSellToCover={sellToCover} />
         </section>
         {hasIso && (
           <div className="two-up">

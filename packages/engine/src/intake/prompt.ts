@@ -81,6 +81,7 @@ const STRUCTURED: Partial<Record<IntakeSection, string>> = {
       acquired: 2025-04-10
       via: iso_exercise        # iso_exercise | nso_exercise | rsu_vest | espp | purchase | other
       costBasis: 0             # per share, regular basis
+      grantDate: 2023-06-01    # ISO shares: the option's grant date (for the two-year holding test)
       amtBasis: 0              # per share, FMV at exercise for ISO shares (Form 3921 box 4)`,
 };
 

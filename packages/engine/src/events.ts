@@ -13,9 +13,14 @@ export function activeScenario(profile: Profile): Scenario {
 
 /** Collapse a scenario's events into the per-year lever table the engine computes from. */
 export function leversOf(scenario: Scenario | undefined): Levers {
-  const levers: Levers = { exercises: { iso: {}, nso: {} } };
-  for (const e of scenario?.events ?? []) {
-    if (e.kind === "exercise") levers.exercises[e.type][e.year] = (levers.exercises[e.type][e.year] ?? 0) + e.shares;
+  const levers: Levers = { exercises: { iso: {}, nso: {} }, exerciseDates: { iso: {}, nso: {} }, sales: {} };
+  for (const e of sortedEvents(scenario?.events ?? [])) {
+    if (e.kind === "exercise") {
+      levers.exercises[e.type][e.year] = (levers.exercises[e.type][e.year] ?? 0) + e.shares;
+      if (e.date) levers.exerciseDates![e.type][e.year] = e.date;
+    } else if (e.kind === "sell") {
+      (levers.sales![e.year] ??= []).push({ id: e.id, shares: e.shares, date: e.date, price: e.price, lots: e.lots });
+    }
   }
   return levers;
 }

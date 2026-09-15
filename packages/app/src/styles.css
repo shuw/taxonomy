@@ -541,3 +541,18 @@ code { font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-r
 .events-empty { margin: 10px 0 0; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 .tooltip { animation: fade-in .12s ease; }
+.card-head { display: flex; align-items: flex-start; gap: 16px; }
+.card-head > div:first-child { flex: 1; min-width: 0; }
+.plan-years { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.plan-years .input-wrap { width: 84px; }
+.ev-chip.sell { border-left: 3px solid var(--series-surtax); }
+.badge.sell { background: var(--series-surtax); }
+.ei-date { width: 150px; }
+.ei-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ei-price { display: flex; align-items: center; gap: 8px; }
+.ei-price .input-wrap { width: 130px; }
+.sale-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.milestones { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+.lots-fold summary { margin-top: 2px; }
+.ledger.lots td.warn { color: var(--series-amt); }
+.input-wrap.sm { width: 110px; }
