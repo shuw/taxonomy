@@ -141,6 +141,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <span className="chip ghost" title="Edit this file; the app follows it">{path}{saving ? " · saving…" : ""}</span>
         <span className="spacer" />
         <ThemeToggle />
+        <button type="button" className="btn edit-info" onClick={() => openFacts()}>Edit my information</button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin</button>
           : <button type="button" className="btn primary" onClick={() => setPinned({ levers, plan })}>Pin this scenario</button>}

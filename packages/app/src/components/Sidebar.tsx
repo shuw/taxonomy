@@ -30,10 +30,6 @@ export function Sidebar({ profile, levers, crossovers, years, focusYear, onFocus
 
   return (
     <div className="sidebar-inner">
-      <div className="intake-cta">
-        <button type="button" className="btn primary big" onClick={() => onOpenFacts("you")}>Edit my information</button>
-        <span className="muted small" style={{ margin: 0 }}>Pay, equity grants, home, giving, last return. The sidebar below is for what-ifs.</span>
-      </div>
       <Section id="you" title="You" color="var(--accent)" defaultOpen summary={`${statusName(profile.filer.filingStatus)} · ${profile.filer.state} · ${usdCompact(self.salary)}${spouse ? ` + ${usdCompact(spouse.salary)}` : ""} · ${profile.plan.startYear}–${endYear}`}>
         <div className="row2">
           <Field label="Filing status"><Select options={[...FILING_OPTIONS]} value={profile.filer.filingStatus} onChange={(v) => set(["filer", "filingStatus"], v)} /></Field>
