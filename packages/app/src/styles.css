@@ -380,3 +380,27 @@ code { font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-r
 .create-basics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 12px 14px; background: var(--surface-2); border-radius: 14px; }
 .create-basics .wide { grid-column: 1 / -1; }
 .modal { width: min(1180px, 100%); }
+
+/* Simplified intake ---------------------------------------------------------------- */
+.modal { width: min(720px, 100%); }
+.modal.wide { width: min(1180px, 100%); }
+.create-head { padding-bottom: 0; flex: none; }
+.start-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .start-cards { grid-template-columns: 1fr; } }
+.start-card { position: relative; text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 18px 18px 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-2); cursor: pointer; transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease; }
+.start-card:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); border-color: var(--accent); }
+.start-card:disabled { opacity: .5; cursor: default; }
+.start-card strong { font: 700 17px/1.2 var(--display); letter-spacing: -0.01em; }
+.start-card span { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.start-card em { position: absolute; top: 12px; right: 12px; font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--focus); padding: 2px 8px; border-radius: 999px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.col-title { display: flex; align-items: center; gap: 8px; font: 700 15px/1.2 var(--display); }
+.col .prompt-box { min-height: 300px; }
+.col .paste-box { min-height: 300px; }
+.sections-details { font-size: 12px; color: var(--ink-2); }
+.sections-details summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+.sections-details ul { list-style: none; padding: 8px 0 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.sections-details label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+.sections-details input { accent-color: var(--accent); }
