@@ -1,5 +1,5 @@
 import { exerciseDraws, exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
-import { resolveLevers, runPlan } from "./plan.ts";
+import { resolveLevers, runPlan, stateBefore, yearFrom, runPlanFrom } from "./plan.ts";
 import type { Levers, Profile } from "./types.ts";
 
 export interface AmtCrossover {
@@ -19,12 +19,13 @@ const withIso = (levers: Levers, year: number, company: string, shares: number):
   exercises: { iso: { ...levers.exercises.iso, [year]: { ...(levers.exercises.iso[year] ?? {}), [company]: shares } }, nso: levers.exercises.nso },
 });
 
-/** Binary-search the ISO exercise count in `year` for one company at which AMT first appears. */
+/** Binary-search the ISO exercise count in `year` for one company at which AMT first appears. Only that year is recomputed per probe. */
 export function amtCrossover(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, company?: string): AmtCrossover {
   const levers = resolveLevers(profile, leverOverrides);
   const c = company ?? profile.equity.companies[0]?.id ?? "*";
   const available = sharesExercisable(profile, levers, "iso", year, c);
-  const amtAt = (shares: number): number => runPlan(profile, withIso(levers, year, c, shares)).years.find((y) => y.year === year)?.lines.amt?.value ?? 0;
+  const before = stateBefore(profile, levers, year);
+  const amtAt = (shares: number): number => yearFrom(profile, resolveLevers(profile, withIso(levers, year, c, shares)), year, before).lines.amt?.value ?? 0;
   let lo = 0;
   let hi = available;
   if (amtAt(hi) <= 0) lo = hi;
@@ -47,18 +48,28 @@ export interface SweepPoint {
   amtCreditCarryforwardEnd: number;
 }
 
-/** Vary this year's ISO exercise count from 0 to available and record what moves, for charting. */
+/**
+ * Vary this year's ISO exercise count from 0 to available and record what moves, for charting.
+ * Each point recomputes this year only; the plan-wide totals are exact at the two ends and
+ * interpolated between, since they need the later years too.
+ */
 export function sweepIsoExercise(profile: Profile, leverOverrides: Partial<Levers> | undefined, year: number, steps = 40, company?: string): SweepPoint[] {
   const levers = resolveLevers(profile, leverOverrides);
   const c = company ?? profile.equity.companies[0]?.id ?? "*";
   const available = sharesExercisable(profile, levers, "iso", year, c);
+  if (!profile.plan || year < profile.plan.startYear || year >= profile.plan.startYear + profile.plan.years) return [];
+  const before = stateBefore(profile, levers, year);
+  const prefix = runPlan(profile, levers).years.filter((y) => y.year < year);
+  const full = (shares: number) => runPlanFrom(profile, resolveLevers(profile, withIso(levers, year, c, shares)), year, before, prefix);
+  const ends = { 0: full(0), [available]: full(available) } as Record<number, ReturnType<typeof full>>;
   const points: SweepPoint[] = [];
   for (let i = 0; i <= steps; i++) {
     const shares = Math.round((available * i) / steps);
-    const res = runPlan(profile, withIso(levers, year, c, shares));
-    const y = res.years.find((r) => r.year === year);
-    if (!y) return [];
-    points.push({ shares, amt: y.lines.amt!.value, totalTax: y.lines.totalTax!.value, planTotalTax: res.totals.totalTax, amtCreditCarryforwardEnd: res.totals.amtCreditCarryforwardEnd });
+    const y = yearFrom(profile, resolveLevers(profile, withIso(levers, year, c, shares)), year, before);
+    const t = available > 0 ? shares / available : 0;
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    const e0 = ends[0]!, e1 = ends[available] ?? e0;
+    points.push({ shares, amt: y.lines.amt!.value, totalTax: y.lines.totalTax!.value, planTotalTax: lerp(e0.totals.totalTax, e1.totals.totalTax), amtCreditCarryforwardEnd: lerp(e0.totals.amtCreditCarryforwardEnd, e1.totals.amtCreditCarryforwardEnd) });
   }
   return points;
 }

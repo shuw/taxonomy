@@ -73,8 +73,6 @@ export function SweepChart({ sweep, crossover, current, onChange }: Props) {
           <div className="row"><strong>{shares(hp.shares)} shares</strong></div>
           <div className="row"><span>AMT this year</span><span>{usd(hp.amt)}</span></div>
           <div className="row"><span>Tax this year</span><span>{usd(hp.totalTax)}</span></div>
-          <div className="row"><span>Extra tax over the plan</span><span>{usd(extra(hp))}</span></div>
-          <div className="row"><span>Credit unused at end</span><span>{usd(hp.amtCreditCarryforwardEnd)}</span></div>
           <div className="row muted"><span>click to set</span></div>
         </div>
       )}

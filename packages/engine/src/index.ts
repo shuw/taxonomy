@@ -4,7 +4,8 @@ export { federalParams, FEDERAL_2025, FEDERAL_2026, bracketTax, bracketRate, cap
 export type { FederalParams, Bracket } from "./params.ts";
 export { computeFederal, statusName } from "./federal.ts";
 export { stateModule, MODELED_STATES } from "./state/index.ts";
-export { runPlan, computeYear, yearInputs, planYears, resolveLevers, openingCarries, profileWithLevers } from "./plan.ts";
+export { runPlan, runPlanFrom, stepYear, stateBefore, yearFrom, openingState, computeYear, yearInputs, planYears, resolveLevers, openingCarries, profileWithLevers } from "./plan.ts";
+export type { PlanState } from "./plan.ts";
 export { profileInYear, changesIn, activeLevers, emptyLevers, setPath, getPath, DEFAULT_SCENARIO } from "./timeline.ts";
 export type { Carries } from "./plan.ts";
 export { openingLots, lotsFromExercise, lotFromRsu, applySale, lowestTaxOrder, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, sharesHeld, addYears, addDays } from "./lots.ts";

@@ -5,7 +5,7 @@ import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
 import { activeLevers, profileInYear } from "./timeline.ts";
-import { applySale, lotFromRsu, lotsFromExercise, openingLots, type SaleResult } from "./lots.ts";
+import { applySale, lotFromRsu, lotsFromExercise, openingLots, type Lot, type SaleResult } from "./lots.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
 
 export function planYears(profile: Profile): number[] {
@@ -152,6 +152,84 @@ function carriesOut(result: YearResult): Carries {
   };
 }
 
+/** Everything that flows from one plan year into the next. */
+export interface PlanState {
+  carries: Carries;
+  lots: Lot[];
+  mortgage: MortgageYear[] | null;
+  mortgageKey: string;
+}
+
+export function openingState(profile: Profile): PlanState {
+  return { carries: openingCarries(profile), lots: openingLots(profile), mortgage: null, mortgageKey: "" };
+}
+
+/**
+ * Compute one plan year from the state entering it: the timeline shapes the year's facts,
+ * exercises and settlements add lots, sales consume them, then the tax runs. `base` is the
+ * profile with the scenario's liquidity events applied (profileWithLevers).
+ */
+export function stepYear(profile: Profile, base: Profile, levers: Levers, year: number, state: PlanState): { result: YearResult; state: PlanState } {
+  const i = year - profile.plan.startYear;
+  const p = profileInYear(base, year);
+  let { mortgage, mortgageKey } = state;
+  // Re-amortize only when the loan itself changes on the timeline.
+  const key = JSON.stringify(p.home?.mortgage ?? null);
+  if (key !== mortgageKey) {
+    mortgageKey = key;
+    mortgage = p.home?.mortgage ? amortize(p.home.mortgage, year, profile.plan.years - i) : null;
+    if (mortgage) mortgage = [...Array(i).fill(undefined), ...mortgage];
+  }
+  const inputs = yearInputs(p, levers, year, state.carries, mortgage?.[i]);
+  // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on January 1.
+  let lots = [
+    ...state.lots,
+    ...lotsFromExercise(p, levers, "iso", year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
+    ...lotsFromExercise(p, levers, "nso", year, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
+  ];
+  const rsuLot = lotFromRsu(p, year, `${year}-01-01`);
+  if (rsuLot) lots.push(rsuLot);
+  const lotsBefore = lots.map((l) => ({ ...l }));
+  const sales: SaleResult[] = [];
+  for (const sale of [...(levers.sales?.[year] ?? [])].sort((a, b) => (a.date ?? `${year}-12-31`).localeCompare(b.date ?? `${year}-12-31`))) {
+    const { remaining, result } = applySale(p, lots, sale, year);
+    lots = remaining;
+    sales.push(result);
+    inputs.sharesSold += result.shares;
+    inputs.saleProceeds += result.proceeds;
+    inputs.longTermGains += result.longTermGain;
+    inputs.shortTermGains += result.shortTermGain;
+    inputs.isoDisqualifyingIncome += result.ordinaryIncome;
+    inputs.amtCapitalAdjustment += result.amtAdjustment;
+  }
+  const result = computeYear(p, inputs);
+  result.lotsBefore = lotsBefore;
+  result.lotsEnd = lots.map((l) => ({ ...l }));
+  result.sales = sales;
+  return { result, state: { carries: carriesOut(result), lots, mortgage, mortgageKey } };
+}
+
+/** The state entering `year`: every earlier plan year run in sequence. */
+export function stateBefore(profile: Profile, levers: Levers, year: number): PlanState {
+  const base = profileWithLevers(profile, levers);
+  let state = openingState(profile);
+  for (const y of planYears(profile)) {
+    if (y >= year) break;
+    state = stepYear(profile, base, levers, y, state).state;
+  }
+  return state;
+}
+
+/** One year on its own, from a state computed earlier: the cheap way to probe a lever in that year. */
+export function yearFrom(profile: Profile, levers: Levers, year: number, state: PlanState): YearResult {
+  return stepYear(profile, profileWithLevers(profile, levers), levers, year, state).result;
+}
+
+function totals(years: YearResult[], carries: Carries): PlanResult["totals"] {
+  const sum = (id: string) => years.reduce((s, y) => s + y.lines[id]!.value, 0);
+  return { totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carries.amtCredit };
+}
+
 /**
  * Run every plan year in sequence: the timeline shapes each year's facts, carryforwards thread
  * through, and shares held flow from exercises and settlements into sales.
@@ -159,54 +237,27 @@ function carriesOut(result: YearResult): Carries {
 export function runPlan(profile: Profile, leverOverrides?: Partial<Levers>): PlanResult {
   const levers = resolveLevers(profile, leverOverrides);
   const base = profileWithLevers(profile, levers);
-  let carries = openingCarries(profile);
-  let lots = openingLots(profile);
+  let state = openingState(profile);
   const years: YearResult[] = [];
-  let mortgage: MortgageYear[] | null = null;
-  let mortgageKey = "";
-  for (const [i, year] of planYears(profile).entries()) {
-    const p = profileInYear(base, year);
-    // Re-amortize only when the loan itself changes on the timeline.
-    const key = JSON.stringify(p.home?.mortgage ?? null);
-    if (key !== mortgageKey) {
-      mortgageKey = key;
-      mortgage = p.home?.mortgage ? amortize(p.home.mortgage, year, profile.plan.years - i) : null;
-      if (mortgage) mortgage = [...Array(i).fill(undefined), ...mortgage];
-    }
-    const inputs = yearInputs(p, levers, year, carries, mortgage?.[i]);
-    // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on January 1.
-    lots = [
-      ...lots,
-      ...lotsFromExercise(p, levers, "iso", year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
-      ...lotsFromExercise(p, levers, "nso", year, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
-    ];
-    const rsuLot = lotFromRsu(p, year, `${year}-01-01`);
-    if (rsuLot) lots.push(rsuLot);
-    const lotsBefore = lots.map((l) => ({ ...l }));
-    const sales: SaleResult[] = [];
-    for (const sale of [...(levers.sales?.[year] ?? [])].sort((a, b) => (a.date ?? `${year}-12-31`).localeCompare(b.date ?? `${year}-12-31`))) {
-      const { remaining, result } = applySale(p, lots, sale, year);
-      lots = remaining;
-      sales.push(result);
-      inputs.sharesSold += result.shares;
-      inputs.saleProceeds += result.proceeds;
-      inputs.longTermGains += result.longTermGain;
-      inputs.shortTermGains += result.shortTermGain;
-      inputs.isoDisqualifyingIncome += result.ordinaryIncome;
-      inputs.amtCapitalAdjustment += result.amtAdjustment;
-    }
-    const result = computeYear(p, inputs);
-    result.lotsBefore = lotsBefore;
-    result.lotsEnd = lots.map((l) => ({ ...l }));
-    result.sales = sales;
-    carries = carriesOut(result);
-    years.push(result);
+  for (const year of planYears(profile)) {
+    const step = stepYear(profile, base, levers, year, state);
+    years.push(step.result);
+    state = step.state;
   }
-  const sum = (id: string) => years.reduce((s, y) => s + y.lines[id]!.value, 0);
-  return {
-    years,
-    totals: { totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carries.amtCredit },
-  };
+  return { years, totals: totals(years, state.carries) };
+}
+
+/** Continue a plan from the state entering `fromYear` to the end; earlier years are taken from `prefix`. */
+export function runPlanFrom(profile: Profile, levers: Levers, fromYear: number, state: PlanState, prefix: YearResult[]): PlanResult {
+  const base = profileWithLevers(profile, levers);
+  const years = [...prefix];
+  for (const year of planYears(profile)) {
+    if (year < fromYear) continue;
+    const step = stepYear(profile, base, levers, year, state);
+    years.push(step.result);
+    state = step.state;
+  }
+  return { years, totals: totals(years, state.carries) };
 }
 
 export { pct, usd };
