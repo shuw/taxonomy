@@ -28,7 +28,7 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   L.put("salarySelf", hasSpouse ? "Your salary and bonus" : "Salary and bonus", inputs.salarySelf, "Base pay plus bonus from the profile, grown by the wage growth assumption.");
   if (inputs.salarySpouse > 0) L.put("salarySpouse", "Spouse salary and bonus", inputs.salarySpouse, "Spouse base pay plus bonus, grown by the wage growth assumption.");
   L.put("rsuIncome", "RSU vesting income", inputs.rsuIncome, inputs.rsuSharesVested > 0 ? `${n(inputs.rsuSharesVested)} units vested x share value. Taxed as wages the year they vest, whether or not you sell.` : "No RSUs vest this year.");
-  L.put("nsoIncome", "NSO exercise income", inputs.nsoIncome, inputs.nsoSharesExercised > 0 ? `(FMV - strike) x ${n(inputs.nsoSharesExercised)} NSO shares exercised. Unlike ISOs, the spread is ordinary wage income right away, and there is no AMT preference.` : "No NSO exercises this year.");
+  L.put("nsoIncome", "NSO exercise income", inputs.nsoIncome, inputs.nsoSharesExercised > 0 ? `(share price − strike) × ${n(inputs.nsoSharesExercised)} NSO shares. Unlike ISOs, the spread is ordinary wage income right away, and there is no AMT preference.` : "No NSO exercises this year.");
   L.put("pretaxContributions", "Pre-tax contributions", inputs.pretaxContributions, inputs.pretaxContributions > 0 ? "401(k), HSA and similar. They come out of taxable wages (W-2 box 1) but not Medicare wages." : "No pre-tax contributions in the profile.");
   const grossWages = inputs.salarySelf + inputs.salarySpouse + inputs.rsuIncome + inputs.nsoIncome;
   const wages = L.put(
@@ -187,11 +187,11 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   // AMT -----------------------------------------------------------------------
   const addback = usesItemized ? saltDeduction : standard;
   L.put("amtAddbacks", "AMT addbacks", addback, usesItemized ? "The SALT deduction is not allowed under AMT, so it is added back. Mortgage interest and charitable gifts stay deductible." : "The standard deduction is not allowed under AMT, so it is added back.", ["usesItemized"]);
-  L.put("isoSharesExercised", "ISO shares exercised", inputs.isoSharesExercised, "The lever. Vested ISO shares exercised this year, drawn from ISO grants in profile order.", [], "shares");
+  L.put("isoSharesExercised", "ISO shares exercised", inputs.isoSharesExercised, "Vested ISO shares exercised this year, taken from ISO grants in profile order.", [], "shares");
   L.put(
     "isoBargainElement", "ISO bargain element", inputs.isoBargainElement,
     inputs.isoSharesExercised > 0 || inputs.isoBargainElement > 0
-      ? `(FMV - strike) x shares exercised. It is income for AMT the year you exercise, even though you sold nothing and it is invisible to regular tax.`
+      ? `(share price − strike) × shares exercised. It is income for AMT the year you exercise, even though you sold nothing and it is invisible to regular tax.`
       : "No ISO exercises this year, so no AMT preference from equity.",
     ["isoSharesExercised"],
   );

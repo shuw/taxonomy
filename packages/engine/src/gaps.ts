@@ -66,9 +66,9 @@ export function profileGaps(profile: Profile): Gap[] {
     if ((inc.qualifiedDividends ?? 0) === 0 && (i.qualifiedDividends ?? 0) > 0 && (inc.ordinaryDividends ?? 0) > 0) gaps.push({ id: "income.qualifiedDividends", section: "Other income", text: `${yr} had ${usd(i.qualifiedDividends!)} of qualified dividends; this year's qualified figure is 0.`, fill: { label: `Use ${usd(i.qualifiedDividends!)}`, edits: [{ path: ["income", "qualifiedDividends"], value: i.qualifiedDividends! }, { path: ["sources", ["income", "qualifiedDividends"].join(".")], value: fromReturn("1040 line 3a") }] } });
   }
   const self = profile.people.self;
-  if ((self.pretaxContributions ?? 0) === 0 && self.salary > 0) gaps.push({ id: "people.self.pretaxContributions", section: "You", text: "No pre-tax contributions recorded. A 401(k) or HSA lowers taxable wages; 2026's 401(k) limit is $24,500.", fill: { label: "Assume $24,500", edits: [{ path: ["people", "self", "pretaxContributions"], value: 24_500 }, { path: ["sources", "people.self.pretaxContributions"], value: "assumed: 2026 401(k) limit" }] } });
+  if ((self.pretaxContributions ?? 0) === 0 && self.salary > 0) gaps.push({ id: "people.self.pretaxContributions", section: "You", text: "No pre-tax contributions recorded (401(k), HSA).", fill: { label: "Use the 401(k) limit, $24,500", edits: [{ path: ["people", "self", "pretaxContributions"], value: 24_500 }, { path: ["sources", "people.self.pretaxContributions"], value: "assumed: 2026 401(k) limit" }] } });
   if (profile.filer.filingStatus === "mfj" && !profile.people.spouse) gaps.push({ id: "people.spouse", section: "You", text: "Filing jointly, but no spouse income is recorded. Add it in the You section if there is any." });
-  if ((profile.filer.dependents ?? []).length === 0 && (profile.filer.filingStatus === "mfj" || profile.filer.filingStatus === "hoh")) gaps.push({ id: "filer.dependents", section: "You", text: "No dependents recorded. Birth years matter for credits that are coming." });
+  if ((profile.filer.dependents ?? []).length === 0 && (profile.filer.filingStatus === "mfj" || profile.filer.filingStatus === "hoh")) gaps.push({ id: "filer.dependents", section: "You", text: "No dependents recorded." });
 
   // Equity the plan cannot model as entered.
   for (const g of grantsMissingVesting(profile)) {
@@ -84,7 +84,7 @@ export function profileGaps(profile: Profile): Gap[] {
     const year = r.event.year;
     gaps.push({
       id: `holdings.${h.id}.exercise`, section: "Equity",
-      text: `Lot "${h.lot}": ${int(h.quantity)} ${type} shares exercised ${h.acquired}, inside the plan, but no exercise is modeled, so ${year} is missing its ${type === "ISO" ? "AMT" : "wage income"}. Modeling it adds the exercise to the ${name} scenario${r.price ? ` and uses ${usd(r.price.value)}/sh as the ${year} price` : ""}${r.exercised ? " and moves the shares back to exercisable" : ""}; the plan then creates the lot itself.`,
+      text: `Lot "${h.lot}": ${int(h.quantity)} ${type} shares exercised ${h.acquired}, inside the plan, but not modeled, so ${year} is missing its ${type === "ISO" ? "AMT" : "wage income"}. Model it to add the exercise to the ${name} scenario.`,
       fill: { label: `Model it in ${year}`, edits: [
         { path: ["scenarios", name], value: { ...scenario, events: [...scenario.events, r.event] } },
         { path: ["equity", "holdings"], value: holdings.filter((x) => x.id !== h.id) },

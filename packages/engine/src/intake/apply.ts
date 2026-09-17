@@ -266,13 +266,13 @@ export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEd
     .map((g): FollowUp => ({ id: "", text: `${g.name}: ${Math.round(g.granted - (g.vestedToDate ?? 0)).toLocaleString("en-US")} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Add the schedule on the grant card.`, about: `grants.${g.id}` }));
   const missing: FollowUp[] = [];
   const deps = review.changes.find((c) => c.id === "filer.dependents")?.dependents;
-  if (deps?.some((d) => d.birthYear === undefined)) missing.push({ id: "", text: `Birth year${deps.filter((d) => !d.birthYear).length > 1 ? "s" : ""} for ${deps.filter((d) => !d.birthYear).map((d) => d.name ?? "the dependent").join(", ")} (the return does not show them; they decide the child credit).`, about: "filer.dependents", kind: "missing" });
+  if (deps?.some((d) => d.birthYear === undefined)) missing.push({ id: "", text: `Birth year${deps.filter((d) => !d.birthYear).length > 1 ? "s" : ""} for ${deps.filter((d) => !d.birthYear).map((d) => d.name ?? "the dependent").join(", ")} (the return does not show them).`, about: "filer.dependents", kind: "missing" });
   const mort = review.doc.home?.mortgage;
   if (mort && mort.rate === undefined) missing.push({ id: "", text: "Mortgage interest rate, from the latest statement (the balance is in; interest is computed from the rate).", about: "home.mortgage.rate", kind: "missing" });
   if (mort && mort.originated === undefined) missing.push({ id: "", text: "When the mortgage was taken out (Form 1098 box 3); it decides whether the $750k or $1M interest cap applies.", about: "home.mortgage.originated", kind: "missing" });
   const pr = review.doc.prior_return;
   if (pr && (pr.amt?.amt ?? 0) > 0 && (pr.inputs?.isoBargainElement ?? 0) > 0 && !(pr.amtCreditCarryforward ?? 0)) {
-    missing.push({ id: "", text: `Your ${pr.year} return paid ${Math.round(pr.amt!.amt!).toLocaleString("en-US")} of AMT with an ISO exercise in it. Most of that comes back as a credit from ${pr.year + 1} on. Enter Form 8801 line 26 if it was filed; otherwise the AMT amount itself is a fair starting figure.`, about: "carryforwards.amtCredit", kind: "missing" });
+    missing.push({ id: "", text: `Your ${pr.year} return paid ${Math.round(pr.amt!.amt!).toLocaleString("en-US")} of AMT with an ISO exercise in it. Most of that comes back as a credit from ${pr.year + 1} on. Enter Form 8801 line 26 if it was filed.`, about: "carryforwards.amtCredit", kind: "missing" });
   }
   const fresh: FollowUp[] = [...missing, ...scheduleGaps, ...review.questions.map((q): FollowUp => ({ id: "", text: q.question, about: q.about ?? undefined }))].map((f) => {
     const id = newId("f", taken);
@@ -293,6 +293,8 @@ export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEd
 
 /** Where an intake path lands in the profile, for values the user types in by hand. */
 export function profilePathForIntake(path: string): ProfilePath | null {
+  const m = /^home\.mortgage\.(balance|rate|originated|originalAmount|termYears)$/.exec(path);
+  if (m) return ["home", "mortgage", m[1]!];
   const f = fieldByIntake(path === "basics.dependents" ? "pay.dependents" : path);
   return f && f.review !== false ? toPath(f.path) : null;
 }

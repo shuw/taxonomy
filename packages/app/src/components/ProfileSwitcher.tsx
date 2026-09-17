@@ -17,12 +17,14 @@ interface Props {
 export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, onNew, onDuplicate, onRename, onDelete }: Props) {
   const [mode, setMode] = useState<"menu" | "rename" | "delete">("menu");
   const [draft, setDraft] = useState(currentName);
+  const taken = profiles.some((p) => p.id !== currentId && p.name.trim().toLowerCase() === draft.trim().toLowerCase());
   const panel = mode === "rename" ? (
-    <form className="menu-form" onSubmit={(e) => { e.preventDefault(); if (draft.trim()) { onRename(draft.trim()); setMode("menu"); } }}>
+    <form className="menu-form" onSubmit={(e) => { e.preventDefault(); if (draft.trim() && !taken) { onRename(draft.trim()); setMode("menu"); } }}>
       <span className="input-wrap"><input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Profile name" /></span>
+      {taken && <span className="field-error">Another profile is already called {draft.trim()}.</span>}
       <div className="menu-actions">
         <button type="button" className="btn" onClick={() => setMode("menu")}>Cancel</button>
-        <button type="submit" className="btn primary">Rename</button>
+        <button type="submit" className="btn primary" disabled={!draft.trim() || taken}>Rename</button>
       </div>
     </form>
   ) : mode === "delete" ? (

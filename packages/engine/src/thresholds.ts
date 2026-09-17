@@ -129,7 +129,9 @@ export function creditRecovery(profile: Profile, leverOverrides: Partial<Levers>
   const years = (base ?? runPlan(profile, levers)).years;
   const line = (y: (typeof years)[number], id: string) => y.lines[id]?.value ?? 0;
   const tranches: { year: number; left: number }[] = [{ year: -Infinity, left: profile.carryforwards?.amtCredit ?? 0 }];
-  const generated = line(years.find((y) => y.year === year)!, "amtCreditGenerated");
+  const target = years.find((y) => y.year === year);
+  if (!target) return null;
+  const generated = line(target, "amtCreditGenerated");
   if (generated <= 0) return null;
   let remaining = generated;
   const path: CreditRecovery["path"] = [];

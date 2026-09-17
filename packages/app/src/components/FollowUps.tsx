@@ -42,7 +42,7 @@ export function FollowUps({ profile, edit, onSecondLook }: { profile: Profile; e
     <section className={"card followups" + (expanded ? "" : " folded")}>
       <button type="button" className="card-fold" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
         <h2>A few things to fill in <span className="count">{missing.length}</span></h2>
-        <span className="muted small fold-hint">Your documents didn't say; answer here and the picture updates</span>
+        <span className="muted small fold-hint">Answer here</span>
         <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
       {expanded && <>
@@ -99,7 +99,7 @@ export function NotesFromClaude({ profile, edit }: { profile: Profile; edit: (ed
   };
   const groups = new Map<string, FollowUp[]>();
   for (const f of notes) { const k = sectionOf(f.about); groups.set(k, [...(groups.get(k) ?? []), f]); }
-  if (notes.length === 0) return <p className="muted">Nothing here. Notes Claude leaves while filling things in appear here, and beside the values they concern.</p>;
+  if (notes.length === 0) return <p className="muted">No notes from Claude.</p>;
   return (
     <>
       {notes.length > 0 && (
@@ -107,7 +107,7 @@ export function NotesFromClaude({ profile, edit }: { profile: Profile; edit: (ed
           <div className="notes-head">
             <div>
               <div className="subhead">Notes from Claude</div>
-              <p className="muted small" style={{ margin: 0 }}>How it read the documents and what it decided when they disagreed. For reading, not approving; each note also shows as ⓘ beside its value. Clear them when you have seen them.</p>
+              <p className="muted small" style={{ margin: 0 }}>Judgment calls Claude made while filling things in. Nothing to approve.</p>
             </div>
             <button type="button" className="btn" onClick={() => clear(notes.map((f) => f.id))}>Clear all</button>
           </div>
@@ -118,7 +118,7 @@ export function NotesFromClaude({ profile, edit }: { profile: Profile; edit: (ed
                 <div key={f.id} className="note-card">
                   <div className="note-subject"><b>{sj.label}</b>{sj.value !== undefined && <span className="note-value">{sj.value}</span>}</div>
                   <div className="note-text">{f.text}</div>
-                  <button type="button" className="link muted note-clear" onClick={() => clear([f.id])}>Clear</button>
+                  <button type="button" className="link muted note-clear" onClick={() => clear([f.id])}>Dismiss</button>
                 </div>
               ); })}
             </div>
@@ -143,7 +143,7 @@ export function ProbablyMissing({ profile, edit }: { profile: Profile; edit: (ed
             <span>{g.text} <span className="where">· {g.section}</span></span>
             <span className="gap-actions">
               {g.fill && <button type="button" className="btn" onClick={() => edit(g.fill!.edits)}>{g.fill.label}</button>}
-              <button type="button" className="link" onClick={() => setDismissed((d) => [...d, g.id])}>Not needed</button>
+              <button type="button" className="link" onClick={() => setDismissed((d) => [...d, g.id])}>Dismiss</button>
             </span>
           </li>
         ))}

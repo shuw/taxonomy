@@ -455,5 +455,11 @@ export interface PlanResult {
     stateTax: number;
     amt: number;
     amtCreditCarryforwardEnd: number;
+    /** Salary, bonus and sale proceeds over the plan. */
+    cashIn: number;
+    /** Cash in less tax, exercise cost and cash gifts: what stays. */
+    netCash: number;
+    /** Total tax over AGI plus the ISO bargain element, across the plan; 0 when there is no income. */
+    rateWithSpread: number;
   };
 }

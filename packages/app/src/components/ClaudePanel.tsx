@@ -1,4 +1,5 @@
-import { useContext, useEffect, useState } from "react";
+import { demoText } from "../format.ts";
+import { useContext, useEffect, useMemo, useState } from "react";
 import type { Profile } from "@taxonomy/engine";
 import { ProfileIdContext } from "../persist.ts";
 import { ago, useAgentStatus, type AgentStatus } from "../hooks/useAgentStatus.ts";
@@ -10,12 +11,12 @@ export function suggestedPrompts(profile: Profile): { text: string; why: string 
   const out: { text: string; why: string }[] = [];
   const name = profile.name?.trim() || "Me";
   if (!(profile.returns?.length)) out.push({ text: "Read my last tax return and fill in what you find.", why: "Calibrates the model against a filed year." });
-  if (!profile.people.self.salary) out.push({ text: "My base salary is 250,000 and my bonus target is 30,000.", why: "Simple facts go straight in, for your review." });
-  out.push({ text: `${profile.equity.grants.length ? "Update" : "Set up"} my equity from these documents: grant notices, the holdings page from my portal, and any exercise confirmations.`, why: "Grants, vesting schedules and the shares you already own, for your review." });
+  if (!profile.people.self.salary) out.push({ text: "My base salary is 250,000 and my bonus target is 30,000.", why: "Filled in at once, with the source recorded." });
+  out.push({ text: `${profile.equity.grants.length ? "Update" : "Set up"} my equity from these documents: grant notices, the holdings page from my portal, and any exercise confirmations.`, why: "Grants, vesting and the shares you own, with sources." });
   if (profile.equity.grants.some((g) => g.type === "iso")) out.push({ text: "What's the most I can exercise this year without paying AMT?", why: "Answered from the plan, with the reason." });
-  if (profile.equity.grants.length > 0) out.push({ text: "Exercise 2,000 shares next year and sell half the year after. What does that do?", why: "Arrives as a scenario for you to accept." });
+  if (profile.equity.grants.length > 0) out.push({ text: "Exercise 2,000 shares next year and sell half the year after. What does that do?", why: "Saved as a scenario; the app switches to it." });
   out.push({ text: `Why is ${profile.plan.startYear + 1} different from ${profile.plan.startYear}?`, why: "Line by line, from the ledger." });
-  out.push({ text: "Assume 20% share growth from now on.", why: "An assumption change, waiting for your yes." });
+  out.push({ text: "Assume 20% share growth from now on.", why: "Applied at once; undo from History." });
   if (out.length < 4) out.push({ text: `Connect to my Taxonomy profile "${name}" and tell me what's still missing.`, why: "A quick status from Claude's side." });
   return out.slice(0, 6);
 }
@@ -59,7 +60,9 @@ export function ClaudePanel({ profile, news, onSeen, onHistory, onClose }: { pro
   const here = on && status.conn?.lastProfile === id;
   const [showSetup, setShowSetup] = useState(false);
   // What arrived is shown once, then counted as seen.
-  const [fresh] = useState(news);
+  const [initial] = useState(news);
+  // What was new when the panel opened stays listed; anything that arrives meanwhile joins it.
+  const fresh = useMemo(() => { const m = new Map(initial.map((r) => [r.at, r])); for (const r of news) m.set(r.at, r); return [...m.values()].sort((a, b) => (a.at < b.at ? 1 : -1)); }, [initial, news]);
   useEffect(() => { onSeen(); }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -88,30 +91,23 @@ export function ClaudePanel({ profile, news, onSeen, onHistory, onClose }: { pro
                 <div className="news">
                   <div className="subhead">New from Claude</div>
                   <ul className="plain">
-                    {fresh.slice(0, 8).map((r) => <li key={r.at}><span className="muted small">{ago(new Date(r.at))} · </span>{r.lines.join("; ")}</li>)}
+                    {fresh.slice(0, 8).map((r) => <li key={r.at}><span className="muted small">{ago(new Date(r.at))} · </span>{demoText(r.lines.join("; "))}</li>)}
                   </ul>
                   <button type="button" className="link" onClick={onHistory}>Full history, with undo</button>
                 </div>
               )}
-              <div className="subhead">Things to say</div>
-              <p className="muted small" style={{ margin: 0 }}>Click one to copy it. What Claude changes shows up here and in the plan at once; every change is in the history and can be undone.</p>
+              <div className="subhead">Prompts</div>
+              <p className="muted small" style={{ margin: 0 }}>Click to copy.</p>
               <PromptList profile={profile} />
               <div className="modal-actions">
                 {openLink}
                 <span className="spacer" />
                 <button type="button" className="link" onClick={() => setShowSetup(true)}>Connection settings</button>
               </div>
-              <div className="subhead">What Claude can do here</div>
-              <ul className="plain">
-                <li><b>Answer</b> from the plan: any number, with the ledger's reason behind it.</li>
-                <li><b>Try</b> decisions and save them as scenarios the plan switches to.</li>
-                <li><b>Fill in</b> facts you tell it and documents it reads, with the source recorded on each value.</li>
-                <li><b>Never</b> compute tax itself. Every change it makes is logged, and any of them can be undone from History.</li>
-              </ul>
             </>
           ) : (
             <>
-              {on && <button type="button" className="link" onClick={() => setShowSetup(false)}>← Back to things to say</button>}
+              {on && <button type="button" className="link" onClick={() => setShowSetup(false)}>← Back</button>}
               <AgentSetup status={status} name={profile.name?.trim() || "Me"} create={false} />
               <details className="sections-details"><summary>Set up Claude Desktop by hand</summary><ManualSetup conn={status.conn} /></details>
             </>

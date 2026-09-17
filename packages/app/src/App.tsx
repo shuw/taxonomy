@@ -29,6 +29,7 @@ import { CreditRecoveryView } from "./components/CreditRecovery.tsx";
 import { HoldOrSellCard } from "./components/HoldOrSell.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
 import { ProposalBanner } from "./components/ProposalBanner.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { setPersisted } from "./persist.ts";
 import { ShortcutsHelp } from "./components/ShortcutsHelp.tsx";
 import { ClaudePanel, ClaudeStatusButton } from "./components/ClaudePanel.tsx";
@@ -68,6 +69,9 @@ export function App() {
   useEffect(() => { if (currentId) { remember(currentId); api.setCurrent(currentId).catch(() => {}); } }, [currentId]);
 
   const store = useProfile(currentId);
+  // The profile open before this one, so a delete lands back there.
+  const previousId = useRef<string | null>(null);
+  useEffect(() => () => { previousId.current = currentId; }, [currentId]);
   // The first-run wizard stays up once shown: creating the draft makes the list non-empty, which must not close it.
   const [firstRun, setFirstRun] = useState(false);
   useEffect(() => { if (list !== null && list.length === 0) setFirstRun(true); }, [list]);
@@ -84,7 +88,7 @@ export function App() {
   if (needIntake) return <IntakeModal mode="create" onDone={done} onOpen={(id) => { setFirstRun(false); switchTo(id); }} onClose={!firstRun && list.length > 0 ? () => setCreating(false) : undefined} />;
   const file = store.file;
   if (!file || file.id !== currentId) return <div className="empty">Loading profile…</div>;
-  if (!file.profile) return <div className="empty"><div className="error">{file.error}</div></div>;
+  if (!file.profile) return <div className="empty"><div className="error"><strong>Could not read {file.path}.</strong>{"\n"}{file.error}{"\n"}Fix the file by hand, or restore an earlier version from History.</div></div>;
 
   const currentName = file.profile.name?.trim() || file.id;
   const actions = {
@@ -99,15 +103,15 @@ export function App() {
     onDelete: async () => {
       await api.remove(file.id, true);
       const l = await refresh();
-      const next = l.find((p) => p.id !== file.id);
+      const next = l.find((p) => p.id === previousId.current) ?? l.find((p) => p.id !== file.id);
       if (next) switchTo(next.id); else setWantedId(null);
     },
   };
 
   return (
     <ProfileIdContext.Provider value={file.id}>
-      <Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
-        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
+      <ErrorBoundary where="the plan"><Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
+        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} /></ErrorBoundary>
     </ProfileIdContext.Provider>
   );
 }
@@ -145,10 +149,12 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const levers = useMemo(() => resolveLevers(profile), [profile]);
   const scenario = useMemo(() => activeScenario(profile), [profile]);
   const events = scenario.events;
-  const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
   // Inputs answer at once; the engine runs once a burst of edits (a slider drag) settles.
   const engineProfile = useDebounced(profile);
   const engineLevers = useMemo(() => (engineProfile === profile ? levers : resolveLevers(engineProfile)), [engineProfile, profile, levers]);
+  // The analyses run on the engine's profile, so their year must be one of its years, not the live profile's.
+  const engineYears = useMemo(() => planYears(engineProfile), [engineProfile]);
+  const sweepYear = engineYears.includes(focusYear) ? focusYear : engineYears[0]!;
   const { plan, isoCompanies, crossovers, byCompany } = usePlanAnalyses(engineProfile, engineLevers, sweepYear);
   const hasIso = isoCompanies.length > 0;
   const facts = useMemo(() => factMarkers(profile, years, () => openFacts("equity")), [profile, yearsKey]);
@@ -179,7 +185,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
     { keys: ["e"], label: "Edit my information", run: () => openFacts() },
     { keys: ["p"], label: "Pin or unpin this scenario", run: () => setPinned((cur) => (cur ? null : { levers, plan })) },
     { keys: ["l"], label: "Show or hide the ledger", run: () => setLedgerOpen((o) => !o) },
-    { keys: ["c"], label: "Claude: status and things to say", run: () => setClaudeOpen(true) },
+    { keys: ["c"], label: "Claude", run: () => setClaudeOpen(true) },
     { keys: ["h"], label: "History of changes", run: () => setHistoryOpen(true) },
     { keys: ["?"], label: "These shortcuts", run: () => setHelpOpen((o) => !o), always: true },
     { keys: ["Escape"], label: "Close the panel or dialog", run: () => {
@@ -199,8 +205,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />
       : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />;
   const stripCopy = planView === "combined"
-    ? "Each bar is the year's cash in: tax at the bottom, then exercise cost, then what you keep. The number is the net."
-    : planView === "tax" ? "Tax above, decisions below." : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net.";
+    ? "Each bar is the year's cash in, split into tax, exercise cost, gifts and what is kept."
+    : planView === "tax" ? "" : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net.";
 
   return (
     <div className={"app" + (selected ? " has-explain" : "")}>
@@ -218,7 +224,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <button type="button" className="btn edit-info" onClick={() => openFacts()}>Edit my information <kbd>E</kbd></button>
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
-          : <button type="button" className="btn primary" title="Pin this scenario to compare against" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
+          : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
       </header>
 
       <aside className="sidebar">
@@ -227,14 +233,14 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
 
       <main className="main">
         <MobileNotice />
-        {error && <div className="error">Profile file has a problem; showing the last good version.{"\n"}{error}</div>}
+        {error && <div className="error">{error}</div>}
         <ProposalBanner profile={profile} edit={edit} onCompare={() => setPinned({ levers, plan })} onReviewIntake={(d) => { setReviewDocId(d.id); setIntakeOpen(true); }} onCopyRequest={() => { setReviewDocId(null); setIntakeOpen(true); }} onEditFacts={() => openFacts("you")} onClaude={() => setClaudeOpen(true)} />
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} onSecondLook={() => openFacts("history")} />
         <section className="card timeline-card">
           <div className="card-head">
             <div>
-              <h2>Your plan, year by year <Info label="How to read the plan">{stripCopy} Press + under a year to add a decision; click a chip to adjust it. Hover a year to focus it.{pinned && planView !== "cash" ? " Gray columns are the pinned scenario." : ""}</Info></h2>
+              <h2>Your plan, year by year <Info label="How to read the plan">{stripCopy} Press + under a year to add a decision; click a chip to change it.{pinned && planView !== "cash" ? " Gray columns are the pinned scenario." : ""}</Info></h2>
             </div>
             <div className="plan-years"><Segmented options={[{ value: "combined", label: "Combined", key: "1" }, { value: "tax", label: "Tax", key: "2" }, { value: "cash", label: "Cash", key: "3" }]} value={planView} onChange={setPlanView} /></div>
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
@@ -264,7 +270,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <section className={"card" + (ledgerOpen ? "" : " folded")}>
           <button type="button" className="card-fold" onClick={() => setLedgerOpen((o) => !o)} aria-expanded={ledgerOpen}>
             <h2>Ledger</h2>
-            <span className="muted small fold-hint">{ledgerOpen ? "Click any number for the reason behind it" : "Every line of every year, with its reason"}</span>
+            <span className="muted small fold-hint">Click a number for its reason</span>
             <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} />}
@@ -285,7 +291,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       {intakeOpen && (() => {
         const doc = profile.pendingIntake?.find((d) => d.id === reviewDocId) ?? profile.pendingIntake?.[0];
         const rest = (profile.pendingIntake ?? []).filter((d) => d.id !== doc?.id);
-        return <IntakeModal mode="fill" profile={profile} doc={doc} onApply={(edits) => edit(doc ? [...edits, { path: ["pendingIntake"], value: rest.length ? rest : undefined }] : edits)} onClose={() => setIntakeOpen(false)} />;
+        return <IntakeModal mode="fill" profile={profile} doc={doc} onApply={(edits) => edit(doc ? [...edits, { path: ["pendingIntake"], value: rest.length ? rest : undefined }] : edits)} onClose={() => setIntakeOpen(false)} onHistory={() => { setIntakeOpen(false); setHistoryOpen(true); }} />;
       })()}
     </div>
   );

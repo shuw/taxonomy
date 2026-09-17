@@ -94,7 +94,7 @@ export function describeChanges(before: Profile | null, after: Profile): string[
   for (const [id, d] of db) if (!da.has(id)) lines.push(`Sent a ${doc(d)} for review`);
   for (const [id, d] of da) if (!db.has(id)) lines.push(`Reviewed a ${doc(d)}`);
   const fa = byId(before.followUps), fb = byId(after.followUps);
-  for (const [id, f] of fb) { const prev = fa.get(id); if (!prev) lines.push(`Question added: ${f.text}`); else if (!prev.resolved && f.resolved) lines.push(`Answered: ${f.text}`); }
+  for (const [id, f] of fb) { const prev = fa.get(id); if (!prev) lines.push(`${f.kind === "missing" ? "Question" : "Note from Claude"}: ${f.text}`); else if (!prev.resolved && f.resolved) lines.push(`Answered: ${f.text}`); }
 
   // Equity items by id.
   const items: [string, (x: { id: string; name?: string; lot?: string }) => string, Map<string, { id: string }>, Map<string, { id: string }>][] = [
@@ -120,7 +120,9 @@ export function describeChanges(before: Profile | null, after: Profile): string[
   for (const y of ra.keys()) if (!rb.has(y)) lines.push(`${y} return removed`);
 
   // Everything else as scalars, with the registry's labels; sections handled above are skipped, sources are noise.
-  const skip = /^(scenarios|activeScenario|timeline|pending|pendingIntake|followUps|sources|equity\.(companies|grants|holdings)|returns)(\.|$)/;
+  const skip = /^(scenarios|activeScenario|timeline|pending|pendingIntake|followUps|sources|equity\.(companies|grants|holdings)|returns|filer\.dependents)(\.|$)/;
+  const people = (d: Profile["filer"]["dependents"]) => (d ?? []).map((x) => x.birthYear ?? x.name ?? "?").join(", ") || "none";
+  if (JSON.stringify(before?.filer.dependents ?? []) !== JSON.stringify(after.filer.dependents ?? [])) lines.push(before ? `Dependents: ${people(before.filer.dependents)} → ${people(after.filer.dependents)}` : `Dependents: ${people(after.filer.dependents)}`);
   const raw: { path: string; from: unknown; to: unknown }[] = [];
   leaves(before, after, "", raw);
   for (const l of raw) if (!skip.test(l.path)) lines.push(scalar(l.path, l.from, l.to));

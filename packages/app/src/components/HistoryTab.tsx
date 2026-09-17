@@ -1,3 +1,4 @@
+import { demoText } from "../format.ts";
 import { useContext, useEffect, useState } from "react";
 import { api, type HistoryRow } from "../api.ts";
 import { ProfileIdContext } from "../persist.ts";
@@ -20,12 +21,12 @@ export function HistoryTab() {
   const restore = async (at: string) => { try { await api.restore(id, at, rows?.[0]?.at); setConfirm(null); } catch (e) { setError(String((e as Error).message ?? e)); } };
   if (error) return <div className="error">{error}</div>;
   if (!rows) return <div className="muted">Loading…</div>;
-  if (rows.length === 0) return <p className="muted">No changes recorded yet. Every save from here on is listed: yours, and anything Claude sends.</p>;
+  if (rows.length === 0) return <p className="muted">No changes yet.</p>;
   const days = new Map<string, HistoryRow[]>();
   for (const r of rows) { const d = new Date(r.at).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); days.set(d, [...(days.get(d) ?? []), r]); }
   return (
     <>
-      <p className="muted small" style={{ margin: 0 }}>Each entry is one save. “Restore” puts the file back the way it was just before that change; the restore is itself recorded, so nothing is lost.</p>
+      <p className="muted small" style={{ margin: 0 }}>Restore puts the file back to just before that change; the restore is logged too.</p>
       {[...days.entries()].map(([day, list]) => (
         <div key={day}>
           <div className="subhead">{day}</div>
@@ -35,7 +36,7 @@ export function HistoryTab() {
                 <div className="history-when"><span className="mono">{new Date(r.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</span><span className="muted small">{ago(new Date(r.at))}</span></div>
                 <div className="history-body">
                   <div className="history-actor">{r.actor === "you" ? "You" : clientName(r.actor)}</div>
-                  <ul>{r.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+                  <ul>{r.lines.map((l, i) => <li key={i}>{demoText(l)}</li>)}</ul>
                 </div>
                 <div className="history-actions">
                   {r.restorable && (confirm === r.at

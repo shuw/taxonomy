@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-import { calibrate, latestReturn, parseBirthYears, statusName, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { calibrate, latestReturn, statusName, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, usd, usdCompact } from "../format.ts";
 import { notesOf, sourceOf } from "../sources.ts";
 import { EquityFacts, equitySummary } from "./EquitySection.tsx";
 import { NotesFromClaude, ProbablyMissing, secondLookCount } from "./FollowUps.tsx";
 import { usePersisted } from "../persist.ts";
-import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, SourceChip, STATE_OPTIONS } from "./fields.tsx";
+import { DependentsInput, FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, SourceChip, STATE_OPTIONS } from "./fields.tsx";
 import { Documents, DocumentsProvider } from "./Documents.tsx";
 
 export const FACT_TABS = ["confirm", "you", "equity", "income", "home", "giving", "deductions", "history"] as const;
@@ -70,7 +70,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
         <div className="modal-head">
           <div>
             <h3>Your information</h3>
-            <div className="muted small" style={{ margin: 0 }}>Everything the plan is computed from, saved as you type to <code title="Edit this file by hand if you like; the app follows it">{path}</code>{saving ? " · saving…" : ""}. What-ifs stay in the sidebar.</div>
+            <div className="muted small" style={{ margin: 0 }}>Saved as you type to <code title="The app follows edits made by hand">{path}</code>{saving ? " · saving…" : ""}</div>
           </div>
           <button type="button" className="btn primary" onClick={onOpenIntake}>Fill from documents</button>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
@@ -79,7 +79,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
           <nav className="facts-nav" role="tablist" aria-label="Sections">
             {tabs.map((t) => (
               <button type="button" role="tab" aria-selected={t.id === tab} key={t.id} className={"facts-tab" + (t.id === tab ? " on" : "") + (t.task ? " task" : "")} onClick={() => onTab(t.id)}>
-                {t.task ? <span className="task-count">{secondLook.notes}</span> : <span className="dot" style={{ background: t.color }} />}
+                {t.task && secondLook.notes > 0 ? <span className="task-count">{secondLook.notes}</span> : <span className="dot" style={{ background: t.color }} />}
                 <span className="facts-tab-text"><span className="facts-tab-title">{t.title}</span><span className="facts-tab-summary">{t.summary}</span></span>
               </button>
             ))}
@@ -91,8 +91,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                 <div className="row3">
                   <Field label="State" source={src(["filer", "state"])} note={note(["filer", "state"])}><Select options={STATE_OPTIONS} value={profile.filer.state} onChange={(v) => set(["filer", "state"], v)} /></Field>
                   <Field label="Dependents" hint="birth years">
-                    <span className="input-wrap"><input value={deps.map((d) => d.birthYear ?? "?").join(", ")} placeholder="e.g. 2019, 2022"
-                      onChange={(e) => set(["filer", "dependents"], parseBirthYears(e.target.value))} /></span>
+                    <DependentsInput dependents={deps} onChange={(list) => set(["filer", "dependents"], list)} />
                   </Field>
                   <span />
                   <Field label="First plan year"><NumberInput value={profile.plan.startYear} onChange={(n) => set(["plan", "startYear"], Math.round(n))} min={2026} grouping={false} /></Field>
@@ -153,7 +152,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                   <Field label="Donor-advised fund" source={src(["deductions", "charitable", "daf"])} note={note(["deductions", "charitable", "daf"])}><MoneyInput value={ch.daf ?? 0} onChange={(n) => set(["deductions", "charitable", "daf"], n)} /></Field>
                 </div>
                 <div className="row3">
-                  <Field label="Charitable carryforward" hint="gifts not yet deducted because of AGI limits" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"])}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
+                  <Field label="Gifts carried forward" hint="gifts not yet deducted because of AGI limits" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"])}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
                 </div>
                 <p className="muted small">Giving is deducted only when itemizing beats the standard deduction; appreciated stock avoids the gain as well. Put a large gift on the timeline to see which year it does the most.</p>
               </>
@@ -186,7 +185,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                       {r.reported.totalTax !== undefined && <><dt>Total tax</dt><dd>{usd(r.reported.totalTax)}</dd></>}
                       {r.reported.amt !== undefined && <><dt>AMT</dt><dd>{usd(r.reported.amt)}</dd></>}
                     </dl>
-                    <p className="muted small">The card at the bottom of the main page shows how closely the model reproduces this return. To change its figures, edit the file or fill from documents again.</p>
+                    <p className="muted small">To change these figures, fill from documents again.</p>
                     <button type="button" className="link danger" onClick={() => set(["returns"], (profile.returns ?? []).filter((x) => x.year !== r.year))}>Remove return</button>
                   </div>
                 ))}

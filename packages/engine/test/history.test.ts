@@ -43,3 +43,15 @@ describe("profile history", () => {
     expect(describeChanges(profile, after([{ path: ["sources", "people.self.salary"], value: "x" }]))).toEqual([]);
   });
 });
+
+test("dependents are described as people, not paths", () => {
+  const { readFileSync } = require("node:fs");
+  const { parseProfile, editProfileText } = require("../src/profile.ts");
+  const { describeChanges } = require("../src/history.ts");
+  const text = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
+  const before = parseProfile(text);
+  const after = parseProfile(editProfileText(text, [{ path: ["filer", "dependents"], value: [{ birthYear: 2015 }, { birthYear: 2019 }] }]));
+  const lines = describeChanges(before, after);
+  expect(lines).toContain("Dependents: none → 2015, 2019");
+  expect(lines.some((l: string) => l.includes("birthYear"))).toBe(false);
+});

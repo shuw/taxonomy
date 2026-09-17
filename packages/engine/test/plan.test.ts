@@ -223,3 +223,17 @@ describe("thresholds", () => {
     for (let i = 1; i < pts.length; i++) expect(pts[i]!.amt).toBeGreaterThanOrEqual(pts[i - 1]!.amt);
   });
 });
+
+describe("plan totals", () => {
+  test("carry cash in, what is kept, and a rate that counts the ISO spread", () => {
+    const { readFileSync } = require("node:fs");
+    const { parseProfile } = require("../src/profile.ts");
+    const p = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
+    const r = runPlan(p);
+    const sum = (id: string) => r.years.reduce((s, y) => s + (y.lines[id]?.value ?? 0), 0);
+    expect(r.totals.cashIn).toBeCloseTo(sum("cashIn"), 6);
+    expect(r.totals.netCash).toBeCloseTo(sum("netCash"), 6);
+    expect(r.totals.rateWithSpread).toBeGreaterThan(0);
+    expect(r.totals.rateWithSpread).toBeLessThan(r.totals.totalTax / sum("agi"));
+  });
+});

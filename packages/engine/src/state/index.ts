@@ -21,7 +21,7 @@ const none: StateModule = {
   code: "none",
   name: "No state tax modeled",
   compute(inputs, ledger) {
-    ledger.put("stateTax", "State tax", 0, `No model for state "${inputs.state}" yet; state tax is shown as zero.`, []);
+    ledger.put("stateTax", "State tax", 0, `No model for ${inputs.state} yet, so state tax shows as zero.`, []);
   },
 };
 

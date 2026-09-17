@@ -33,7 +33,7 @@ export function ScenarioBar({ profile, scenario, edit }: Props) {
     </form>
   ) : mode === "delete" ? (
     <div className="menu-form">
-      <p>Delete scenario <strong>{active}</strong>? Its decisions are gone; the others stay.</p>
+      <p>Delete scenario <strong>{active}</strong>?</p>
       <div className="menu-actions">
         <button type="button" className="btn" onClick={() => setMode("menu")}>Keep</button>
         <button type="button" className="btn danger" onClick={() => remove(close)}>Delete</button>

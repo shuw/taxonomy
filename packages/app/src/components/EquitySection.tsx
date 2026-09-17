@@ -127,7 +127,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
       {(profile.equity.holdings?.length ?? 0) > 0 && (
         <>
           <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} <SourceChip source={sourceOf(profile, ["holdings"])} />{notesOf(profile, ["holdings"]) && <Info label="Note from Claude">{notesOf(profile, ["holdings"])}</Info>}</div>
-          <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
+          <p className="muted small"></p>
           <div className="vest-rows">
             {profile.equity.holdings!.map((h) => (
               <div key={h.id} className="vest-row holding">

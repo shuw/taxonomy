@@ -57,10 +57,10 @@ export function ProposalBanner({ profile, edit, onCompare, onReviewIntake, onCop
             <div className="claude-line on"><span className="dot" />Connected · {clientName(agent.conn?.client)} · {ago(agent.lastSeen!)}</div>
             <div className="proposal-title">This profile is empty. Say one of these to Claude:</div>
             <PromptList profile={profile} compact />
-            <div className="muted small">What Claude finds goes straight into the plan, with the source on each value; the Claude button in the top bar shows what came in. Or answer the questions below, or fill things in yourself.</div>
+            <div className="muted small"></div>
           </div>
           <div className="proposal-actions">
-            <button type="button" className="btn primary" onClick={onClaude}>More to say</button>
+            <button type="button" className="btn primary" onClick={onClaude}>Open Claude</button>
             <button type="button" className="btn" onClick={onEditFacts}>Fill it in by hand</button>
             <button type="button" className="btn icon" title="Dismiss" aria-label="Dismiss" onClick={() => setNudgeOff(true)}>✕</button>
           </div>
@@ -84,7 +84,7 @@ export function ProposalBanner({ profile, edit, onCompare, onReviewIntake, onCop
       {pending.rows.length > 0 && (
         <section className="card proposal">
           <div className="proposal-text">
-            <div className="proposal-title">Your agent wants to change {pending.rows.length === 1 ? "one thing" : `${pending.rows.length} things`} in your information</div>
+            <div className="proposal-title">Claude proposes {pending.rows.length === 1 ? "one change" : `${pending.rows.length} changes`}</div>
             <table className="pending-rows">
               <tbody>
                 {pending.rows.map((r) => (

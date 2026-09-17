@@ -51,6 +51,15 @@ export function fmtDelta(delta: number, unit: Line["unit"] = "usd"): string {
   return `${sign}${usd(abs)}`;
 }
 
+/** Headline money: whole dollars until a million, then $1.39M, so a big number stays one glance wide. */
+export function usdHeadline(n0: number): string {
+  const n = scaled(n0);
+  const abs = Math.abs(n);
+  if (abs < 1_000_000) return usd(n0);
+  const sym = demo.on ? demo.symbol : "$";
+  return `${n < 0 ? "−" : ""}${sym}${(abs / 1_000_000).toFixed(abs >= 100_000_000 ? 0 : 2)}M`;
+}
+
 /** Compact currency for chart labels: $81k, $1.2M. */
 export function usdCompact(n0: number): string {
   const n = scaled(n0);

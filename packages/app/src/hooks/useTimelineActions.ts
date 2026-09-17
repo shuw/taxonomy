@@ -25,6 +25,9 @@ export function useTimelineActions({ profile, levers, events, facts, edit, selec
     edit(edits);
   };
   const select = (id: string | null) => {
+    // A decision left at zero was never a decision; it goes when the selection moves on.
+    const prev = events.find((e) => e.id === selectedId);
+    if (prev && prev.id !== id && ((prev.kind === "exercise" || prev.kind === "sell") ? prev.shares === 0 : prev.kind === "give" ? prev.amount === 0 : false)) writeEvents(events.filter((e) => e.id !== prev.id));
     setSelectedId(id);
     const year = events.find((x) => x.id === id)?.year ?? facts.find((f) => f.id === id)?.year;
     if (year !== undefined) setFocusYear(year);

@@ -11,7 +11,7 @@ export function MobileNotice() {
   const dismiss = () => { try { localStorage.setItem(KEY, "seen"); } catch {} setShow(false); };
   return (
     <div className="notice mobile-notice">
-      <span>Taxonomy is built for a laptop screen. It works here, but the year-by-year plan is easier to read wide.</span>
+      <span>Easier to read on a laptop: the plan is wide.</span>
       <button type="button" className="btn" onClick={dismiss}>Got it</button>
     </div>
   );

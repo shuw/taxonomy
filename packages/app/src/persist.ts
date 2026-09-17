@@ -3,6 +3,16 @@ import { createContext, useContext, useState } from "react";
 /** Profile id used to namespace remembered UI state; set once per workspace. */
 export const ProfileIdContext = createContext<string>("default");
 
+/** Forget every remembered view setting; the profile choice and the theme stay. */
+export function clearRemembered(): void {
+  try {
+    const keep = new Set(["taxonomy.profile", "taxonomy.theme"]);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("taxonomy.") && !keep.has(k)) localStorage.removeItem(k);
+  } catch {}
+}
+// A reset asked for just before a reload finishes here, before any component can write state back.
+try { if (sessionStorage.getItem("taxonomy.reset")) { sessionStorage.removeItem("taxonomy.reset"); clearRemembered(); } } catch {}
+
 /** Write a remembered value for a profile from outside a component, in the same place usePersisted reads it. */
 export function setPersisted(id: string, key: string, value: unknown): void {
   try { localStorage.setItem(`taxonomy.${id}.${key}`, JSON.stringify(value)); } catch {}

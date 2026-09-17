@@ -3,7 +3,7 @@ import type { AgentConnection } from "../api.ts";
 import { ago, useAgentStatus, type AgentStatus } from "../hooks/useAgentStatus.ts";
 
 /** The sentence to say to a connected agent: connecting is the handshake; filling in happens in conversation after it. */
-export const agentSentence = (name: string, create: boolean) => (create ? `Connect to my Taxonomy profile "${name}".` : `Update my Taxonomy profile "${name}" from my documents.`);
+export const agentSentence = (name: string, create: boolean) => (create ? `Connect to my Taxonomy profile "${name}"` : `Update my Taxonomy profile "${name}" from my documents`);
 
 /** claude.ai's deep link to the add-connector dialog. It does not take the name or address, so those are copied. */
 const CONNECTOR_LINK = "https://claude.ai/new?modal=add-custom-connector#customize/connectors";
@@ -50,7 +50,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
   const [client, setClientState] = useState<AgentClient>(readClient);
   // Typed here, saved on the server next to the secret; the saved one is the default everywhere.
   const [typedHost, setTypedHost] = useState<string | null>(null);
-  const tunnelHost = typedHost ?? status.conn?.remote.tunnelHost ?? "";
+  const tunnelHost = typedHost ?? status.conn?.remote?.tunnelHost ?? "";
   const setTunnelHost = (raw: string) => { const host = raw.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); setTypedHost(host); void status.setTunnelHost(host); };
   const setClient = (c: AgentClient) => { setClientState(c); try { localStorage.setItem(CLIENT_KEY, c); } catch {} };
   const sentence = agentSentence(name, create);
@@ -75,15 +75,15 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
     </>
   );
   const arrival = (n: number) => (
-    <Step n={n} done={connected} title={connected ? `Connected · ${clientName(status.conn?.client)} · ${ago(status.lastSeen!)}` : expect ? "Claude says hello" : "Its numbers appear here for your review"}>
+    <Step n={n} done={connected} title={connected ? `Connected · ${clientName(status.conn?.client)} · ${ago(status.lastSeen!)}` : expect ? "Claude connects" : "Its changes appear in the plan"}>
       {!connected && !elsewhere && <span className="agent-status"><span className="dot pulse" /> {expect ? "Waiting for Claude to connect…" : "Waiting for the first call."}</span>}
-      {elsewhere && <span className="muted small">Claude connected to another profile (“{elsewhere}”), not to this one. If two profiles share a name, delete the spare from the profile menu, then say the sentence again.</span>}
+      {elsewhere && <span className="muted small">Claude connected to “{elsewhere}” instead. Say the sentence again; if two profiles share a name, delete the spare first.</span>}
     </Step>
   );
   let n = 0;
 
   // Choosing claude.ai starts the local HTTP server; nothing to press.
-  useEffect(() => { if (client === "web" && status.conn && !status.conn.remote.running && !status.busy) void status.serve(true); }, [client, status.conn?.remote.running]);
+  useEffect(() => { if (client === "web" && status.conn?.remote && !status.conn.remote.running && !status.busy) void status.serve(true); }, [client, status.conn?.remote?.running]);
 
   if (client === "web") {
     // Local testing: the tunnel step. A hosted deployment reports its own address in `remote.url`
@@ -95,7 +95,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
       <ol className="setup">
         <Step n={++n} done={!!r?.running} title={r?.running ? "Local server running" : "Starting the local server…"}>
           {pick}
-          <span className="muted small">Runs here, on this computer only; it is what the tunnel forwards to.</span>
+          <span className="muted small">Local only; the tunnel forwards to it.</span>
           {status.error && <div className="error">{status.error}</div>}
         </Step>
         {!r?.url && (
@@ -116,7 +116,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
                 </details>
               </>
             )}
-            {shared && tunnelHost && <span className="muted small">Through <code>{tunnelHost}</code>. Only the exact secret address answers; the bare address shows “not found” on purpose.</span>}
+            {shared && tunnelHost && <span className="muted small">Through <code>{tunnelHost}</code>. Only the exact address answers; the bare host says “not found”.</span>}
           </Step>
         )}
         <Step n={++n} done={connected} title="Add it in claude.ai">

@@ -59,7 +59,8 @@ export function parseProfile(text: string): Profile {
   if (!raw.assumptions) problems.push("assumptions is required");
 
   const people = raw.people ?? (typeof raw.income?.wages === "number" ? { self: { salary: raw.income.wages } } : undefined);
-  if (!people?.self || typeof people.self.salary !== "number") problems.push("people.self.salary is required");
+  if (!people?.self || people.self.salary === undefined) problems.push("people.self.salary is required");
+  else if (typeof people.self.salary !== "number") problems.push("people.self.salary must be a number");
 
   const equity = normalizeEquity(raw, problems);
   if (problems.length) throw new Error("profile problems:\n - " + problems.join("\n - "));

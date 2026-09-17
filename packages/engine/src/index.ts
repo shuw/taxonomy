@@ -35,3 +35,4 @@ export type { EventInput, YearHeadline, Delta, FactChangeInput, PendingRow } fro
 export type { Gap } from "./gaps.ts";
 export { describeChanges } from "./history.ts";
 export type { HistoryEntry } from "./history.ts";
+export { describeSource, sourceKeyFor, sourcesAfterEdit } from "./provenance.ts";

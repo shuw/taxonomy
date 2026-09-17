@@ -121,9 +121,9 @@ export function createServer(opts: { clientLabel?: string } = {}): McpServer {
   { instructions: [
     "Taxonomy is a personal US tax-planning tool. You read its plan, explain it and propose scenarios; the engine does all tax math.",
     "Profiles: a person or a household each has one; what-ifs are scenarios inside a profile. Every tool takes `profile` (id or name). Without it, the only profile or the one open in the app is used, and each result names the profile it is about; when several exist, say which one you are talking about, and ask if the user's words could mean another.",
-    "When the user says to connect to (or set up) a Taxonomy profile, call get_context on it right away; the app is watching for that call. Then say in two or three lines what the profile holds and what is still missing (its `outstanding` section), and offer the next step: read a document, or answer a question here.",
-    "Filling in a profile is a conversation, not one sweep. Simple facts the user can state (salary, birth years, a bonus, a balance): ask in chat and use facts. Documents: intake(request) for one section at a time, then intake(submit); several submissions are expected. Never stall on something missing; note it and move on.",
-    "Start with get_context, then get_plan. Never state a tax figure you did not get from a tool; when asked why, quote the line's reason from explain or analyze(compare_years).",
+    "When the user says to connect to (or set up) a Taxonomy profile, call get_context on it right away (the app watches for that call). Then say in two or three lines what the profile holds and what is still missing (its `outstanding` section), and offer the next step: read a document, or answer a question here.",
+    "Filling in a profile is a conversation, not one sweep. Simple facts the user can state (salary, birth years, a bonus, a balance): ask in chat and call `facts`. Documents: intake(request) for one section at a time, then intake(submit); several submissions are expected. Never stall on something missing; note it and move on.",
+    "Then get_plan. Never state a tax figure you did not get from a tool; when asked why, quote the line's reason from explain or analyze(compare_years).",
     "To change the plan: call what_if to show the effect if the user is weighing it, then scenario(add) with a name that reads like the request; the app switches to it and shows what changed.",
     "To change a fact or assumption the user states (a raise, a growth rate, a switch), call facts; it is applied at once, logged, and undoable in the app.",
     "To set up or fill in a profile from documents: create_profile if there is none for this person, intake(request) for the sections, read the documents it names, then intake(submit) with the YAML. Values are written at once with their sources; the app shows what came in.",
@@ -155,7 +155,7 @@ const factChange = z.object({
 server.registerTool("list_profiles", { description: "The profiles on this machine (id, name, and which one the app is showing). A profile is one person or household; what-ifs are scenarios within it.", annotations: { title: "List profiles", readOnlyHint: true, destructiveHint: false, openWorldHint: false } }, async () => run(() => { const current = currentProfileId(); return listProfiles().map((p) => ({ ...p, openInApp: p.id === current || undefined })); }));
 
 server.registerTool("create_profile", {
-  description: "Start a new profile from the example, named for the person or household. Follow with intake (request, then submit) to fill it from documents; pass the returned id as `profile` from then on.",
+  description: "Start an empty profile named for the person or household. Follow with intake (request, then submit) to fill it from documents; pass the returned id as `profile` from then on.",
   annotations: { title: "Create a profile", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   inputSchema: { name: z.string() },
 }, async ({ name }) => run(() => ({ ...createProfile(name, actor), next: "call intake with action 'request' for this profile, gather the documents, then intake with action 'submit'" })));
@@ -167,7 +167,7 @@ server.registerTool("get_context", {
 }, async ({ profile }) => run(() => { const f = use(profile); return about(f, tools.context(f.profile)); }));
 
 server.registerTool("get_plan", {
-  description: "Every plan year's headline lines (AGI, regular tax, AMT, credit, state, total, cash in, exercise cost, net cash, shares exercised, sold, RSUs settled) and the year's decisions, for a scenario (the active one by default).",
+  description: "Every plan year's main lines (AGI, regular tax, AMT, credit, state, total, cash in, exercise cost, net cash, shares exercised, sold, RSUs settled) and the year's decisions, for a scenario (the active one by default).",
   annotations: { title: "Read the plan", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   inputSchema: { profile: profileArg, scenario: z.string().optional() },
 }, async ({ profile, scenario }) => run(() => { const f = use(profile); return about(f, tools.plan(f.profile, scenario)); }));
@@ -213,7 +213,7 @@ server.registerTool("analyze", {
 }));
 
 server.registerTool("what_if", {
-  description: "Try decisions on top of a scenario (the active one by default) without saving: add events, optionally remove existing ones by id. Returns the resulting years and the change in total tax, AMT and net cash against the scenario.",
+  description: "Try decisions on top of a scenario (the active one by default) without saving: `add` decisions, `remove` existing ones by id. Returns the resulting years and the change in total tax, AMT and net cash against the scenario.",
   annotations: { title: "Try a what-if", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   inputSchema: { profile: profileArg, add: z.array(eventInput), remove: z.array(z.string()).optional(), basedOn: z.string().optional() },
 }, async ({ profile, add, remove, basedOn }) => run(() => { const f = use(profile); return about(f, tools.whatIf(f.profile, toEvents(add), remove ?? [], basedOn)); }));
@@ -221,7 +221,7 @@ server.registerTool("what_if", {
 server.registerTool("scenario", {
   description: [
     "Scenarios, by `action`:",
-    "add (name, add, remove?, basedOn?, note?): save decisions as a new named scenario based on the active one plus the added events, and switch the app to it; the scenario it was based on stays as it was. Returns the effect.",
+    "add (name, add, remove?, basedOn?, note?): save a new scenario: the base scenario's decisions plus `add`, minus `remove`; the app switches to it. The base is unchanged. Returns the effect.",
     "activate (name): make a scenario the active one, what the app shows.",
     "delete (name): delete a scenario; the last one cannot be deleted.",
     "Every change is logged in the app's history and can be undone there.",
@@ -241,7 +241,7 @@ server.registerTool("scenario", {
 }));
 
 server.registerTool("facts", {
-  description: "Set facts and assumptions the user states: salary, growth, inflation, share price, the Washington switches, years to plan and so on, now or from a given year. Applied at once with the source recorded; the app shows what changed and the history can undo it. Returns before/after rows and the effect on the plan.",
+  description: "Set facts and assumptions the user states: salary, growth, inflation, share price, the Washington tax switches, years to plan and so on, now or from a given year. Applied at once with the source recorded; the app shows what changed and the history can undo it. Returns before/after rows and the effect on the plan.",
   annotations: { title: "Set facts", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   inputSchema: { profile: profileArg, changes: z.array(factChange).min(1) },
 }, async ({ profile, changes }) => run(() => {

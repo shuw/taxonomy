@@ -1,3 +1,5 @@
+import { clearRemembered } from "../persist.ts";
+import { Info } from "./Info.tsx";
 import { demo, setDemo } from "../format.ts";
 import { statusName, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, usdCompact } from "../format.ts";
@@ -41,14 +43,13 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
           <Field label="Wage growth" hint="/yr"><PercentInput value={a.wageGrowth} onChange={(n) => set(["assumptions", "wageGrowth"], n)} /></Field>
           <Field label="Inflation" hint="indexes brackets"><PercentInput value={a.inflation} onChange={(n) => set(["assumptions", "inflation"], n)} /></Field>
         </div>
-        <Field label="Bracket rate shift" hint="added to every rate; put it on the timeline to start in a later year" wide><PercentInput value={a.bracketRateDelta ?? 0} onChange={(n) => set(["assumptions", "bracketRateDelta"], n || undefined)} /></Field>
+        <Field label="Bracket rate shift" hint="added to every bracket" wide><PercentInput value={a.bracketRateDelta ?? 0} onChange={(n) => set(["assumptions", "bracketRateDelta"], n || undefined)} /></Field>
         {profile.filer.state === "WA" && (
           <>
-            <div className="subhead">Washington</div>
-            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains excise tax</strong> · 7% on long-term gains over about $285k. Law since 2022.</span></label>
-            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>2.9% surtax</strong> · on gains over $1M. Law since 2025.</span></label>
-            <label className="switch"><input type="checkbox" checked={a.state?.waMillionairesTax !== false} onChange={(e) => set(["assumptions", "state", "waMillionairesTax"], e.target.checked ? undefined : false)} /><span><strong>Millionaires' tax</strong> · 9.9% on income over $1M per household, from 2028. Signed March 2026; facing a court challenge and a repeal initiative, so switch it off to see that outcome.</span></label>
-            <p className="muted small">To start any of these in a later year, press + under that year on the timeline and pick it under Assumptions.</p>
+            <div className="subhead">Washington <Info label="About the Washington taxes">Capital gains excise tax: 7% on long-term gains over about $285k, law since 2022. Surtax: 2.9% more on gains over $1M, since 2025. Millionaires' tax: 9.9% on income over $1M per household from 2028, signed March 2026 and facing a court challenge and a repeal initiative; switch it off to see that outcome. To start or stop any of these in a later year, press + under that year and pick it under Assumptions.</Info></div>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains excise tax</strong> · 7% over $285k</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>2.9% surtax</strong> · gains over $1M</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waMillionairesTax !== false} onChange={(e) => set(["assumptions", "state", "waMillionairesTax"], e.target.checked ? undefined : false)} /><span><strong>Millionaires' tax</strong> · 9.9% over $1M, from 2028</span></label>
           </>
         )}
       </Section>
@@ -62,10 +63,9 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
 
 /** Clear remembered UI state (not data, not the theme) and reload. */
 function resetView() {
-  try {
-    const keep = new Set(["taxonomy.profile", "taxonomy.theme"]);
-    for (const k of Object.keys(localStorage)) if (k.startsWith("taxonomy.") && !keep.has(k)) localStorage.removeItem(k);
-  } catch {}
+  // Cleared again on boot (persist.ts), so nothing written during unmount survives.
+  try { sessionStorage.setItem("taxonomy.reset", "1"); } catch {}
+  clearRemembered();
   location.hash = "";
   location.reload();
 }

@@ -1,15 +1,35 @@
+import { parseBirthYears } from "@taxonomy/engine";
 import { demo } from "../format.ts";
 import { Info } from "./Info.tsx";
 import { useDocumentLink } from "./Documents.tsx";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** The "source" chip on a field; a link when the source names a stored document. */
+/** The "source" chip: click it to read where the value came from; when the source names a stored document, a link opens the page. */
 export function SourceChip({ source }: { source?: string }) {
   const href = useDocumentLink(source);
+  const [open, setOpen] = useState(false);
+  const [right, setRight] = useState(false);
+  const box = useRef<HTMLElement | null>(null);
+  const place = (el: HTMLElement | null) => { box.current = el; if (el) setRight(el.getBoundingClientRect().left > window.innerWidth / 2); };
+  // A press anywhere else puts it away.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
   if (!source) return null;
-  return href
-    ? <a className="src linked" href={href} target="_blank" rel="noreferrer" title={source} onClick={(e) => e.stopPropagation()}>source ↗</a>
-    : <span className="src" title={source}>source</span>;
+  return (
+    <span className={"info src-info" + (open ? " open" : "") + (right ? " right" : "")} ref={place} onMouseDown={(e) => e.preventDefault()}>
+      <button type="button" className={"src" + (href ? " linked" : "")} aria-expanded={open} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}>source{href ? " ↗" : ""}</button>
+      <span className="info-pop" role="tooltip">
+        <span className="src-from">Where this came from</span>
+        {source}
+        {href && <><br /><a href={href} target="_blank" rel="noreferrer" onMouseDown={(e) => e.stopPropagation()}>Open the document ↗</a></>}
+      </span>
+    </span>
+  );
 }
 
 export function Field({ label, hint, children, wide, source, note, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; note?: string; error?: string }) {
@@ -29,23 +49,57 @@ export function NumberInput({ value, onChange, prefix, suffix, decimals = 0, min
   const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US", { useGrouping: grouping, maximumFractionDigits: decimals, minimumFractionDigits: decimals > 0 && !Number.isInteger(n) ? Math.min(decimals, 2) : 0 }) : "");
   const [text, setText] = useState(fmt(value));
   const focused = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
+  // Where the caret should land after the text is regrouped, counted in digits from the left.
+  const caretDigits = useRef<number | null>(null);
   useEffect(() => { if (!focused.current) setText(fmt(value)); }, [value]);
+  useLayoutEffect(() => {
+    if (caretDigits.current === null || !input.current) return;
+    let seen = 0, pos = text.length;
+    for (let i = 0; i < text.length; i++) { if (/\d/.test(text[i]!)) seen++; if (seen === caretDigits.current) { pos = i + 1; break; } }
+    if (caretDigits.current === 0) pos = 0;
+    input.current.setSelectionRange(pos, pos);
+    caretDigits.current = null;
+  }, [text]);
   return (
     <span className="input-wrap">
       {prefix && <span className="affix">{prefix}</span>}
       <input
-        type="text" inputMode="decimal" value={text} placeholder={placeholder}
+        ref={input} type="text" inputMode="decimal" value={text} placeholder={placeholder}
         onFocus={() => { focused.current = true; }}
         onBlur={() => { focused.current = false; setText(fmt(value)); }}
         onChange={(e) => {
           const raw = e.target.value;
-          setText(raw);
+          // Plain whole numbers are regrouped as they are typed ("5,000,0000" reads as 50,000,000); anything with a suffix or a decimal point is left alone until blur.
+          const plain = grouping && /^-?[\d,]*$/.test(raw) && raw.replace(/[^\d]/g, "").length > 0;
+          if (plain) {
+            const digitsBeforeCaret = raw.slice(0, e.target.selectionStart ?? raw.length).replace(/[^\d]/g, "").length;
+            const grouped = (raw.startsWith("-") ? "-" : "") + Number(raw.replace(/[^\d]/g, "")).toLocaleString("en-US");
+            caretDigits.current = digitsBeforeCaret;
+            setText(grouped);
+          } else setText(raw);
           const n = parseAmount(raw);
           if (raw.trim() === "") onChange(0);
           else if (n !== null) onChange(min !== undefined ? Math.max(min, n) : n);
         }}
       />
       {suffix && <span className="affix">{suffix}</span>}
+    </span>
+  );
+}
+
+/** Dependents as birth years, typed freely: the text is yours while the field has focus, and the profile follows what parses. */
+export function DependentsInput({ dependents, onChange }: { dependents: { name?: string; birthYear?: number }[]; onChange: (list: { birthYear?: number }[]) => void }) {
+  const shown = dependents.map((d) => d.birthYear ?? d.name ?? "?").join(", ");
+  const [text, setText] = useState(shown);
+  const focused = useRef(false);
+  useEffect(() => { if (!focused.current) setText(shown); }, [shown]);
+  return (
+    <span className="input-wrap">
+      <input value={text} placeholder="e.g. 2019, 2022" inputMode="numeric"
+        onFocus={() => { focused.current = true; }}
+        onBlur={() => { focused.current = false; setText(shown); }}
+        onChange={(e) => { setText(e.target.value); onChange(parseBirthYears(e.target.value)); }} />
     </span>
   );
 }

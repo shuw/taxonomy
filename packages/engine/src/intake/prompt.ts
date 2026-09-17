@@ -22,7 +22,7 @@ export const INTAKE_SECTIONS: SectionInfo[] = [
   { id: "equity", title: "Equity", what: "Every grant with its type, strike, vesting and how much is vested, exercised and unexercised; the current share value; shares already owned with cost and AMT basis.", documents: "Shareworks, Carta, E*Trade, Schwab or Fidelity grant pages; the latest 409A notice; Form 3921 for ISO exercises", search: "Shareworks, Carta, E*Trade, \"stock option agreement\", \"grant notice\", 409A, \"Form 3921\", \"exercise confirmation\"", shortcuts: ["\"never exercised\" sets exercised to 0 for every option grant", "\"nothing owned\" means holdings is an empty list"] },
   { id: "home", title: "Home and deductions", what: "The mortgage as a loan, property tax, state income tax, medical.", documents: "Form 1098, county tax bill", search: "\"Form 1098\", mortgage statement, property tax bill", shortcuts: ["\"no mortgage\" omits the mortgage block", "\"rent\" omits home entirely"] },
   { id: "giving", title: "Giving", what: "Charitable giving expected this year, by kind: cash, appreciated stock, donor-advised fund.", documents: "donation receipts, DAF statements, last year's Schedule A as a guide", search: "donation receipts, \"donor-advised\", DAF statement, Schedule A line 11-14", shortcuts: ["\"no giving\" sets all three to 0"] },
-  { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours", search: "nothing; ask me" },
+  { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours", search: "none" },
 ];
 
 /** Render the scalar fields of a section as a YAML tree with a comment per line, from the registry. */
@@ -118,7 +118,7 @@ export interface PromptOptions {
 export function knownFacts(profile: Profile, sections: IntakeSection[]): string {
   const facts: Record<string, unknown> = { planStartYear: profile.plan.startYear };
   if (!sections.includes("basics")) facts.filer = { filingStatus: profile.filer.filingStatus, state: profile.filer.state };
-  if (sections.includes("pay")) facts.pay = { dependents: (profile.filer.dependents ?? []).length, people: { self: { salary: profile.people.self.salary, bonus: profile.people.self.bonus }, spouse: profile.people.spouse ? { salary: profile.people.spouse.salary } : undefined } };
+  if (sections.includes("pay")) facts.pay = { dependentsOnFile: (profile.filer.dependents ?? []).length, people: { self: { salary: profile.people.self.salary, bonus: profile.people.self.bonus }, spouse: profile.people.spouse ? { salary: profile.people.spouse.salary } : undefined } };
   if (sections.includes("prior_return")) {
     const r = [...(profile.returns ?? [])].sort((a, b) => b.year - a.year)[0];
     facts.carryforwards = profile.carryforwards;
@@ -128,7 +128,7 @@ export function knownFacts(profile: Profile, sections: IntakeSection[]): string 
   if (sections.includes("equity")) facts.equity = {
     companies: profile.equity.companies.map((c) => ({ name: c.name, sharePrice: c.sharePrice, asOf: c.sharePriceAsOf })),
     grants: profile.equity.grants.map((g) => ({ name: g.name, type: g.type, granted: g.granted, vestedToDate: g.vestedToDate, exercisedToDate: g.exercisedToDate, strike: g.strike })),
-    holdings: (profile.equity.holdings ?? []).length,
+    holdingsOnFile: (profile.equity.holdings ?? []).length,
   };
   if (sections.includes("home")) facts.home = { mortgage: profile.home?.mortgage, propertyTax: profile.home?.propertyTax };
   if (sections.includes("giving")) facts.giving = { charitable: profile.deductions?.charitable };
@@ -147,15 +147,15 @@ export function intakePrompt(opts: PromptOptions): string {
 ## How we'll work
 
 1. **Look.** Search what you can reach (Drive, mail, my uploads, this chat) for: ${sections.map((s) => s.search).join("; ")}.
-2. **Finish in the same message.** A few lines on what you found, then the YAML in one \`\`\`yaml block, nothing after it. The tool shows me each number with its source before saving, and asks me itself for anything you left out.
-3. **Don't wait on me for simple facts.** Anything I can type in a moment (base salary, a bonus, a birth year, a balance, a rate, withholding to date) is never a reason to stop: leave it out, list it under \`unknown\`, and finish. Never estimate or guess it either.
-4. **Ask only for documents.** The one thing worth a question is something that lives in a page or file you can't reach: a vesting schedule page, an exercise confirmation, a statement. Name the exact page or file, once, at the end of the same message, after the YAML. If I send it, produce the YAML again.${shortcuts.length ? `\n   One-word answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
+2. **Finish in the same message.** A few lines on what you found, then the YAML in one \`\`\`yaml block. Anything you still need from me goes after it, in one line. The tool records each number with its source and asks me itself for anything you left out.
+3. **Don't wait on me for simple facts.** Anything I can type in a moment (base salary, a bonus, a birth year, a balance, a rate, withholding to date) is never a reason to stop: leave it out, list it under \`unknown\`, and finish.
+4. **Ask only for documents.** The one thing worth a question is something that lives in a page or file you can't reach: a vesting schedule page, an exercise confirmation, a statement. Name the exact page or file, once. If I send it, produce the YAML again.${shortcuts.length ? `\n   Short answers you should accept: ${shortcuts.join("; ")}.` : ""}
 
 ## What I need${opts.profile ? " (skip what the tool already has, listed at the bottom)" : ""}
 
 ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.`).join("\n")}
 
-Look hardest for these; they shape everything else. Not found after a real look? Under \`unknown\`, and finish:
+Look hardest for these. Not found: list under \`unknown\` and finish:
 
 ${required.map(({ s, items }) => `**${s.title}**\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
 
@@ -165,14 +165,15 @@ Everything else: fill it when a document shows it, leave it out otherwise.
 
 - Copy from documents or my answers. Never estimate.
 - Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`. Name the file exactly as it is stored or attached, so the tool can link the value to the page.
-- Filed return beats portal beats pay stub beats memory. If sources disagree, ask me; if I can't settle it, use the stronger source and note the other in \`questions\`.
+- Filed return beats portal beats pay stub beats memory. If sources disagree, use the stronger one and note the other in \`questions\`.
 - Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575). Paths use dots for list positions: \`equity.holdings.0.amtBasis\`.
 - An option lot exercised on or after the first plan year still goes under \`holdings\` with its date and AMT basis (Form 3921 box 4); the tool models it as an exercise decision in that year and taxes the spread itself.
-- Dependents as the return lists them: \`[{ name: Sophie, birthYear: 2019 }]\`; leave birthYear out when the return does not show it and the tool asks me.
-- A mortgage with only its balance is fine; leave rate or originated out and they become questions.
+- Dependents as the return lists them: \`[{ name: Sophie, birthYear: 2019 }]\`; leave birthYear out when the return does not show it.
+- A mortgage with only its balance is fine; leave rate or originated out and list them under \`unknown\`.
 - If the return shows AMT (Form 6251) with an ISO exercise but no Form 8801, say so under \`questions\`; the credit that carries forward is worked out from it.
 - Base salary is base pay only; the tool adds RSU and option income from the grants.
-- Options: granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO is \`nso\`. No spouse, no \`spouse\` block.
+- Options: granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO is \`nso\`.
+- Omit \`spouse\` when there is none.
 - Whatever you couldn't find goes under \`unknown\`, one path per line; the tool turns each into a question for me.
 - \`questions\` is for judgment calls I should double-check later: a derived value, disagreeing sources, something hinted but not shown. One sentence each, with \`about\` (the path) and \`proposed\` (the value you used).${opts.onlyPaths?.length ? `\n- Follow-up: report only these paths: ${opts.onlyPaths.join(", ")}.` : ""}
 
@@ -195,7 +196,7 @@ questions:
   if (opts.profile) {
     parts.push(`## What the tool already has
 
-These came from an earlier pass or are placeholders: a 0 salary, a "single" filing status with no source, are placeholders, not facts. For the sections above, report the full current state (not a diff); the tool works out what changed.
+Values with no source (a 0 salary, a "single" filing status) are placeholders, not facts. For the sections above, report the full current state (not a diff); the tool works out what changed.
 
 \`\`\`yaml
 ${knownFacts(opts.profile, opts.sections)}

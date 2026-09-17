@@ -19,14 +19,7 @@ export function GiveInspector({ years, event: e, onChange, onRemove }: { years: 
         <span className="muted">of</span>
         <span className="ei-value"><MoneyInput value={e.amount} onChange={(n) => onChange({ amount: Math.max(0, n) })} /></span>
       </>}>
-      <p className="muted small" style={{ margin: 0 }}>
-        {e.how === "stock"
-          ? "Deducted at fair value, up to 30% of AGI; the gain is never realized. Not cash, so the cash chart shows it as a line above the bar, not in it."
-          : e.how === "daf"
-            ? "Deducted this year, up to 60% of AGI, and granted out later on your schedule. Counts as cash out."
-            : "Deducted this year, up to 60% of AGI. Counts as cash out."}
-        {" "}Added on top of the recurring giving under Edit my information. Excess carries forward five years.
-      </p>
+      <p className="muted small" style={{ margin: 0 }}>On top of the yearly giving under Edit my information.{e.how === "stock" ? " Shares are not cash, so the chart shows them above the bar." : ""}</p>
     </InspectorShell>
   );
 }

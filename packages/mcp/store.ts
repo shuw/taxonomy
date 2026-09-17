@@ -75,6 +75,7 @@ export function listAttachments(id: string): { name: string; size: number; mtime
 }
 /** Store a document under a checked name; the bytes must already be decoded. */
 export function saveAttachment(id: string, name: string, bytes: Uint8Array): string {
+  if (!ID.test(id)) throw new Error("no such profile");
   const clean = safeName(name);
   if (!clean) throw new Error("a file name is required");
   if (!ATTACHABLE.test(clean)) throw new Error("only images, PDFs and text files (png, jpg, webp, gif, pdf, txt, csv, md, yaml, json)");

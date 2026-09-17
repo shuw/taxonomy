@@ -22,10 +22,10 @@ export function ExerciseInspector({ profile, levers, years, event: e, crossovers
         <DateField value={e.date} fallback={`${e.year}-01-01`} onChange={(d) => onChange({ date: d, ...(d ? { year: Number(d.slice(0, 4)) } : {}) })} />
         <YearSelect years={years} value={e.year} onChange={(y) => onChange({ year: y, date: undefined })} />
       </>}>
-      <LeverRow label={e.type.toUpperCase()} hint={e.type === "iso" ? "spread goes to AMT" : "spread is wage income"} available={available} value={value}
+      <LeverRow label={e.type.toUpperCase()} year={e.year} hint={e.type === "iso" ? "spread goes to AMT" : "spread is wage income"} available={available} value={value}
         mark={hasMark ? cross!.sharesBeforeAmt : null} over={e.type === "iso" && !!cross && value > cross.sharesBeforeAmt} sharesBeforeAmt={cross?.sharesBeforeAmt ?? 0}
         spread={nextShareSpread(profile, e.type, e.year, company)} onChange={(n) => onChange({ shares: Math.max(0, Math.round(n)) })} />
-      {e.shares > available && <p className="muted small">Only {shares(available)} are exercisable in {e.year}; the rest of this event is ignored.</p>}
+      {e.shares > available && <p className="muted small">Only {shares(available)} are exercisable in {e.year}; the rest is ignored.</p>}
     </InspectorShell>
   );
 }

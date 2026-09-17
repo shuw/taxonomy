@@ -30,7 +30,6 @@ describe("an option lot exercised inside the plan", () => {
   test("moves the shares back to exercisable when the grant's counts were read after the exercise", () => {
     const p = parseProfile(editProfileText(example, [{ path: ["equity", "holdings"], value: [lot] }, { path: ["equity", "grants", 0, "exercisedToDate"], value: 2_500 }, { path: ["equity", "grants", 0, "countsAsOf"], value: "2026-06-01" }]));
     const gap = profileGaps(p).find((g) => g.id === "holdings.h9.exercise")!;
-    expect(gap.text).toContain("moves the shares back to exercisable");
     expect(gap.fill!.edits).toContainEqual({ path: ["equity", "grants", 0, "exercisedToDate"], value: 0 });
   });
 

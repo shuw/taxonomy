@@ -140,5 +140,5 @@ export function exampleValue(f: FieldDef): string {
 
 /** Dependents from free text: four-digit birth years become people with a birth year, anything else a person without one. */
 export function parseBirthYears(text: string): { birthYear?: number }[] {
-  return text.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}));
+  return text.split(/[,\s]+/).filter((t) => /^\d{4}$/.test(t)).map((t) => ({ birthYear: Number(t) }));
 }

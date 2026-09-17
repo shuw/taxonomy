@@ -42,7 +42,9 @@ function listProfiles() {
 function readProfile(id: string) {
   const path = fileFor(id);
   let text = readFileSync(path, "utf8");
-  const migrated = migrateProfileText(text);
+  // A file the engine cannot read is still handed over as text, so the page can say what is wrong and where.
+  let migrated = text;
+  try { migrated = migrateProfileText(text); } catch { return { id, path: relative(root, path), mtime: statSync(path).mtimeMs, text }; }
   if (migrated !== text) {
     writeFileSync(path, migrated);
     text = migrated;
@@ -78,7 +80,7 @@ function isEmptyProfile(p: ReturnType<typeof parseProfile>): boolean {
   return self.salary === 0 && !self.bonus && !self.pretaxContributions && !p.people.spouse && !(p.filer.dependents?.length)
     && p.equity.grants.length === 0 && p.equity.companies.length === 0 && !(p.equity.holdings?.length)
     && none(p.income) && none(p.home) && none(p.deductions) && none(p.carryforwards)
-    && !p.pendingIntake && !(p.pending?.length) && !(p.timeline?.length) && !(p.returns?.length) && !(p.followUps?.length) && !p.sources
+    && !p.pendingIntake && !(p.pending?.length) && !(p.timeline?.length) && !(p.returns?.length) && !(p.followUps?.length) && none(p.sources)
     && Object.values(p.scenarios ?? {}).every((s) => s.events.length === 0);
 }
 
@@ -296,7 +298,7 @@ Bun.serve({
       return Response.json({ ...agentConnection(), remote: await remoteState() });
     } },
     "/api/current": { POST: async (req) => { const refused = sameOrigin(req); if (refused) return refused; const { id } = (await req.json()) as { id?: string }; if (!id || !ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404); writeFileSync(resolve(dataDir, ".current"), id); return Response.json({ ok: true }); } },
-    "/api/agent/desktop": { POST: (req) => { const refused = sameOrigin(req); if (refused) return refused; const r = addToDesktop(); return "error" in r ? bad(r.error) : Response.json(agentConnection()); } },
+    "/api/agent/desktop": { POST: async (req) => { const refused = sameOrigin(req); if (refused) return refused; const r = addToDesktop(); return "error" in r ? bad(r.error) : Response.json({ ...agentConnection(), remote: await remoteState() }); } },
     "/api/agent/open": { POST: async (req) => { const refused = sameOrigin(req); if (refused) return refused; return Response.json(await openDesktop()); } },
     "/api/profiles": {
       GET: () => Response.json(listProfiles()),

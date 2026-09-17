@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type IntakeChange, type IntakeSection, type PendingIntake, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { pct, shares, usd } from "../format.ts";
+import { pct, shares, usd, demoText } from "../format.ts";
 import { Field, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
-import { api } from "../api.ts";
+import { api, type HistoryRow } from "../api.ts";
+import { ProfileIdContext } from "../persist.ts";
 import { useProfile } from "../useProfile.ts";
 import { setHash } from "../hash.ts";
 import { AgentSetup } from "./ConnectAgent.tsx";
 import { Segmented } from "./fields.tsx";
 import { useAgentStatus } from "../hooks/useAgentStatus.ts";
 
-interface FillProps { mode: "fill"; profile: Profile; /** The agent's document being reviewed, if any. */ doc?: PendingIntake; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
+interface FillProps { mode: "fill"; profile: Profile; /** The agent's document being reviewed, if any. */ doc?: PendingIntake; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; /** Open History, where Claude's writes can be undone. */ onHistory?: () => void; }
 interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; }
 type Props = FillProps | CreateProps;
 
@@ -53,7 +54,7 @@ export function IntakeModal(props: Props) {
 }
 
 /** Fill from documents for the profile on screen. */
-function FillModal({ profile, doc, onApply, onClose }: FillProps) {
+function FillModal({ profile, doc, onApply, onClose, onHistory }: FillProps) {
   const scope = `fill.${profile.name ?? ""}`;
   const finish = async (edits: ProfileEdit[]) => { onApply(edits); clearDraft(`${scope}.paste`); onClose(); };
   return (
@@ -62,11 +63,11 @@ function FillModal({ profile, doc, onApply, onClose }: FillProps) {
         <header className="modal-head">
           <div>
             <h3>Fill from documents</h3>
-            <div className="muted small" style={{ margin: 0 }}>Claude reads the documents. You approve every number before it is saved.</div>
+            <div className="muted small" style={{ margin: 0 }}>Connected, Claude fills values in directly. A pasted reply is reviewed here first.</div>
           </div>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>
         </header>
-        <AgentIntake profile={profile} doc={doc} name={profile.name?.trim() || "Me"} create={false} busy={false} error={null} onFinish={finish} scope={scope} />
+        <AgentIntake profile={profile} doc={doc} name={profile.name?.trim() || "Me"} create={false} busy={false} error={null} onFinish={finish} scope={scope} onDone={onClose} onHistory={onHistory} />
       </div>
     </div>
   );
@@ -124,6 +125,12 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
     setDraftId(null);
   };
   const back = async () => { await discard(); };
+  useEffect(() => {
+    if (!onClose) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") void close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const close = async () => { await discard(); onClose?.(); };
 
   const finish = async (edits: ProfileEdit[], provided: Set<string> = new Set(), awaitAgent = false) => {
@@ -151,7 +158,7 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
         <header className="modal-head">
           <div>
             <h3>New profile <span className="muted step-count">step {step} of 2</span></h3>
-            <div className="muted small" style={{ margin: 0 }}>{step === 1 ? "Name it." : "Connect Claude. It fills the profile in with you, one thing at a time; every change is logged and can be undone."}</div>
+            {step === 2 && <div className="muted small" style={{ margin: 0 }}>Connect Claude; it fills the profile in with you.</div>}
           </div>
           {!onClose && <ThemeToggle />}
           {onClose && <button type="button" className="btn icon" onClick={() => void close()} aria-label="Close">×</button>}
@@ -167,7 +174,7 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
               <div className="notice">A profile named “{taken.name}” already exists. Pick another name, or {onOpen ? <button type="button" className="link" onClick={() => onOpen(taken.id)}>open the existing one</button> : "open it from the profile menu"}.</div>
             )}
             <div className="modal-actions">
-              <span className="muted small" style={{ margin: 0 }}>Enter keeps “{name || "Me"}”.</span>
+              <span />
               <span className="spacer" />
               <button type="button" className="btn primary" disabled={busy} onClick={() => void next()}>{busy ? "…" : "Next"}</button>
             </div>
@@ -182,12 +189,25 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
   );
 }
 
-function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope, onBack, handshake }: { profile: Profile; doc?: PendingIntake; name: string; create: boolean; busy: boolean; error: string | null; onFinish: (edits: ProfileEdit[], provided?: Set<string>, awaitAgent?: boolean) => Promise<void>; scope: string; onBack?: () => void; handshake?: { profile: string; since: number } }) {
+function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope, onBack, handshake, onDone, onHistory }: { profile: Profile; doc?: PendingIntake; name: string; create: boolean; busy: boolean; error: string | null; onFinish: (edits: ProfileEdit[], provided?: Set<string>, awaitAgent?: boolean) => Promise<void>; scope: string; onBack?: () => void; handshake?: { profile: string; since: number }; onDone?: () => void; onHistory?: () => void }) {
   const onInteract = undefined as (() => void) | undefined;
+  // With Claude connected, its writes land in the profile directly; this pane shows what has arrived since the dialog opened.
+  const [openedAt] = useState(() => new Date().toISOString());
+  const [arrived, setArrived] = useState<HistoryRow[]>([]);
+  const profileId = useContext(ProfileIdContext);
   const canFinish = true;
   const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<"agent" | "copy">(() => loadDraft(`${scope}.mode`, { mode: "agent" as const }).mode);
+  const live = mode === "agent" && !create;
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    const tick = () => api.history(profileId).then((rows) => { if (!cancelled) setArrived(rows.filter((r) => r.actor !== "you" && r.at > openedAt)); }).catch(() => {});
+    tick();
+    const h = setInterval(tick, 3000);
+    return () => { cancelled = true; clearInterval(h); };
+  }, [live, profileId, openedAt]);
   const [ready, setReady] = useState(false);
   useEffect(() => { saveDraft(`${scope}.mode`, { mode }); }, [scope, mode]);
   const sent = doc;
@@ -238,7 +258,7 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
   const sectionLabel = sections.length === INTAKE_SECTIONS.length ? "Everything" : sections.length === DOCUMENT_SECTIONS.length && DOCUMENT_SECTIONS.every((s) => sections.includes(s)) ? "Documents only" : `${sections.length} of ${INTAKE_SECTIONS.length} sections`;
 
   const finishButton = (
-    <button type="button" id="create-profile" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set([...selected].filter((id) => review?.changes.find((c) => c.id === id && c.proposed !== 0 && c.proposed !== ""))), create && !review)}>
+    <button type="button" id="create-profile" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set((review?.changes ?? []).filter((c) => c.proposed !== undefined && c.proposed !== "" && !(c.id === "people.self.salary" && c.proposed === 0)).map((c) => c.id)), create && !review)}>
       {busy ? "…" : create ? (review ? "Create profile" : "Create now, add numbers later") : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
     </button>
   );
@@ -250,10 +270,10 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
         {toggle}
         <AgentSetup status={agent} name={name} create expect={handshake} onConnected={() => setReady(true)} />
         {error && <div className="error">{error}</div>}
-        {ready && <div className="notice good">All set. Claude is connected to this profile. From here it fills things in with you; what it changes shows up in the plan at once, and History can undo any of it.</div>}
+        {ready && <div className="notice good">Connected.</div>}
         <div className="modal-actions">
           {onBack && !ready && <button type="button" className="btn" onClick={onBack}>Back</button>}
-          <span className="muted small" style={{ margin: 0 }}>{ready ? "" : "Every step turns green once Claude connects."}</span>
+          <span className="muted small" style={{ margin: 0 }}>{ready ? "" : ""}</span>
           <span className="spacer" />
           {ready
             ? <button type="button" className="btn primary" disabled={busy} onClick={() => void onFinish([], new Set(), false)}>Open my plan</button>
@@ -289,6 +309,15 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
             </>
           )}
         </div>
+        {live ? (
+          <div className="col">
+            <div className="col-title"><span className="step-no">✓</span> What arrived</div>
+            {arrived.length === 0
+              ? <div className="agent-status"><span className="dot pulse" /> Nothing yet.</div>
+              : <ul className="plain arrived">{arrived.slice(0, 12).map((r) => <li key={r.at}><span className="muted small">{new Date(r.at).toLocaleTimeString()} · {r.actor} · </span>{demoText(r.lines.join("; "))}</li>)}</ul>}
+            {onHistory && <button type="button" className="link" onClick={onHistory}>Full history, with undo</button>}
+          </div>
+        ) : (
         <div className="col">
           <div className="col-title"><span className="step-no">{mode === "agent" ? "✓" : "2"}</span> Review what it found</div>
           {sent && pasted === sent.text && <div className="muted small">Sent by Claude {new Date(sent.submitted).toLocaleString()}.</div>}
@@ -296,13 +325,14 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
           <textarea className="paste-box" placeholder={mode === "agent" ? "Claude's reply appears here on its own." : "Paste the whole reply here."} value={pasted} onChange={(e) => { onInteract?.(); setPasted(e.target.value); setAccepted(null); }} />
           {parsed && parsed.problems.length > 0 && (
             <div className="error">
-              Not quite the expected shape:
+              Could not read the reply:
               <ul>{parsed.problems.map((p, i) => <li key={i}><code>{p.path || "document"}</code> {p.message}</li>)}</ul>
             </div>
           )}
           {parsed && parsed.doc && parsed.warnings.length > 0 && <div className="muted small">Read with small corrections: {parsed.warnings.map((w) => `${w.path} (${w.message})`).join("; ")}.</div>}
-          {!review && <p className="muted small">{create ? "Nothing yet? Create the profile now; the numbers can arrive later." : "What changed shows here before anything is saved."}</p>}
+          {!review && <p className="muted small">{create ? "Create the profile now; numbers can arrive later." : "What changed shows here before anything is saved."}</p>}
         </div>
+        )}
       </div>
 
       {review && (
@@ -350,9 +380,9 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
         {onBack && <button type="button" className="btn" onClick={onBack}>Back</button>}
-        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Claude's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
+        <span className="muted small" style={{ margin: 0 }}>{live ? "Every change is logged and can be undone from History." : review?.questions.length ? "Claude's notes are under Edit my information." : "Every number keeps its source."}</span>
         <span className="spacer" />
-        {finishButton}
+        {live ? <button type="button" className="btn primary" onClick={onDone}>Done</button> : finishButton}
       </div>
     </div>
   );
@@ -361,7 +391,7 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
 function fmt(v: unknown, format: IntakeChange["format"]): string {
   if (v === undefined || v === null) return "";
   switch (format) {
-    case "usd": return typeof v === "number" ? usd(v) : String(v);
+    case "usd": return typeof v === "number" ? (Number.isInteger(v) ? usd(v) : `$${v.toFixed(2)}`) : String(v);
     case "pct": return typeof v === "number" ? pct(v) : String(v);
     case "shares": return typeof v === "number" ? shares(v) : String(v);
     case "number": return typeof v === "number" ? v.toLocaleString("en-US") : String(v);

@@ -72,6 +72,8 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
     const r = el.getBoundingClientRect(), b = root.getBoundingClientRect();
     const left = Math.max(0, Math.min(r.left - b.left, Math.max(0, b.width - panelWidth)));
     setAnchor({ top: r.bottom - b.top + 10, left, caret: Math.max(14, Math.min(panelWidth - 14, r.left - b.left - left + Math.min(r.width / 2, 60))) });
+    // A chip near the bottom of the window would open its inspector out of sight.
+    requestAnimationFrame(() => root.querySelector(".inspector-slot.floating")?.scrollIntoView({ block: "nearest" }));
   }, [selectedId, width, panelWidth, events, facts]);
   // A click anywhere else puts the inspector away; chips, the add menu and dialogs keep it.
   useEffect(() => {
@@ -120,12 +122,12 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
         )}
         {selectedFact && selectedFact.entryIndex === undefined && (
           <InspectorShell kind="fact" title={selectedFact.label} head={<><span className="badge fact">{selectedFact.year}</span><span className="muted">{selectedFact.detail}</span>{selectedFact.edit && <button type="button" className="link" onClick={selectedFact.edit}>Edit</button>}</>}>
-            <p className="muted small">A fact, not a decision: it applies to every scenario. Decisions are the chips above.</p>
+            <p className="muted small">Applies in every scenario.</p>
           </InspectorShell>
         )}
       </div>}
       {!selected && !selectedFact && events.length === 0 && (
-        <p className="muted small events-empty">{canAdd ? "Nothing decided yet. Press + under a year to add an exercise, a sale, or a change like a raise." : "Press + under a year to add a change like a raise. Add option grants or shares you own under Edit my information for exercise and sale decisions."}</p>
+        <p className="muted small events-empty">{canAdd ? "Press + under a year to add a decision." : "Press + under a year to add a change. Exercises and sales need grants or shares under Edit my information."}</p>
       )}
     </div>
   );

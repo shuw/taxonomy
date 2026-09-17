@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { editProfileText, parseProfile, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { editProfileText, parseProfile, sourcesAfterEdit, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { api, ApiError, ConflictError, type ProfileSummary } from "./api.ts";
 
 export interface ProfileFile {
@@ -47,11 +47,18 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
           setFile((prev) => ({ id, path: body.path, text: body.text, profile: prev?.profile ?? null, error: String((e as Error).message ?? e) }));
         }
       } catch (e) {
-        if (!cancelled) setFile((prev) => prev ?? { id, path: "", text: "", profile: null, error: `could not load profile: ${String((e as Error).message ?? e)}` });
+        if (cancelled) return;
+        if (e instanceof ApiError && e.status === 404) {
+          // The file is gone: say so once and stop asking.
+          clearInterval(handle);
+          setFile((prev) => ({ id, path: prev?.path ?? "", text: prev?.text ?? "", profile: prev?.profile ?? null, error: "This profile's file has been deleted. Pick another profile, or restore it from a backup." }));
+          return;
+        }
+        setFile((prev) => prev ?? { id, path: "", text: "", profile: null, error: `Could not load the profile: ${String((e as Error).message ?? e)}` });
       }
     };
-    void tick();
     const handle = setInterval(tick, pollMs);
+    void tick();
     return () => { cancelled = true; clearInterval(handle); };
   }, [id, pollMs]);
 
@@ -87,7 +94,7 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
         pendingText.current = text;
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => { const t = pendingText.current; pendingText.current = null; if (t !== null) void write(t); }, RETRY_DELAY_MS);
-        setFile((prev) => (prev ? { ...prev, error: `could not save, retrying: ${String((e as Error).message ?? e)}` } : prev));
+        setFile((prev) => (prev ? { ...prev, error: `Could not save; retrying: ${String((e as Error).message ?? e)}` } : prev));
       }
     } finally {
       setSaving(false);
@@ -100,7 +107,8 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
   const edit = useCallback((edits: ProfileEdit[]) => {
     setFile((prev) => {
       if (!prev) return prev;
-      const text = editProfileText(prev.text, edits);
+      // A hand edit to a sourced value rewrites its source to you, keeping the old provenance in the note.
+      const text = editProfileText(prev.text, prev.profile ? [...edits, ...sourcesAfterEdit(prev.profile, edits)] : edits);
       pendingText.current = text;
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {

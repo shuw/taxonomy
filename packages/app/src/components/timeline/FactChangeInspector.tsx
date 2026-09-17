@@ -31,7 +31,7 @@ export function FactChangeInspector({ profile, years, entry, onChange, onRemove 
       </>}>
       <div className="ei-row">
         <span className="input-wrap ei-note"><input placeholder="note (optional)" value={entry.note ?? ""} onChange={(e) => onChange({ ...entry, note: e.target.value || undefined })} /></span>
-        <span className="muted small">{same ? "Same as the current value, so nothing changes yet." : "A fact, not a decision: it applies in every scenario. Growth assumptions still compound from the plan start."}</span>
+        <span className="muted small">{same ? "Same as the current value, so nothing changes yet." : "Applies in every scenario."}</span>
       </div>
     </InspectorShell>
   );

@@ -141,7 +141,7 @@ export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   // Cash: what arrives and what leaves, before living costs. Equity income is not cash until sold.
   const cashIn = ledger.put("cashIn", "Cash in", inputs.salarySelf + inputs.salarySpouse + inputs.saleProceeds, "Salary and bonus received, plus proceeds of shares sold. RSU vests and option spreads are income but not cash.", ["salarySelf", ...(inputs.salarySpouse > 0 ? ["salarySpouse"] : []), "sharesSold"]);
   ledger.put("exerciseCost", "Exercise cost", inputs.exerciseCost, inputs.exerciseCost > 0 ? "Shares exercised × strike, paid to the company." : "No options exercised this year.", ["isoSharesExercised"]);
-  const giving = ledger.put("giving", "Gifts", inputs.charitableCash, inputs.charitableCash > 0 ? "Cash gifts and donor-advised fund contributions: money that left. Shares given are not cash and are not counted here." : "No cash gifts this year.", []);
+  const giving = ledger.put("giving", "Gifts", inputs.charitableCash, inputs.charitableCash > 0 ? "Cash gifts and donor-advised fund contributions, paid out this year. Shares given are on their own line." : "No cash gifts this year.", []);
   ledger.put("givingStock", "Shares given", inputs.charitableStock, inputs.charitableStock > 0 ? "Appreciated shares given at fair value. Not cash, so not in cash out; the deduction is in taxable income and the gain is never realized." : "No shares given this year.", []);
   const cashOut = ledger.put("cashOut", "Cash out", inputs.exerciseCost + total + giving, "Exercise cost + total tax + cash gifts.", ["exerciseCost", "totalTax", "giving"]);
   ledger.put("netCash", "Net cash", cashIn - cashOut, "Cash in - cash out, before living costs and withholding timing. Negative means the year needs money from savings or a sale.", ["cashIn", "cashOut"]);
@@ -230,8 +230,12 @@ export function yearFrom(profile: Profile, levers: Levers, year: number, state: 
 }
 
 function totals(years: YearResult[], carries: Carries): PlanResult["totals"] {
-  const sum = (id: string) => years.reduce((s, y) => s + y.lines[id]!.value, 0);
-  return { totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carries.amtCredit };
+  const sum = (id: string) => years.reduce((s, y) => s + (y.lines[id]?.value ?? 0), 0);
+  const income = sum("agi") + sum("isoBargainElement");
+  return {
+    totalTax: sum("totalTax"), federalTotal: sum("federalTotal"), stateTax: sum("stateTax"), amt: sum("amt"), amtCreditCarryforwardEnd: carries.amtCredit,
+    cashIn: sum("cashIn"), netCash: sum("netCash"), rateWithSpread: income > 0 ? sum("totalTax") / income : 0,
+  };
 }
 
 /**

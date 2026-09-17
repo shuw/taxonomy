@@ -42,13 +42,13 @@ export function Documents() {
         for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
         await api.attach(docs.id, f.name, btoa(bin));
       }
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setError(`Could not add the file: ${e instanceof Error ? e.message : String(e)}`); }
     finally { docs.refresh(); setBusy(false); }
   };
   return (
     <div className="docs">
       <div className="subhead">Documents</div>
-      <p className="muted small">Pages and statements the numbers came from. A value whose source names one of these links to it. Claude can add them too, when you give it the file.</p>
+      <p className="muted small">Pages the numbers came from; a value's source chip links to its page.</p>
       {docs.list.length > 0 && (
         <ul className="plain doc-list">
           {docs.list.map((a) => (
