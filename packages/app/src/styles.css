@@ -418,6 +418,14 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 /* Field errors --------------------------------------------------------------------- */
 .field.invalid .input-wrap { border-color: var(--bad); background: var(--surface); box-shadow: 0 0 0 3px var(--bad-bg); }
 .field-error { font-size: var(--text-md); color: var(--bad); font-weight: 500; }
+.src.linked { text-decoration: none; cursor: pointer; }
+.src.linked:hover { background: var(--accent); color: #fff; }
+.docs { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.doc-list { padding-left: 0; list-style: none; display: grid; gap: 4px; margin: 6px 0 10px; }
+.doc-list li { display: flex; align-items: baseline; gap: 6px; }
+.doc-list a { font-weight: 600; }
+.doc-list .link { margin-left: auto; }
+.btn.disabled { opacity: .5; cursor: default; }
 .notice { background: color-mix(in srgb, var(--series-amt) 14%, var(--surface)); border-left: 3px solid var(--series-amt); border-radius: 10px; padding: 10px 12px; font-size: var(--text-md); line-height: 1.45; }
 .grant-foot.warn { color: var(--series-amt); }
 .followups ul.gaps { gap: 6px; }
@@ -757,3 +765,4 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .note-value { font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .note-text { grid-column: 1; color: var(--ink-2); line-height: 1.45; }
 .note-clear { grid-column: 2; grid-row: 1 / span 2; align-self: start; padding: 0; }
+.tooltip.below { z-index: 12; }

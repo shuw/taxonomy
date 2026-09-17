@@ -34,9 +34,14 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export interface HistoryRow { at: string; actor: string; lines: string[]; restorable: boolean; }
+export interface Attachment { name: string; size: number; mtime: number; }
 
 export const api = {
   history: (id: string) => call<HistoryRow[]>(`/api/profiles/${id}/history`),
+  attachments: (id: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`),
+  attach: (id: string, name: string, base64: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`, json("POST", { name, base64 })),
+  detach: (id: string, name: string) => call<Attachment[]>(`/api/profiles/${id}/attachments/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  attachmentUrl: (id: string, name: string) => `/api/profiles/${id}/attachments/${encodeURIComponent(name)}`,
   restore: (id: string, at: string) => call<ProfileFileBody>(`/api/profiles/${id}/restore`, json("POST", { at })),
   example: () => call<{ text: string }>("/api/example"),
   agent: () => call<AgentConnection>("/api/agent"),

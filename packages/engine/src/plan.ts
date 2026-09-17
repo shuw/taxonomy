@@ -5,7 +5,7 @@ import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
 import { activeLevers, profileInYear } from "./timeline.ts";
-import { applySale, lotFromRsu, lotsFromExercise, openingLots, type Lot, type SaleResult } from "./lots.ts";
+import { applySale, lotsFromRsu, lotsFromExercise, openingLots, type Lot, type SaleResult } from "./lots.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
 
 export function planYears(profile: Profile): number[] {
@@ -181,14 +181,13 @@ export function stepYear(profile: Profile, base: Profile, levers: Levers, year: 
     if (mortgage) mortgage = [...Array(i).fill(undefined), ...mortgage];
   }
   const inputs = yearInputs(p, levers, year, state.carries, mortgage?.[i]);
-  // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on January 1.
+  // Shares acquired this year: exercises on their event date (January 1 by default), RSU settlements on their vest dates.
   let lots = [
     ...state.lots,
     ...lotsFromExercise(p, levers, "iso", year, levers.exerciseDates?.iso[year] ?? `${year}-01-01`),
     ...lotsFromExercise(p, levers, "nso", year, levers.exerciseDates?.nso[year] ?? `${year}-01-01`),
   ];
-  const rsuLot = lotFromRsu(p, year, `${year}-01-01`);
-  if (rsuLot) lots.push(rsuLot);
+  lots.push(...lotsFromRsu(p, year));
   const lotsBefore = lots.map((l) => ({ ...l }));
   const sales: SaleResult[] = [];
   for (const sale of [...(levers.sales?.[year] ?? [])].sort((a, b) => (a.date ?? `${year}-12-31`).localeCompare(b.date ?? `${year}-12-31`))) {

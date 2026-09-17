@@ -128,6 +128,8 @@ export interface IntakeGrant {
   expires?: string;
   /** RSUs: "double" when the grant needs a liquidity event to settle. */
   trigger?: "single" | "double";
+  /** NSO tranche carved from an ISO grant by the $100k rule: the ISO tranche's name. The two share its vesting. */
+  splitOf?: string;
 }
 
 export interface IntakeHolding {
@@ -268,7 +270,7 @@ export function parseIntake(text: string): IntakeParse {
         if (granted === undefined && unexercised === undefined) problems.push({ path, message: "needs granted or unexercised shares" });
         const triggerRaw = str(`${path}.trigger`, o.trigger)?.toLowerCase();
         if (triggerRaw !== undefined && triggerRaw !== "single" && triggerRaw !== "double") problems.push({ path: `${path}.trigger`, message: "must be single or double" });
-        grants.push({ name, type, owner: ownerRaw as Owner | undefined, grantDate: o.grantDate === undefined ? undefined : date(`${path}.grantDate`, o.grantDate), granted, strike, vesting, vested: num(`${path}.vested`, o.vested, { min: 0 }), exercised: num(`${path}.exercised`, o.exercised, { min: 0 }), unexercised, expires: o.expires === undefined ? undefined : date(`${path}.expires`, o.expires), trigger: triggerRaw as "single" | "double" | undefined });
+        grants.push({ name, type, owner: ownerRaw as Owner | undefined, grantDate: o.grantDate === undefined ? undefined : date(`${path}.grantDate`, o.grantDate), granted, strike, vesting, vested: num(`${path}.vested`, o.vested, { min: 0 }), exercised: num(`${path}.exercised`, o.exercised, { min: 0 }), unexercised, expires: o.expires === undefined ? undefined : date(`${path}.expires`, o.expires), trigger: triggerRaw as "single" | "double" | undefined, splitOf: str(`${path}.splitOf`, o.splitOf) });
       });
     }
     const holdings: IntakeHolding[] = [];

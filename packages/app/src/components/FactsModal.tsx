@@ -5,7 +5,8 @@ import { notesOf, sourceOf } from "../sources.ts";
 import { EquityFacts, equitySummary } from "./EquitySection.tsx";
 import { NotesFromClaude, ProbablyMissing, secondLookCount } from "./FollowUps.tsx";
 import { usePersisted } from "../persist.ts";
-import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
+import { FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, SourceChip, STATE_OPTIONS } from "./fields.tsx";
+import { Documents, DocumentsProvider } from "./Documents.tsx";
 
 export const FACT_TABS = ["confirm", "you", "equity", "income", "home", "giving", "deductions", "history"] as const;
 export type FactTab = (typeof FACT_TABS)[number];
@@ -65,7 +66,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal wide facts" role="dialog" aria-modal="true" aria-label="Your information">
+      <DocumentsProvider><div className="modal wide facts" role="dialog" aria-modal="true" aria-label="Your information">
         <div className="modal-head">
           <div>
             <h3>Your information</h3>
@@ -179,7 +180,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                 </div>
                 {(profile.returns ?? []).map((r) => (
                   <div className="prior-return" key={r.year}>
-                    <div className="subhead">{r.year} return {src(["returns", r.year]) && <span className="src" title={src(["returns", r.year])}>source</span>}</div>
+                    <div className="subhead">{r.year} return <SourceChip source={src(["returns", r.year])} /></div>
                     <dl>
                       {r.reported.agi !== undefined && <><dt>AGI</dt><dd>{usd(r.reported.agi)}</dd></>}
                       {r.reported.totalTax !== undefined && <><dt>Total tax</dt><dd>{usd(r.reported.totalTax)}</dd></>}
@@ -190,11 +191,12 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                   </div>
                 ))}
                 {!ret && <p className="muted small">Fill from documents to add last year's return; the tool will show how closely it reproduces it.</p>}
+                <Documents />
               </>
             )}
           </div>
         </div>
-      </div>
+      </div></DocumentsProvider>
     </div>
   );
 }

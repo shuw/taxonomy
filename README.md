@@ -83,6 +83,10 @@ them newest first, and any entry can restore the file to the way it was just bef
 change; the restore is recorded too. The log lives in `data/history/<id>.jsonl` (gitignored),
 one line per save with the previous text alongside.
 
+**Documents.** The Last return tab keeps the pages a profile's numbers came from
+(`data/attachments/<id>/`, gitignored). Add them there or let Claude attach them; a value whose
+source names a stored file links to it.
+
 ## Profile schema (version 3)
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,

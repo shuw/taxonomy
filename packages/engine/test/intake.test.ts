@@ -75,7 +75,7 @@ describe("intake review and apply", () => {
     expect(iso.schedule?.cadence).toBe("monthly");
     const nso = toGrant(doc.equity!.grants![1]!, "g3");
     expect(nso).toMatchObject({ type: "nso", granted: 12_000, vestedToDate: 3_000 });
-    expect(nso.vesting).toEqual({ 2026: 3_000, 2027: 3_000 });
+    expect(nso.vesting).toEqual({ "2026-06-01": 3_000, "2027-06-01": 3_000 });
     const rsu = toGrant(doc.equity!.grants![2]!, "g2");
     expect(rsu).toMatchObject({ type: "rsu", granted: 8_000, vestedToDate: 3_500 });
     expect(rsu.strike).toBeUndefined();

@@ -3,7 +3,7 @@ import { pct, shares, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
 import { notesOf, sourceOf } from "../sources.ts";
 import { Info } from "./Info.tsx";
-import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
+import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, SourceChip } from "./fields.tsx";
 import { Section } from "./Section.tsx";
 
 const TYPE_LABEL: Record<GrantType, string> = { iso: "ISO", nso: "NSO", rsu: "RSU" };
@@ -125,7 +125,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
 
       {(profile.equity.holdings?.length ?? 0) > 0 && (
         <>
-          <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}{notesOf(profile, ["holdings"]) && <Info label="Note from Claude">{notesOf(profile, ["holdings"])}</Info>}</div>
+          <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} <SourceChip source={sourceOf(profile, ["holdings"])} />{notesOf(profile, ["holdings"]) && <Info label="Note from Claude">{notesOf(profile, ["holdings"])}</Info>}</div>
           <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
           <div className="vest-rows">
             {profile.equity.holdings!.map((h) => (
@@ -150,7 +150,7 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, onChange, on
     <div className="company open">
       <div className="company-line">
         <input className="grant-name" value={c.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Company name" />
-        {source && <span className="src" title={source}>source</span>}
+        <SourceChip source={source} />
         <button type="button" className="link danger" onClick={onRemove}>Remove</button>
       </div>
       <div className="company-more">
@@ -227,7 +227,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
         <div className="grant-body">
           <div className="grant-head">
             <input className="grant-name" value={g.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Grant name" />
-            {source && <span className="src" title={source}>source</span>}{note && <Info label="Note from Claude">{note}</Info>}
+            <SourceChip source={source} />{note && <Info label="Note from Claude">{note}</Info>}
             {profile.people.spouse && <Select options={[{ value: "self", label: "mine" }, { value: "spouse", label: "spouse's" }]} value={g.owner ?? "self"} onChange={(o) => onChange({ owner: o })} />}
             <button type="button" className="link danger" onClick={onRemove}>Remove</button>
           </div>
@@ -269,11 +269,17 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
               <Field label="Cadence"><Select options={[...CADENCE_OPTIONS]} value={g.schedule.cadence ?? "monthly"} onChange={(c) => onChange({ schedule: { ...g.schedule!, cadence: c } })} /></Field>
             </div>
           )}
-          {mode === "years" && g.vesting && (
+          {mode === "years" && g.vesting && !Object.keys(g.vesting).some((k) => !/^\d{4}$/.test(k)) && (
             <div className="vest-grid">
-              {years.map((y) => <Field key={y} label={String(y)}><NumberInput value={g.vesting?.[y] ?? 0} onChange={(n) => onChange({ vesting: { ...g.vesting, [y]: Math.max(0, Math.round(n)) } })} min={0} /></Field>)}
+              {years.map((y) => <Field key={y} label={String(y)}><NumberInput value={g.vesting?.[String(y)] ?? 0} onChange={(n) => onChange({ vesting: { ...g.vesting, [String(y)]: Math.max(0, Math.round(n)) } })} min={0} /></Field>)}
             </div>
           )}
+          {mode === "years" && g.vesting && Object.keys(g.vesting).some((k) => !/^\d{4}$/.test(k)) && (
+            <div className="vest-grid dated">
+              {Object.entries(g.vesting).sort(([a], [b]) => a.localeCompare(b)).map(([d, n]) => <Field key={d} label={d}><NumberInput value={n} onChange={(v) => onChange({ vesting: { ...g.vesting, [d]: Math.max(0, Math.round(v)) } })} min={0} /></Field>)}
+            </div>
+          )}
+          {g.splitOf && <div className="muted small">NSO tranche of {profile.equity.grants.find((x) => x.id === g.splitOf)?.name ?? g.splitOf} under the $100k rule: the two share that grant's vesting, ISO first up to $100k of strike value a year.</div>}
           <div className={"grant-foot " + (noSchedule ? "warn" : "muted")}>
             {g.type === "rsu" ? `${shares(unvested)} unvested.` : `${shares(outstanding)} outstanding, ${shares(exercisableNow ?? 0)} exercisable now.`}
             {noSchedule && " No schedule, so the unvested part never vests here."}

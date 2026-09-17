@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { homedir, platform } from "node:os";
 import { randomBytes } from "node:crypto";
 import { parse } from "yaml";
@@ -77,6 +77,28 @@ function readProfile(id: string) {
 }
 
 const bad = (message: string, status = 400) => Response.json({ error: message }, { status });
+
+// ---- attachments: the documents behind the numbers, in data/attachments/<profile>/ ----
+const ATTACHABLE = /\.(png|jpe?g|webp|gif|pdf|txt|csv|md|ya?ml|json)$/i;
+const MAX_ATTACHMENT = 25 * 1_048_576;
+const attachmentsDir = (id: string) => resolve(dataDir, "attachments", id);
+/** A plain file name: no directories, no control characters. */
+const safeName = (name: string) => name.replace(/[\\/]/g, "_").replace(/[^\x20-\x7E]/g, "").replace(/^\.+/, "").trim().slice(0, 120);
+function attachmentPath(id: string, name: string): string | null {
+  if (!ID.test(id)) return null;
+  let raw = name;
+  try { raw = decodeURIComponent(name); } catch { /* keep as is */ }
+  const clean = safeName(raw);
+  if (!clean || clean !== raw) return null;
+  const base = attachmentsDir(id);
+  const full = resolve(base, clean);
+  return full.startsWith(base + sep) ? full : null;
+}
+function listAttachments(id: string): { name: string; size: number; mtime: number }[] {
+  const dir = attachmentsDir(id);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => ATTACHABLE.test(f)).map((f) => { const st = statSync(resolve(dir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; }).sort((a, b) => b.mtime - a.mtime);
+}
 
 // ---- history: one line per save, with the text before it, in data/history/<id>.jsonl ----
 const historyDir = resolve(dataDir, "history");
@@ -255,6 +277,48 @@ Bun.serve({
   routes: {
     "/": index,
     "/api/example": () => Response.json({ text: readFileSync(examplePath, "utf8") }),
+    // Documents behind the numbers: page images, PDFs, statements. Stored beside the profile, cited by name in sources.
+    "/api/profiles/:id/attachments": {
+      GET: (req) => {
+        const { id } = req.params;
+        if (!ID.test(id)) return bad("no such profile", 404);
+        return Response.json(listAttachments(id));
+      },
+      POST: async (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
+        const { id } = req.params;
+        if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
+        const body = (await req.json()) as { name?: string; base64?: string };
+        const name = safeName(body.name ?? "");
+        if (!name) return bad("a file name is required");
+        if (!ATTACHABLE.test(name)) return bad("only images, PDFs and text files (png, jpg, webp, gif, pdf, txt, csv, md, yaml, json)");
+        const bytes = Buffer.from(body.base64 ?? "", "base64");
+        if (bytes.length === 0) return bad("the file is empty");
+        if (bytes.length > MAX_ATTACHMENT) return bad(`the file is over ${MAX_ATTACHMENT / 1_048_576} MB`);
+        mkdirSync(attachmentsDir(id), { recursive: true, mode: 0o700 });
+        writeFileSync(resolve(attachmentsDir(id), name), bytes, { mode: 0o600 });
+        return Response.json(listAttachments(id));
+      },
+    },
+    "/api/profiles/:id/attachments/:name": {
+      GET: (req) => {
+        const { id, name } = req.params;
+        const file = attachmentPath(id, name);
+        if (!file || !existsSync(file)) return bad("no such document", 404);
+        const shown = safeName(name).replace(/["\\]/g, "_");
+        return new Response(Bun.file(file), { headers: { "content-disposition": `inline; filename="${shown}"`, "x-content-type-options": "nosniff" } });
+      },
+      DELETE: (req) => {
+        const refused = sameOrigin(req);
+        if (refused) return refused;
+        const { id, name } = req.params;
+        const file = attachmentPath(id, name);
+        if (!file || !existsSync(file)) return bad("no such document", 404);
+        unlinkSync(file);
+        return Response.json(listAttachments(id));
+      },
+    },
     "/api/profiles/:id/history": {
       GET: (req) => {
         const { id } = req.params;

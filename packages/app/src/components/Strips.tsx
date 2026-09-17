@@ -135,7 +135,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, serie
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
       </svg>
       {hover !== null && (
-        <ChartTooltip index={hover} count={years.length} width={width} band={band} left={m.left} top={m.top}>
+        <ChartTooltip index={hover} width={width} band={band} left={m.left} height={height}>
           <div className="row"><strong>{years[hover]!.year}</strong></div>
           {series.map((sr) => <TooltipRow key={sr.id} label={sr.label} color={sr.color} value={usd(sr.value(years[hover]!))} />)}
           {series.length > 1 && !capLabel && <TooltipRow className="total" label={totalLabel} value={usd(totals[hover]!)} />}
@@ -204,7 +204,7 @@ export function CashStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus }
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
       </svg>
       {hover !== null && (() => { const r = rows[hover]!; return (
-        <ChartTooltip index={hover} count={years.length} width={width} band={band} left={m.left} top={m.top}>
+        <ChartTooltip index={hover} width={width} band={band} left={m.left} height={height}>
           <div className="row"><strong>{years[hover]!.year}</strong></div>
           {IN.map((p) => <TooltipRow key={p.key} label={p.label} color={p.color} value={usd(r[p.key])} />)}
           {OUT.map((p) => <TooltipRow key={p.key} label={p.label} color={p.color} value={`−${usd(r[p.key])}`} />)}

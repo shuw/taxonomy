@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { vestingOf } from "../src/equity.ts";
 import { readFileSync } from "node:fs";
 import { parseProfile } from "../src/profile.ts";
 import { runPlan } from "../src/plan.ts";
-import { applySale, lotMilestones, lowestTaxOrder, longTermFrom, type Lot } from "../src/lots.ts";
+import { applySale, isLongTerm, lotMilestones, lotsFromRsu, lowestTaxOrder, longTermFrom, type Lot } from "../src/lots.ts";
 import { amtCrossover, creditRecovery, holdOrSell, sharesToCover } from "../src/thresholds.ts";
 import type { Profile, ScenarioEvent } from "../src/types.ts";
 
@@ -76,7 +77,7 @@ describe("sales in the plan", () => {
     // The RSU lot settling this year has no gain, so the rule sells it first; selling everything reaches the ISO shares too.
     const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 20_000 }, { id: "e2", kind: "sell", year: 2026, shares: 23_500 }]);
     const y = year(p, 2026);
-    expect(y.sales![0]!.lots.map((l) => l.lotId)).toEqual(["rsu-2026", "x-g1-2026"]);
+    expect(y.sales![0]!.lots.map((l) => l.lotId)).toEqual(["rsu-2026-1", "rsu-2026-2", "rsu-2026-3", "rsu-2026-4", "x-g1-2026"]);
     expect(y.lines.isoDisqualifyingIncome!.value).toBe(20_000 * 16);
     expect(y.lines.amti!.value).toBeCloseTo(y.lines.taxableIncome!.value + y.lines.amtAddbacks!.value, 0);
     expect(y.lines.amtCreditGenerated!.value).toBe(0);
@@ -175,5 +176,31 @@ describe("hold or sell", () => {
     expect(h.hold.proceeds).toBeCloseTo(20_000 * h.holdPrice, 0);
     expect(h.sell.proceeds).toBeCloseTo(20_000 * h.sellPrice, 0);
     expect(holdOrSell(withEvents([]), undefined, 2026)).toBeNull();
+  });
+});
+
+describe("dated vests and the $100k split", () => {
+  test("RSU units vesting on a date become a lot acquired that day, so the holding period is right", () => {
+    const p = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
+    const rsu = p.equity.grants.find((g) => g.type === "rsu")!;
+    rsu.vesting = { "2026-08-20": 1000, "2026-11-20": 500 };
+    rsu.schedule = undefined;
+    const lots = lotsFromRsu(p, 2026);
+    expect(lots.map((l) => [l.acquired, l.quantity])).toEqual([["2026-08-20", 1000], ["2026-11-20", 500]]);
+    expect(isLongTerm(lots[0]!, "2027-08-20")).toBe(false);
+    expect(isLongTerm(lots[0]!, "2027-08-21")).toBe(true);
+  });
+  test("an ISO tranche and its NSO split share one schedule, ISO first up to $100k of strike a year", () => {
+    const p = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
+    const iso = p.equity.grants.find((g) => g.type === "iso")!;
+    // 60,000 options at $2 vesting 20,000 a year (the ISO tranche carries the combined vests): $100k of strike covers 50,000 ISOs a year, so the NSO side gets nothing here...
+    iso.granted = 30_000; iso.vestedToDate = 0; iso.exercisedToDate = 0; iso.vesting = { "2026": 20_000, "2027": 20_000, "2028": 20_000 }; iso.schedule = undefined;
+    p.equity.grants.push({ id: "g9", name: "NSO tranche", type: "nso", granted: 30_000, vestedToDate: 0, exercisedToDate: 0, strike: iso.strike, splitOf: iso.id });
+    expect(vestingOf(p, iso).byYear).toEqual({ 2026: 20_000, 2027: 20_000, 2028: 20_000 });
+    expect(vestingOf(p, p.equity.grants.find((g) => g.id === "g9")!).byYear).toEqual({ 2026: 0, 2027: 0, 2028: 0 });
+    // ...but at a $40 strike only 2,500 a year can be ISOs; the rest of each year's 20,000 vests as NSOs.
+    iso.strike = 40; p.equity.grants.find((g) => g.id === "g9")!.strike = 40;
+    expect(vestingOf(p, iso).byYear).toEqual({ 2026: 2_500, 2027: 2_500, 2028: 2_500 });
+    expect(vestingOf(p, p.equity.grants.find((g) => g.id === "g9")!).byYear).toEqual({ 2026: 17_500, 2027: 17_500, 2028: 17_500 });
   });
 });

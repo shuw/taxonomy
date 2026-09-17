@@ -30,9 +30,12 @@ export function AxisTicks({ ticks, yOf, left, right }: { ticks: number[]; yOf: (
 }
 
 /** A hover card next to a column, flipped to the left near the right edge so it stays inside the chart. */
-export function ChartTooltip({ index, count, width, band, left, top, children }: { index: number; count: number; width: number; band: number; left: number; top: number; children: ReactNode }) {
-  const style = index >= count - 2 ? { right: width - (left + band * index) + 6, top } : { left: left + band * (index + 1) - 6, top };
-  return <div className="tooltip" style={style}>{children}</div>;
+/** Sits under the plot, centred on the hovered column and kept inside the chart, so no bar is covered. */
+export function ChartTooltip({ index, width, band, left, height, children }: { index: number; count?: number; width: number; band: number; left: number; top?: number; height: number; children: ReactNode }) {
+  const cx = left + band * index + band / 2;
+  const w = 300;
+  const x = Math.max(0, Math.min(cx - w / 2, width - w));
+  return <div className="tooltip below" style={{ left: x, top: height + 4, width: w }}>{children}</div>;
 }
 
 export function TooltipRow({ label, value, color, className }: { label: ReactNode; value: ReactNode; color?: string; className?: string }) {

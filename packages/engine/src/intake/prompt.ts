@@ -67,9 +67,10 @@ const STRUCTURED: Partial<Record<IntakeSection, string>> = {
         years: 4
         cliffMonths: 12
         cadence: monthly       # monthly | quarterly | annual
-      # ...or explicit vest events when the portal shows a table:
+      # ...or explicit vest events when the portal shows a table (dates are kept; they set holding periods):
       # vesting:
       #   - { date: 2026-03-15, shares: 500 }
+      # splitOf: ""             # NSO tranche split from an ISO grant by the $100k rule: that ISO grant's name; both share its vesting
       vested: 0                # vested to date, including anything since exercised
       exercised: 0             # options only, to date
       unexercised: 0           # options only: vested-unexercised + unvested
@@ -163,7 +164,7 @@ Everything else: fill it when a document shows it, leave it out otherwise.
 ## Rules
 
 - Copy from documents or my answers. Never estimate.
-- Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
+- Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`. Name the file exactly as it is stored or attached, so the tool can link the value to the page.
 - Filed return beats portal beats pay stub beats memory. If sources disagree, ask me; if I can't settle it, use the stronger source and note the other in \`questions\`.
 - Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575). Paths use dots for list positions: \`equity.holdings.0.amtBasis\`.
 - Dependents as the return lists them: \`[{ name: Sophie, birthYear: 2019 }]\`; leave birthYear out when the return does not show it and the tool asks me.

@@ -1,11 +1,21 @@
 import { demo } from "../format.ts";
 import { Info } from "./Info.tsx";
+import { useDocumentLink } from "./Documents.tsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+
+/** The "source" chip on a field; a link when the source names a stored document. */
+export function SourceChip({ source }: { source?: string }) {
+  const href = useDocumentLink(source);
+  if (!source) return null;
+  return href
+    ? <a className="src linked" href={href} target="_blank" rel="noreferrer" title={source} onClick={(e) => e.stopPropagation()}>source ↗</a>
+    : <span className="src" title={source}>source</span>;
+}
 
 export function Field({ label, hint, children, wide, source, note, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; note?: string; error?: string }) {
   return (
     <label className={"field" + (wide ? " wide" : "") + (error ? " invalid" : "")}>
-      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}{source && <span className="src" title={source}>source</span>}{note && <Info label="Note from Claude">{note}</Info>}</span>
+      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}<SourceChip source={source} />{note && <Info label="Note from Claude">{note}</Info>}</span>
       {children}
       {error && <span className="field-error">{error}</span>}
     </label>

@@ -1,4 +1,4 @@
-import { companyPrice, exerciseDraws, rsuVesting } from "./equity.ts";
+import { companyPrice, exerciseDraws, rsuVests } from "./equity.ts";
 import type { Holding, Levers, Owner, Profile, SaleLever } from "./types.ts";
 
 /** Shares you hold, by acquisition, with the two bases that matter when they are sold. */
@@ -117,11 +117,12 @@ export function lotsFromExercise(profile: Profile, levers: Levers, type: "iso" |
 }
 
 /** The lot RSU units settling in `year` become; their value was wages, so it is the basis. */
-export function lotFromRsu(profile: Profile, year: number, date: string): Lot | null {
-  const v = rsuVesting(profile, year);
-  if (v.shares <= 0) return null;
-  const company = profile.equity.grants.find((g) => g.type === "rsu")?.company ?? profile.equity.companies[0]?.id;
-  return { id: `rsu-${year}`, label: `RSUs settled ${year}`, company, quantity: v.shares, acquired: date, via: "rsu_vest", costBasis: v.income / v.shares, amtBasis: v.income / v.shares };
+/** One lot per RSU settlement in the year, each acquired on its vest date. */
+export function lotsFromRsu(profile: Profile, year: number): Lot[] {
+  return rsuVests(profile, year).map((v, i) => ({
+    id: `rsu-${year}-${i + 1}`, label: `RSUs settled ${v.date}`, company: v.grant.company ?? profile.equity.companies[0]?.id,
+    quantity: v.shares, acquired: v.date, via: "rsu_vest" as const, costBasis: v.income / v.shares, amtBasis: v.income / v.shares,
+  }));
 }
 
 /** Per-share value of a lot's company in a year, unless the sale names its own price. */

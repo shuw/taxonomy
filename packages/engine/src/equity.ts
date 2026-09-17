@@ -30,16 +30,79 @@ export function sharesOutstanding(g: EquityGrant): number {
  * day; byYear holds schedule vests after that date. `vestedToDate` overrides the schedule for
  * everything up to the counts' date, so portal numbers read mid-year do not double count.
  */
+/** The $100k rule: the most option shares that can first become exercisable as ISOs in one year. */
+const ISO_ANNUAL_LIMIT = 100_000;
+
+/** The vests of one grant inside the plan, dated: explicit dates, year keys (January 1), or the schedule's dates. */
+export function vestEvents(profile: Profile, grant: EquityGrant): { date: string; shares: number }[] {
+  const start = profile.plan.startYear;
+  const end = start + profile.plan.years - 1;
+  const asOf = grant.countsAsOf && grant.vestedToDate !== undefined ? new Date(grant.countsAsOf + "T00:00:00Z") : new Date(Date.UTC(start, 0, 1));
+  const out: { date: string; shares: number }[] = [];
+  const push = (d: Date, n: number) => { if (n > 0 && d > asOf && d.getUTCFullYear() >= start && d.getUTCFullYear() <= end) out.push({ date: d.toISOString().slice(0, 10), shares: n }); };
+  if (grant.vesting) {
+    for (const [k, n] of Object.entries(grant.vesting)) {
+      if (/^\d{4}$/.test(k)) { const y = Number(k); if (n > 0 && y >= asOf.getUTCFullYear() && y >= start && y <= end) out.push({ date: `${y}-01-01`, shares: n }); }
+      else push(new Date(k + "T00:00:00Z"), n);
+    }
+  } else if (grant.schedule) {
+    const s = grant.schedule;
+    const step = s.cadence === "annual" ? 12 : s.cadence === "quarterly" ? 3 : 1;
+    const totalMonths = Math.max(step, Math.round(s.years * 12));
+    const periods = Math.floor(totalMonths / step);
+    const perPeriod = grant.granted / periods;
+    const cliff = s.cliffMonths ?? 0;
+    const startDate = new Date(s.start + "T00:00:00Z");
+    let vestedSoFar = 0;
+    for (let i = 1; i <= periods; i++) {
+      const month = i * step;
+      if (month < cliff) continue;
+      const target = Math.round(perPeriod * i);
+      const amount = target - vestedSoFar;
+      vestedSoFar = target;
+      push(new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + month, startDate.getUTCDate())), amount);
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** An ISO tranche and the NSO tranche split from it by the $100k rule share one schedule over their combined count. */
+function splitPartner(profile: Profile, grant: EquityGrant): { iso: EquityGrant; nso: EquityGrant } | null {
+  if (grant.type === "nso" && grant.splitOf) { const iso = profile.equity.grants.find((g) => g.id === grant.splitOf && g.type === "iso"); return iso ? { iso, nso: grant } : null; }
+  if (grant.type === "iso") { const nso = profile.equity.grants.find((g) => g.type === "nso" && g.splitOf === grant.id); return nso ? { iso: grant, nso } : null; }
+  return null;
+}
+
 export function vestingOf(profile: Profile, grant: EquityGrant): { vestedAtStart: number; byYear: Record<number, number> } {
+  const pair = splitPartner(profile, grant);
+  if (pair) {
+    // Vest the combined grant on the ISO tranche's schedule, then give each year's first $100k of strike value to the ISO side.
+    const combined: EquityGrant = { ...pair.iso, granted: pair.iso.granted + pair.nso.granted, vestedToDate: pair.iso.vestedToDate === undefined && pair.nso.vestedToDate === undefined ? undefined : (pair.iso.vestedToDate ?? 0) + (pair.nso.vestedToDate ?? 0), exercisedToDate: (pair.iso.exercisedToDate ?? 0) + (pair.nso.exercisedToDate ?? 0), splitOf: undefined };
+    const all = vestingOfPlain(profile, combined);
+    const cap = pair.iso.strike ? Math.floor(ISO_ANNUAL_LIMIT / pair.iso.strike) : Infinity;
+    const byYear: Record<number, number> = {};
+    for (const [y, n] of Object.entries(all.byYear)) { const isoPart = Math.min(n, cap); byYear[Number(y)] = grant.type === "iso" ? isoPart : n - isoPart; }
+    // What vested before the plan is what each tranche's own counts say.
+    const vestedAtStart = grant.vestedToDate !== undefined ? grant.vestedToDate : grant.type === "iso" ? Math.min(all.vestedAtStart, grant.granted) : Math.max(0, all.vestedAtStart - pair.iso.granted);
+    return { vestedAtStart, byYear };
+  }
+  return vestingOfPlain(profile, grant);
+}
+
+function vestingOfPlain(profile: Profile, grant: EquityGrant): { vestedAtStart: number; byYear: Record<number, number> } {
   const start = profile.plan.startYear;
   const end = start + profile.plan.years - 1;
   const byYear: Record<number, number> = {};
   let before = 0;
   const asOf = grant.countsAsOf && grant.vestedToDate !== undefined ? new Date(grant.countsAsOf + "T00:00:00Z") : new Date(Date.UTC(start, 0, 1));
   if (grant.vesting) {
-    for (const [y, n] of Object.entries(grant.vesting)) {
-      const year = Number(y);
-      if (year < asOf.getUTCFullYear() || year < start) before += n;
+    for (const [k, n] of Object.entries(grant.vesting)) {
+      // A year key means "during that year"; a date key is compared to the day the counts were read.
+      const isYear = /^\d{4}$/.test(k);
+      const d = isYear ? new Date(Date.UTC(Number(k), 0, 1)) : new Date(k + "T00:00:00Z");
+      const year = d.getUTCFullYear();
+      const past = isYear ? year < asOf.getUTCFullYear() : d <= asOf;
+      if (past || year < start) before += n;
       else if (year <= end) byYear[year] = (byYear[year] ?? 0) + n;
     }
   } else if (grant.schedule) {
@@ -156,21 +219,32 @@ export function sharesExercised(profile: Profile, levers: Levers, type: "iso" | 
  * produce no income in the plan.
  */
 export function rsuVesting(profile: Profile, year: number): { shares: number; income: number } {
-  let shares = 0;
-  let income = 0;
+  return rsuVests(profile, year).reduce((acc, v) => ({ shares: acc.shares + v.shares, income: acc.income + v.income }), { shares: 0, income: 0 });
+}
+
+/**
+ * RSU settlements in a year, one per vest date, so the shares they deliver carry the right
+ * acquisition date into the lot ledger. Double-trigger units already time-vested settle on the
+ * liquidity event's day (January 1 of that year when no day is known).
+ */
+export function rsuVests(profile: Profile, year: number): { date: string; shares: number; income: number; grant: EquityGrant }[] {
+  const out: { date: string; shares: number; income: number; grant: EquityGrant }[] = [];
   for (const g of grantsOf(profile, "rsu")) {
-    const v = vestingOf(profile, g);
-    let n: number;
+    const fmv = grantFmv(profile, g, year);
+    const events = vestEvents(profile, g);
+    const inYear = events.filter((e) => e.date.startsWith(`${year}-`));
     if (g.settlement === "liquidity") {
       const ly = companyOf(profile, g)?.liquidityYear;
-      if (ly === undefined || year < ly) n = 0;
-      else if (year === ly) n = v.vestedAtStart + Object.entries(v.byYear).reduce((s, [y, k]) => (Number(y) <= year ? s + k : s), 0);
-      else n = v.byYear[year] ?? 0;
-    } else n = v.byYear[year] ?? 0;
-    shares += n;
-    income += n * grantFmv(profile, g, year);
+      if (ly === undefined || year < ly) continue;
+      if (year === ly) {
+        const settleDate = `${year}-01-01`;
+        const earlier = vestingOf(profile, g).vestedAtStart + events.filter((e) => e.date < settleDate).reduce((s, e) => s + e.shares, 0);
+        if (earlier > 0) out.push({ date: settleDate, shares: earlier, income: earlier * fmv, grant: g });
+        for (const e of inYear.filter((e) => e.date >= settleDate)) out.push({ date: e.date, shares: e.shares, income: e.shares * fmv, grant: g });
+      } else for (const e of inYear) out.push({ date: e.date, shares: e.shares, income: e.shares * fmv, grant: g });
+    } else for (const e of inYear) out.push({ date: e.date, shares: e.shares, income: e.shares * fmv, grant: g });
   }
-  return { shares, income };
+  return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** Grants with unvested shares but no schedule or vest dates: nothing more of them will vest in the plan. */

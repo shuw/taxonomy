@@ -8,7 +8,7 @@ export { runPlan, runPlanFrom, stepYear, stateBefore, yearFrom, openingState, co
 export type { PlanState } from "./plan.ts";
 export { profileInYear, changesIn, activeLevers, emptyLevers, setPath, getPath, DEFAULT_SCENARIO } from "./timeline.ts";
 export type { Carries } from "./plan.ts";
-export { openingLots, lotsFromExercise, lotFromRsu, applySale, lowestTaxOrder, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, sharesHeld, addYears, addDays } from "./lots.ts";
+export { openingLots, lotsFromExercise, lotsFromRsu, applySale, lowestTaxOrder, lotMilestones, lotPrice, isLongTerm, isQualifying, longTermFrom, qualifyingFrom, sharesHeld, addYears, addDays } from "./lots.ts";
 export type { Lot, LotSale, SaleResult, LotMilestone } from "./lots.ts";
 export { activeScenario, emptyScenario, leversOf, eventsFromLevers, exercisedTotal, newEventId, setExerciseEvent, sortedEvents, scenarioEdits, ANY_COMPANY } from "./events.ts";
 export { grantFmv, companyOf, companyPrice, sharesOutstanding, vestingOf, vestedThrough, sharesExercisable, sharesExercised, exerciseDraws, exerciseCost, exercisedIn, resolveCompany, companiesWithGrants, companyName, sharesGranted, exerciseSpread, rsuVesting, nextShareSpread, newId, grantsMissingVesting } from "./equity.ts";

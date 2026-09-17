@@ -5,6 +5,7 @@ dist/
 data/profile.yaml
 data/profiles/
 data/history/
+data/attachments/
 data/.agent
 data/.current
 data/.remote.json

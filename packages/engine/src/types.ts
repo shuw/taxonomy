@@ -124,13 +124,19 @@ export interface EquityGrant {
   countsAsOf?: string;
   /** Exercise price per share. Options only. */
   strike?: number;
-  /** Shares vesting in each plan year, when you would rather state it than derive it. */
-  vesting?: Record<number, number>;
+  /** Shares vesting per plan year, or per vest date (YYYY-MM-DD keys), when you would rather state it than derive it. Dates set the lots' holding periods. */
+  vesting?: Record<string, number>;
   /** Derive per-year vesting from a schedule instead. */
   schedule?: VestingSchedule;
   expires?: string;
   /** RSUs only. "vest" (default): income when units vest. "liquidity": double-trigger; time-vested units become income in the company's liquidity year. */
   settlement?: "vest" | "liquidity";
+  /**
+   * NSO tranche carved from an ISO grant by the $100k rule: the id of the ISO tranche. The two
+   * share that tranche's schedule over their combined count; each year the first $100k of strike
+   * value vests as ISO and the rest as NSO.
+   */
+  splitOf?: string;
 }
 
 /** Shares already owned, kept for the sales lever. */

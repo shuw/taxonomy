@@ -107,14 +107,20 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
       const byName = new Map(profile.equity.grants.map((g, i) => [g.name, { grant: g, index: i }]));
       const taken = profile.equity.grants.map((g) => g.id);
       let added = 0;
+      const idOf = new Map<string, string>();
+      const built: { g: IntakeGrant; proposed: EquityGrant }[] = [];
       eq.grants.forEach((g, i) => {
         const hit = byName.get(g.name);
         const id = hit?.grant.id ?? newId("g", taken);
         if (!hit) taken.push(id);
+        idOf.set(g.name, id);
         const proposed = toGrant(g, id, hit?.grant.company ?? profile.equity.companies[0]?.id ?? "c1", doc.as_of);
+        built.push({ g, proposed });
         const index = hit ? hit.index : profile.equity.grants.length + added++;
         add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}`, intakeKey: `equity.grants[${i}]` });
       });
+      // An NSO tranche names the ISO tranche it was split from; link it by id once every grant has one.
+      for (const { g, proposed } of built) if (g.splitOf) { const isoId = idOf.get(g.splitOf) ?? profile.equity.grants.find((x) => x.name === g.splitOf)?.id; if (isoId) proposed.splitOf = isoId; }
     }
     if (eq.holdings) {
       const taken: string[] = [];
@@ -153,12 +159,13 @@ export function toGrant(g: IntakeGrant, id: string, companyId?: string, countsAs
     settlement: type === "rsu" && g.trigger === "double" ? "liquidity" : undefined,
   };
   if (Array.isArray(g.vesting)) {
-    const byYear: Record<number, number> = {};
+    // Dated vests are kept as dates: they set the holding period of the shares they deliver.
+    const vesting: Record<string, number> = {};
     for (const ev of g.vesting) {
-      const year = ev.year ?? (ev.date ? Number(ev.date.slice(0, 4)) : undefined);
-      if (year !== undefined) byYear[year] = (byYear[year] ?? 0) + ev.shares;
+      const key = ev.date ?? (ev.year !== undefined ? String(ev.year) : undefined);
+      if (key !== undefined) vesting[key] = (vesting[key] ?? 0) + ev.shares;
     }
-    out.vesting = byYear;
+    out.vesting = vesting;
   } else if (g.vesting) {
     out.schedule = { start: g.vesting.start, years: g.vesting.years, cliffMonths: g.vesting.cliffMonths, cadence: g.vesting.cadence };
   }

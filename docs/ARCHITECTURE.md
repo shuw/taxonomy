@@ -13,6 +13,7 @@ packages/app         React UI (Bun serves it; no bundler beyond Bun's) + a small
 packages/mcp         the engine's tool layer for an outside agent: taxonomy.ts (tools),
                      server.ts (stdio: Claude Desktop, Claude Code), http.ts (claude.ai via a tunnel)
 data/profiles/*.yaml one file per person or what-if (gitignored); data/profile.example.yaml
+data/attachments/<id>/ the pages and statements behind a profile's numbers (gitignored)
 docs/                this file, the data model, the intake contract, the proposal
 ```
 
@@ -105,6 +106,14 @@ dated changes, agent proposals and documents, equity items by id, then every oth
 the field registry's label and format. Both servers append one entry per save (time, actor,
 lines, the previous text) to `data/history/<id>.jsonl`; the app's History tab reads it and can
 restore any earlier version.
+
+### Attachments
+
+The documents behind the numbers live beside the profile in `data/attachments/<id>/`
+(images, PDFs and text, owner-only modes). The app's Last return tab lists, adds and removes
+them, and an agent that holds the file stores it with `intake(attach)`. A `sources` entry that
+names a stored file ("2025 Form 8801 line 26 (2025-return-p1.png)") turns that field's source
+chip into a link to the page, so a value can be checked against what it came from.
 
 ### Tool layer (`tools.ts`)
 

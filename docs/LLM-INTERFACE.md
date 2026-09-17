@@ -74,7 +74,7 @@ of the first design is gone; undo from History is the safety net.
 | `what_if` | try decisions without saving |
 | `scenario` | `action`: add, activate, delete |
 | `facts` | set facts and assumptions the user states |
-| `intake` | `action`: request, submit |
+| `intake` | `action`: request, submit, attach (a page image, PDF or text file, kept beside the profile and linked from the values that cite it) |
 
 The engine functions below keep their own names; the table is the packaging.
 

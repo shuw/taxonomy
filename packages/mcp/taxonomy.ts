@@ -274,12 +274,30 @@ server.registerTool("intake", {
     "Filling the profile from documents, by `action`:",
     "request (sections): the request Taxonomy would hand an agent for the given sections (basics, pay, prior_return, income, equity, home, giving, assumptions). Read it, gather what the documents show, produce the YAML in one go; leave anything the user could type themselves under `unknown` rather than asking.",
     "submit (document, sections?): send that YAML. Partial is fine, one section now and another later. Every value is written at once with its source, questions become follow-ups in the app, and the app shows what came in; the history can undo it.",
+    "attach (name, base64): store a page image, PDF or text file behind the numbers, when you have the file itself. Cite it by name in sources; the app links each value to it.",
   ].join(" "),
   annotations: { title: "Fill in from documents", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  inputSchema: { profile: profileArg, action: z.enum(["request", "submit"]), sections: z.array(z.enum(["basics", "pay", "prior_return", "income", "equity", "home", "giving", "assumptions"])).optional(), document: z.string().optional().describe("submit: the intake YAML, fenced or not") },
-}, async ({ profile, action, sections, document }) => run(() => {
+  inputSchema: {
+    profile: profileArg, action: z.enum(["request", "submit", "attach"]),
+    sections: z.array(z.enum(["basics", "pay", "prior_return", "income", "equity", "home", "giving", "assumptions"])).optional(),
+    document: z.string().optional().describe("submit: the intake YAML, fenced or not"),
+    name: z.string().optional().describe("attach: the file name, e.g. 2025-return-p1.png"),
+    base64: z.string().optional().describe("attach: the file's bytes, base64; images, PDFs or text up to 25 MB"),
+  },
+}, async ({ profile, action, sections, document, name, base64 }) => run(() => {
   const f = use(profile);
   if (action === "request") return about(f, { request: tools.intakeRequest(f.profile, sections?.length ? sections : ["basics", "pay", "prior_return", "income", "equity", "home", "giving"]) });
+  if (action === "attach") {
+    if (!name || !base64) throw new Error("attach needs name and base64");
+    const clean = name.replace(/[\\/]/g, "_").replace(/[^\x20-\x7E]/g, "").replace(/^\.+/, "").trim().slice(0, 120);
+    if (!/\.(png|jpe?g|webp|gif|pdf|txt|csv|md|ya?ml|json)$/i.test(clean)) throw new Error("only images, PDFs and text files");
+    const bytes = Buffer.from(base64, "base64");
+    if (bytes.length === 0 || bytes.length > 25 * 1_048_576) throw new Error("the file is empty or over 25 MB");
+    const dirAtt = join(dataDir, "attachments", f.id);
+    mkdirSync(dirAtt, { recursive: true, mode: 0o700 });
+    writeFileSync(join(dirAtt, clean), bytes, { mode: 0o600 });
+    return about(f, { attached: clean, bytes: bytes.length, note: `cite it in sources as "${clean}" (add a page like "${clean} p3" when it has pages)` });
+  }
   if (!document) throw new Error("submit needs the document");
   const r = tools.applyIntake(f.profile, document);
   if (r.problems.length) return about(f, { problems: r.problems, warnings: r.warnings, note: "fix the document and submit again" });
