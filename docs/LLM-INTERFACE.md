@@ -181,6 +181,7 @@ them:
 | Two writers on the file | The write precondition (mtime, 409) already exists; the MCP server uses the same path. |
 | Ambiguous language | Tools return the facts the model needs to resolve it (holdings, vested counts, years), and the instructions say ask when unsure. |
 | The chat window is far from the chart | Phase 2's banner and diff live in the app; phase 3 exists if that is still not enough. |
+| Several people on one hosted server | Each account has its own store and its own connector secret; the HTTP server picks the store by the secret and never by anything the client can name. The secret sits in the URL because claude.ai's dialog only takes a URL, so proxy access logs must stay private; clients that can send headers use `Authorization: Bearer` on `/mcp`. |
 
 ## Testing
 

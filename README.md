@@ -87,6 +87,31 @@ one line per save with the previous text alongside.
 (`data/attachments/<id>/`, gitignored). Add them there or let Claude attach them; a value whose
 source names a stored file links to it.
 
+## Hosting it for more than one person
+
+Locally there are no accounts: the app binds 127.0.0.1 and everything lives in `data/`. To
+run it for several people, put it behind TLS and start it with accounts on:
+
+```sh
+HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com bun packages/app/server.ts
+```
+
+- Accounts are on whenever `TAXONOMY_AUTH=1` or the server is bound to anything but loopback.
+  The first visitor creates the first account; after that sign-up is closed unless
+  `TAXONOMY_SIGNUP=open`.
+- Each account has its own `data/users/<id>/` with its profiles, history, attachments and
+  connector secret; nothing is shared. Passwords are argon2id hashes and sessions are 30-day
+  HttpOnly cookies, both in `data/auth.sqlite` (gitignored, owner-only).
+- Behind a TLS proxy, set `TAXONOMY_SECURE_COOKIES=1` so the cookie is marked Secure even
+  though the server itself sees plain http, and `TAXONOMY_TRUST_PROXY=1` so the sign-in
+  throttle keys on the proxy's `X-Forwarded-For` rather than the proxy's own address. Leave the
+  latter unset when clients reach the server directly, or anyone could forge the header.
+- claude.ai connectors reach each user's MCP server at `https://<public host>/<secret>/mcp`,
+  proxied by the app to the local MCP process. The secret is in that path because claude.ai's
+  connector dialog only takes a URL, so keep proxy access logs private or off; a client that can
+  send headers should use `Authorization: Bearer <secret>` against `/mcp` instead.
+- Claude Desktop set-up buttons are off on a hosted server; they act on the machine the app runs on.
+
 ## Profile schema (version 3)
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,

@@ -117,6 +117,20 @@ them, and an agent that holds the file stores it with `intake(attach)`. A `sourc
 names a stored file ("2025 Form 8801 line 26 (2025-return-p1.png)") turns that field's source
 chip into a link to the page, so a value can be checked against what it came from.
 
+### Stores and accounts
+
+`packages/mcp/store.ts` builds a `Store` from a directory: profile files, history, attachments,
+the `.current` and `.agent` markers and the remote-access secret, all under that directory.
+Without accounts there is one store, `data/` itself, and both servers use it. With accounts
+(`packages/app/auth.ts`: `TAXONOMY_AUTH=1`, or any non-loopback `HOST`) every request to the
+app server passes a guard that turns the session cookie into a user and the user into
+`data/users/<id>/`; handlers only ever touch the store attached to the request, so a profile
+id from one account cannot address another's files. Accounts and sessions live in
+`data/auth.sqlite`: argon2id password hashes, sessions stored as the SHA-256 of a random id,
+30 days sliding. Sign-in is rate-limited per client and email. The HTTP MCP server picks its
+store by the secret in the request (path or bearer header) with a constant-time compare, and
+the stdio server stays local and uses the root store.
+
 ### Tool layer (`tools.ts`)
 
 Pure functions an agent calls through `packages/mcp/server.ts`: orient (`context`, `plan`),
@@ -189,7 +203,10 @@ the same place.
 ## Testing
 
 `bun test packages/engine` covers federal math against hand-checked cases, the plan loop, states,
-lots and sales, events and profile migration, and the intake parser. UI behavior is exercised
+lots and sales, events and profile migration, and the intake parser. `bun test packages/app/test`
+starts the server with accounts on against a throwaway directory and checks sign-up, sign-in,
+throttling, cookies, per-user isolation, password change and the secret-to-store matching
+(`bun run test` runs both). UI behavior is exercised
 with headless Chrome scripts during development (not checked in) against throwaway profiles.
 Calibration against the user's last filed return runs in the app and reports every line's
 difference.
