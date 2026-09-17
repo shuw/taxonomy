@@ -38,9 +38,9 @@ describe("accounts", () => {
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
-  test("the first account can be created; a weak password or a bad email cannot", async () => {
+  test("the first account can be created; an empty password or a bad email cannot", async () => {
     expect((await post("/api/auth/register", { email: "not an email", password: "long-enough-password" })).status).toBe(400);
-    expect((await post("/api/auth/register", { email: "alice@example.com", password: "short" })).status).toBe(400);
+    expect((await post("/api/auth/register", { email: "alice@example.com", password: "" })).status).toBe(400);
     const res = await post("/api/auth/register", { email: "Alice@Example.com", password: "correct horse battery" });
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie") ?? "";

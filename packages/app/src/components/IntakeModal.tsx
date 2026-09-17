@@ -12,7 +12,7 @@ import { Segmented } from "./fields.tsx";
 import { useAgentStatus } from "../hooks/useAgentStatus.ts";
 
 interface FillProps { mode: "fill"; profile: Profile; /** The agent's document being reviewed, if any. */ doc?: PendingIntake; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; /** Open History, where Claude's writes can be undone. */ onHistory?: () => void; }
-interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; }
+interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; /** On a hosted server: who is signed in, and a way out from the first screen. */ account?: { email: string } | null; signOut?: () => Promise<void>; }
 type Props = FillProps | CreateProps;
 
 interface Basics { name: string }
@@ -50,7 +50,7 @@ export function clearDraft(scope: string): void {
 }
 
 export function IntakeModal(props: Props) {
-  return props.mode === "create" ? <NewProfileWizard onDone={props.onDone} onOpen={props.onOpen} onClose={props.onClose} /> : <FillModal {...props} />;
+  return props.mode === "create" ? <NewProfileWizard onDone={props.onDone} onOpen={props.onOpen} onClose={props.onClose} account={props.account} signOut={props.signOut} /> : <FillModal {...props} />;
 }
 
 /** Fill from documents for the profile on screen. */
@@ -84,7 +84,7 @@ function untouched(p: Profile): boolean {
  * step 1 so Claude has something to send to; going back or closing removes it again while it
  * is still empty.
  */
-function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">) {
+function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<CreateProps, "mode">) {
   const scope = "new";
   const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me" }));
   useEffect(() => { saveDraft(`${scope}.basics`, basics); }, [basics]);
@@ -158,6 +158,7 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
         <header className="modal-head">
           <div>
             <h3>New profile <span className="muted step-count">step {step} of 2</span></h3>
+            {account && signOut && <div className="muted small" style={{ margin: 0 }}>Signed in as {account.email} · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></div>}
             {step === 2 && <div className="muted small" style={{ margin: 0 }}>Connect Claude; it fills the profile in with you.</div>}
           </div>
           {!onClose && <ThemeToggle />}

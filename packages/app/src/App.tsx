@@ -95,7 +95,7 @@ function Signed({ account, signOut }: { account: { email: string } | null; signO
   };
 
   if (list === null) return <div className="empty">Loading profiles…</div>;
-  if (needIntake) return <IntakeModal mode="create" onDone={done} onOpen={(id) => { setFirstRun(false); switchTo(id); }} onClose={!firstRun && list.length > 0 ? () => setCreating(false) : undefined} />;
+  if (needIntake) return <IntakeModal mode="create" onDone={done} onOpen={(id) => { setFirstRun(false); switchTo(id); }} onClose={!firstRun && list.length > 0 ? () => setCreating(false) : undefined} account={account} signOut={signOut} />;
   const file = store.file;
   if (!file || file.id !== currentId) return <div className="empty">Loading profile…</div>;
   if (!file.profile) return <div className="empty"><div className="error"><strong>Could not read {file.path}.</strong>{"\n"}{file.error}{"\n"}Fix the file by hand, or restore an earlier version from History.</div></div>;

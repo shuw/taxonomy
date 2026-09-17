@@ -29,8 +29,8 @@ export function Login({ signup, onDone }: { signup: boolean; onDone: () => void 
           <span className="input-wrap"><input type="email" autoComplete="email" autoFocus required value={email} onChange={(e) => setEmail(e.target.value)} /></span>
         </label>
         <label className="field">
-          <span className="field-label">Password{mode === "new" && <span className="field-hint"> at least 10 characters</span>}</span>
-          <span className="input-wrap"><input type="password" autoComplete={mode === "new" ? "new-password" : "current-password"} required minLength={mode === "new" ? 10 : undefined} value={password} onChange={(e) => setPassword(e.target.value)} /></span>
+          <span className="field-label">Password</span>
+          <span className="input-wrap"><input type="password" autoComplete={mode === "new" ? "new-password" : "current-password"} required value={password} onChange={(e) => setPassword(e.target.value)} /></span>
         </label>
         {error && <div className="error">{error}</div>}
         <div className="modal-actions">

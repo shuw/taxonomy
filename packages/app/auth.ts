@@ -23,7 +23,6 @@ const secureCookies = process.env.TAXONOMY_SECURE_COOKIES === "1";
 
 export const SESSION_COOKIE = "taxonomy_session";
 const SESSION_DAYS = 30;
-const MIN_PASSWORD = 10;
 const MAX_PASSWORD = 200;
 const FAILS_ALLOWED = 10;
 const FAIL_WINDOW_MS = 15 * 60_000;
@@ -62,7 +61,7 @@ export class AuthError extends Error { constructor(message: string, public statu
 export async function register(emailRaw: unknown, password: unknown): Promise<User> {
   const email = normalizeEmail(emailRaw);
   if (!emailOk(email)) throw new AuthError("that is not an email address", 400);
-  if (typeof password !== "string" || password.length < MIN_PASSWORD) throw new AuthError(`the password needs at least ${MIN_PASSWORD} characters`, 400);
+  if (typeof password !== "string" || password.length === 0) throw new AuthError("a password is required", 400);
   if (password.length > MAX_PASSWORD) throw new AuthError("the password is too long", 400);
   if (!signupOpen()) throw new AuthError("sign-up is closed; ask whoever runs this server for an account", 403);
   const d = open();
@@ -133,7 +132,7 @@ export function logout(sessionId: string | null | undefined): void {
 export async function changePassword(user: User, current: unknown, next: unknown, keepSessionId: string): Promise<void> {
   const row = open().query("SELECT password_hash FROM users WHERE id = ?").get(user.id) as { password_hash: string } | null;
   if (!row || !(await Bun.password.verify(typeof current === "string" ? current : "", row.password_hash))) throw new AuthError("the current password is wrong", 401);
-  if (typeof next !== "string" || next.length < MIN_PASSWORD) throw new AuthError(`the new password needs at least ${MIN_PASSWORD} characters`, 400);
+  if (typeof next !== "string" || next.length === 0) throw new AuthError("a new password is required", 400);
   if (next.length > MAX_PASSWORD) throw new AuthError("the new password is too long", 400);
   const d = open();
   d.query("UPDATE users SET password_hash = ? WHERE id = ?").run(await Bun.password.hash(next, { algorithm: "argon2id" }), user.id);
