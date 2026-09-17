@@ -19,12 +19,14 @@ interface Props { profile: Profile; years: number[]; entry: TimelineEntry; onCha
 export function FactChangeInspector({ profile, years, entry, onChange, onRemove }: Props) {
   const f = timelineFields().find((x) => x.path === entry.path);
   const same = getPath(profile, entry.path) === entry.value;
+  const once = entry.until !== undefined;
   return (
     <InspectorShell kind="fact" title={f?.label ?? entry.path} onRemove={onRemove}
       head={<>
-        <span className="muted">from</span>
-        <YearSelect years={years} value={entry.year} onChange={(y) => onChange({ ...entry, year: y })} />
-        <span className="muted">on, becomes</span>
+        <span className="muted">{once ? "in" : "from"}</span>
+        <YearSelect years={years} value={entry.year} onChange={(y) => onChange({ ...entry, year: y, ...(once ? { until: y } : {}) })} />
+        <span className="ei-span"><Select options={[{ value: "once", label: "only" }, { value: "on", label: "and on" }]} value={once ? "once" : "on"} onChange={(v) => onChange({ ...entry, until: v === "once" ? entry.year : undefined })} /></span>
+        <span className="muted">{once ? "of" : "set to"}</span>
         <span className="ei-value"><FieldValueInput field={f} value={entry.value} onChange={(v) => onChange({ ...entry, value: v })} /></span>
       </>}>
       <div className="ei-row">

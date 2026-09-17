@@ -1,12 +1,41 @@
 import { latestReturn } from "./calibration.ts";
-import type { Profile } from "./types.ts";
+import { activeScenario, newEventId } from "./events.ts";
+import type { ProfileEdit } from "./profile.ts";
+import { DEFAULT_SCENARIO } from "./timeline.ts";
+import type { Holding, Profile, ScenarioEvent } from "./types.ts";
+import { int } from "./ledger.ts";
 
 export interface Gap {
   id: string;
   text: string;
-  /** Profile path to set, with the value to use, when a one-click fill makes sense. */
-  fill?: { path: (string | number)[]; value: unknown; source: string; label: string };
+  /** Edits that close the gap in one click, when a sensible fill exists. */
+  fill?: { label: string; edits: ProfileEdit[] };
   section: string;
+}
+
+/** An option lot exercised on or after the first plan year: the plan should tax that exercise, not treat the lot as opening stock. */
+export const isPlanExerciseLot = (profile: Profile, h: Holding): boolean =>
+  (h.via === "iso_exercise" || h.via === "nso_exercise") && Number(h.acquired.slice(0, 4)) >= profile.plan.startYear;
+
+export interface LotAsExercise {
+  event: ScenarioEvent;
+  /** The lot's value at exercise is a known price for that year, when none is set. */
+  price?: { companyIndex: number; year: number; value: number };
+  /** The grant whose exercised count already includes these shares, and the count without them. */
+  exercised?: { grantIndex: number; value: number };
+}
+
+/** The decision an in-plan lot stands for, and the counts that move with it. `countsAsOf` is when the grants' counts were read. */
+export function lotAsExercise(profile: Profile, h: Holding, events: ScenarioEvent[], countsAsOf?: string): LotAsExercise {
+  const type = h.via === "iso_exercise" ? "iso" : "nso";
+  const year = Number(h.acquired.slice(0, 4));
+  const companyId = h.company ?? profile.equity.companies[0]?.id;
+  const event: ScenarioEvent = { id: newEventId(events), kind: "exercise", type, year, date: h.acquired, shares: h.quantity, ...(h.company ? { company: h.company } : {}) };
+  const ci = profile.equity.companies.findIndex((c) => c.id === companyId);
+  const price = h.amtBasis && h.amtBasis > 0 && ci >= 0 && profile.equity.companies[ci]!.pricePath?.[year] === undefined ? { companyIndex: ci, year, value: h.amtBasis } : undefined;
+  const gi = profile.equity.grants.findIndex((g) => g.type === type && (g.company ?? profile.equity.companies[0]?.id) === companyId && (g.exercisedToDate ?? 0) >= h.quantity && (countsAsOf ?? g.countsAsOf ?? "9999") >= h.acquired);
+  const exercised = gi >= 0 ? { grantIndex: gi, value: profile.equity.grants[gi]!.exercisedToDate! - h.quantity } : undefined;
+  return { event, price, exercised };
 }
 
 /** Facts the profile is probably missing, judged against the last filed return. Nothing is changed; these are suggestions. */
@@ -18,15 +47,40 @@ export function profileGaps(profile: Profile): Gap[] {
   const fromReturn = (label: string) => `assumed from the ${yr} return (${label})`;
   if (r) {
     const i = r.inputs;
-    if ((inc.interest ?? 0) === 0 && (i.interest ?? 0) > 0) gaps.push({ id: "income.interest", section: "Other income", text: `Your ${yr} return shows ${usd(i.interest!)} of interest; this year has none.`, fill: { path: ["income", "interest"], value: i.interest!, source: fromReturn("1040 line 2b"), label: `Use ${usd(i.interest!)}` } });
-    if ((inc.ordinaryDividends ?? 0) === 0 && (i.ordinaryDividends ?? 0) > 0) gaps.push({ id: "income.ordinaryDividends", section: "Other income", text: `Your ${yr} return shows ${usd(i.ordinaryDividends!)} of dividends (${usd(i.qualifiedDividends ?? 0)} qualified); this year has none.`, fill: { path: ["income", "ordinaryDividends"], value: i.ordinaryDividends!, source: fromReturn("1040 line 3b"), label: `Use ${usd(i.ordinaryDividends!)}` } });
-    if ((inc.qualifiedDividends ?? 0) === 0 && (i.qualifiedDividends ?? 0) > 0 && (inc.ordinaryDividends ?? 0) > 0) gaps.push({ id: "income.qualifiedDividends", section: "Other income", text: `${yr} had ${usd(i.qualifiedDividends!)} of qualified dividends; this year's qualified figure is 0.`, fill: { path: ["income", "qualifiedDividends"], value: i.qualifiedDividends!, source: fromReturn("1040 line 3a"), label: `Use ${usd(i.qualifiedDividends!)}` } });
+    if ((inc.interest ?? 0) === 0 && (i.interest ?? 0) > 0) gaps.push({ id: "income.interest", section: "Other income", text: `Your ${yr} return shows ${usd(i.interest!)} of interest; this year has none.`, fill: { label: `Use ${usd(i.interest!)}`, edits: [{ path: ["income", "interest"], value: i.interest! }, { path: ["sources", ["income", "interest"].join(".")], value: fromReturn("1040 line 2b") }] } });
+    if ((inc.ordinaryDividends ?? 0) === 0 && (i.ordinaryDividends ?? 0) > 0) gaps.push({ id: "income.ordinaryDividends", section: "Other income", text: `Your ${yr} return shows ${usd(i.ordinaryDividends!)} of dividends (${usd(i.qualifiedDividends ?? 0)} qualified); this year has none.`, fill: { label: `Use ${usd(i.ordinaryDividends!)}`, edits: [{ path: ["income", "ordinaryDividends"], value: i.ordinaryDividends! }, { path: ["sources", ["income", "ordinaryDividends"].join(".")], value: fromReturn("1040 line 3b") }] } });
+    if ((inc.qualifiedDividends ?? 0) === 0 && (i.qualifiedDividends ?? 0) > 0 && (inc.ordinaryDividends ?? 0) > 0) gaps.push({ id: "income.qualifiedDividends", section: "Other income", text: `${yr} had ${usd(i.qualifiedDividends!)} of qualified dividends; this year's qualified figure is 0.`, fill: { label: `Use ${usd(i.qualifiedDividends!)}`, edits: [{ path: ["income", "qualifiedDividends"], value: i.qualifiedDividends! }, { path: ["sources", ["income", "qualifiedDividends"].join(".")], value: fromReturn("1040 line 3a") }] } });
   }
   const self = profile.people.self;
-  if ((self.pretaxContributions ?? 0) === 0 && self.salary > 0) gaps.push({ id: "people.self.pretaxContributions", section: "You", text: "No pre-tax contributions recorded. A 401(k) or HSA lowers taxable wages; 2026's 401(k) limit is $24,500.", fill: { path: ["people", "self", "pretaxContributions"], value: 24_500, source: "assumed: 2026 401(k) limit", label: "Assume $24,500" } });
-  if (profile.filer.filingStatus === "mfj" && !profile.people.spouse) gaps.push({ id: "people.spouse", section: "You", text: "Filing jointly, but no spouse income is recorded. Add it in the You section if there is any.", fill: undefined });
-  if ((profile.filer.dependents ?? []).length === 0 && (profile.filer.filingStatus === "mfj" || profile.filer.filingStatus === "hoh")) gaps.push({ id: "filer.dependents", section: "You", text: "No dependents recorded. Birth years matter for credits that are coming.", fill: undefined });
+  if ((self.pretaxContributions ?? 0) === 0 && self.salary > 0) gaps.push({ id: "people.self.pretaxContributions", section: "You", text: "No pre-tax contributions recorded. A 401(k) or HSA lowers taxable wages; 2026's 401(k) limit is $24,500.", fill: { label: "Assume $24,500", edits: [{ path: ["people", "self", "pretaxContributions"], value: 24_500 }, { path: ["sources", "people.self.pretaxContributions"], value: "assumed: 2026 401(k) limit" }] } });
+  if (profile.filer.filingStatus === "mfj" && !profile.people.spouse) gaps.push({ id: "people.spouse", section: "You", text: "Filing jointly, but no spouse income is recorded. Add it in the You section if there is any." });
+  if ((profile.filer.dependents ?? []).length === 0 && (profile.filer.filingStatus === "mfj" || profile.filer.filingStatus === "hoh")) gaps.push({ id: "filer.dependents", section: "You", text: "No dependents recorded. Birth years matter for credits that are coming." });
+
+  // Equity the plan cannot model as entered.
+  for (const g of profile.equity.grants) {
+    const unvested = g.granted - (g.vestedToDate ?? 0);
+    if (unvested > 0 && !g.schedule && !g.vesting) gaps.push({ id: `grants.${g.id}.schedule`, section: "Equity", text: `${g.name}: ${int(unvested)} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Open the grant and set Vesting.` });
+  }
+  const holdings = profile.equity.holdings ?? [];
+  const name = profile.activeScenario ?? DEFAULT_SCENARIO;
+  const scenario = activeScenario(profile);
+  for (const h of holdings) {
+    if (!isPlanExerciseLot(profile, h)) continue;
+    const r = lotAsExercise(profile, h, scenario.events);
+    const type = h.via === "iso_exercise" ? "ISO" : "NSO";
+    const year = r.event.year;
+    gaps.push({
+      id: `holdings.${h.id}.exercise`, section: "Equity",
+      text: `Lot "${h.lot}": ${int(h.quantity)} ${type} shares exercised ${h.acquired}, inside the plan, but no exercise is modeled, so ${year} is missing its ${type === "ISO" ? "AMT" : "wage income"}. Modeling it adds the exercise to the ${name} scenario${r.price ? ` and uses ${usd(r.price.value)}/sh as the ${year} price` : ""}${r.exercised ? " and moves the shares back to exercisable" : ""}; the plan then creates the lot itself.`,
+      fill: { label: `Model it in ${year}`, edits: [
+        { path: ["scenarios", name], value: { ...scenario, events: [...scenario.events, r.event] } },
+        { path: ["equity", "holdings"], value: holdings.filter((x) => x.id !== h.id) },
+        ...(r.price ? [{ path: ["equity", "companies", r.price.companyIndex, "pricePath", String(year)], value: r.price.value }] : []),
+        ...(r.exercised ? [{ path: ["equity", "grants", r.exercised.grantIndex, "exercisedToDate"], value: r.exercised.value }] : []),
+      ] },
+    });
+  }
   return gaps;
 }
 
-const usd = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+const usd = (n: number) => "$" + int(n);

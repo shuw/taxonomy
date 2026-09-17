@@ -46,6 +46,7 @@ export function useTimelineActions({ profile, levers, events, facts, edit, selec
     const event: ScenarioEvent =
       what.kind === "exercise" ? { id, kind: "exercise", type: what.type, year, shares: 0, ...(what.company ? { company: what.company } : {}) }
       : what.kind === "sell" ? { id, kind: "sell", year, shares: 0 }
+      : what.kind === "give" ? { id, kind: "give", year, how: what.how, amount: 0 }
       : { id, kind: "liquidity", year };
     writeEvents([...events, event]);
     setSelectedId(id);
@@ -69,7 +70,9 @@ export function useTimelineActions({ profile, levers, events, facts, edit, selec
     const current = getPath(profile, path);
     const value = current !== undefined ? current : f?.type === "bool" ? true : f?.type === "enum" ? f.enum?.[0] : 0;
     const id = newId("t", timeline.map((t) => t.id ?? ""));
-    edit([{ path: ["timeline"], value: [...timeline, { id, year, path, value }] }]);
+    // Gifts and one-time gains are usually one year; pay, status and assumptions carry on.
+    const once = f?.section === "giving" || ["income.longTermGains", "income.shortTermGains", "income.otherOrdinary"].includes(path);
+    edit([{ path: ["timeline"], value: [...timeline, { id, year, ...(once ? { until: year } : {}), path, value }] }]);
     setSelectedId(id);
     setFocusYear(year);
   };

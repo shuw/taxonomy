@@ -26,6 +26,7 @@ export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanRe
         <Tile label="AMT credit left" value={t.amtCreditCarryforwardEnd} pinned={p?.amtCreditCarryforwardEnd} color="var(--series-amt)" />
         <Tile label="State" value={t.stateTax} pinned={p?.stateTax} color="var(--series-state)" />
       </div>
+      <p className="fine">For understanding, not advice. These are estimates from a model of the rules; confirm anything you act on with a tax professional.</p>
     </section>
   );
 }

@@ -1,3 +1,5 @@
+import { kindStyle } from "../../series.ts";
+import { LogRange } from "../LogRange.tsx";
 import { isLongTerm, isQualifying, longTermFrom, lotMilestones, lotPrice, qualifyingFrom, type Lot, type PlanResult, type Profile, type SaleResult, type ScenarioEvent } from "@taxonomy/engine";
 import { fmtDelta, shares, usd, usdCompact } from "../../format.ts";
 import { MoneyInput, NumberInput } from "../fields.tsx";
@@ -35,14 +37,14 @@ export function SaleInspector({ profile, plan, years, event: e, result, onChange
         <>
           <div className="lever-row">
             <div className="head">
-              <span className="badge sell">SELL</span>
+              <span className="badge" style={kindStyle("sell")}>SELL</span>
               <span className="lever-hint muted">{explicit ? `lots picked by hand · ${shares(sold)} of ${shares(held)} held at ${usd(price)}/sh` : "lowest-tax lots first"}</span>
               {!explicit && <NumberInput value={want} onChange={(n) => onChange({ shares: Math.max(0, Math.min(held, Math.round(n))) })} min={0} suffix="sh" />}
             </div>
             {!explicit && (
               <>
                 <div className="track">
-                  <input type="range" className="range" min={0} max={held} step={held > 5000 ? 50 : 10} value={want} style={{ "--pct": `${held > 0 ? (want / held) * 100 : 0}%` } as React.CSSProperties} onChange={(ev) => onChange({ shares: Number(ev.target.value) })} />
+                  <LogRange max={held} value={want} step={held > 5000 ? 50 : 10} onChange={(n) => onChange({ shares: n })} />
                 </div>
                 <div className="foot">
                   <span>{shares(sold)} of {shares(held)} held</span>

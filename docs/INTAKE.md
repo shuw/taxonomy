@@ -83,7 +83,7 @@ Holdings, for the sales lever that comes next:
 
 | Field | Why | Source |
 |---|---|---|
-| lots of shares already owned: quantity, acquisition date, how acquired (ISO exercise, NSO exercise, RSU vest, ESPP, purchase) | holding periods, qualifying vs disqualifying dispositions | portal holdings page, 1099-B supplemental |
+| lots of shares already owned: quantity, acquisition date, how acquired (ISO exercise, NSO exercise, RSU vest, ESPP, purchase) | holding periods, qualifying vs disqualifying dispositions | portal holdings page, 1099-B supplemental. An option lot exercised on or after the first plan year is still listed here, but the tool models it as an exercise decision in that year (the spread is taxed, the lot is created by the plan, the value at exercise becomes that year's price, and shares counted as exercised after that date move back to exercisable) |
 | regular cost basis and AMT basis per lot | dual-basis gain on ISO shares | Form 3921 (exercise price, FMV at exercise), 1099-B |
 | ISO exercises during the current year | AMT preference already incurred | Form 3921 for the year |
 

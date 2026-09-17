@@ -376,6 +376,7 @@ function fmt(v: unknown, format: IntakeChange["format"]): string {
       return parts.join(" · ");
     }
     case "companies": return (v as { name: string; sharePrice: number }[]).map((c) => `${c.name} at ${usd(c.sharePrice)}/sh`).join("; ");
+    case "events": return (v as { kind: string; type?: string; shares: number; year: number; date?: string }[]).map((e) => `${e.kind === "exercise" ? `exercise ${shares(e.shares)} ${e.type?.toUpperCase()}` : `${e.kind} ${shares(e.shares)}`} ${e.date ?? e.year}`).join("; ");
     case "holdings": {
       const lots = v as { lot: string; quantity: number; costBasis: number; amtBasis?: number }[];
       return lots.map((l) => `${l.lot}: ${shares(l.quantity)} sh, basis ${usd(l.costBasis)}${l.amtBasis !== undefined ? ` / AMT ${usd(l.amtBasis)}` : ""}`).join("; ");

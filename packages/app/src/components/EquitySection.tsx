@@ -1,3 +1,4 @@
+import { kindStyle } from "../series.ts";
 import { companyOf, grantFmv, grantsMissingVesting, newId, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
@@ -216,7 +217,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
   return (
     <div className={"grant" + (open ? " open" : "") + (noSchedule ? " warn" : "")}>
       <button type="button" className="grant-line" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className={"badge " + g.type}>{TYPE_LABEL[g.type]}</span>
+        <span className="badge" style={kindStyle(g.type)}>{TYPE_LABEL[g.type]}</span>
         <span className="grant-text">
           <span className="grant-title">{g.name}</span>
           <span className="grant-summary muted">{oneLine}{noSchedule ? " · no schedule" : ""}</span>

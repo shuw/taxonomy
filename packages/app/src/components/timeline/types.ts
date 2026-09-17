@@ -10,7 +10,7 @@ export interface FactMarker {
 }
 
 /** What the + menu can add. */
-export type AddKind = { kind: "exercise"; type: "iso" | "nso"; company?: string } | { kind: "sell" } | { kind: "liquidity" };
+export type AddKind = { kind: "exercise"; type: "iso" | "nso"; company?: string } | { kind: "sell" } | { kind: "liquidity" } | { kind: "give"; how: "cash" | "stock" | "daf" };
 
 /** Same margins as the tax chart, so event columns sit under their bars. */
 export const STRIP_MARGIN = { left: 46, right: 12 };

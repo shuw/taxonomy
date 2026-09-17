@@ -6,6 +6,7 @@ import { activeScenario, exercisedIn, planYears, resolveLevers, statusName, type
 import { EventTimeline } from "./components/timeline/EventTimeline.tsx";
 import { factMarkers } from "./components/timeline/factMarkers.ts";
 import { usePlanAnalyses } from "./hooks/usePlanAnalyses.ts";
+import { useDebounced } from "./hooks/useDebounced.ts";
 import { useTimelineActions } from "./hooks/useTimelineActions.ts";
 import { Segmented } from "./components/fields.tsx";
 import { Info } from "./components/Info.tsx";
@@ -144,7 +145,10 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
   const scenario = useMemo(() => activeScenario(profile), [profile]);
   const events = scenario.events;
   const sweepYear = years.includes(focusYear) ? focusYear : years[0]!;
-  const { plan, isoCompanies, crossovers, byCompany } = usePlanAnalyses(profile, levers, sweepYear);
+  // Inputs answer at once; the engine runs once a burst of edits (a slider drag) settles.
+  const engineProfile = useDebounced(profile);
+  const engineLevers = useMemo(() => (engineProfile === profile ? levers : resolveLevers(engineProfile)), [engineProfile, profile, levers]);
+  const { plan, isoCompanies, crossovers, byCompany } = usePlanAnalyses(engineProfile, engineLevers, sweepYear);
   const hasIso = isoCompanies.length > 0;
   const facts = useMemo(() => factMarkers(profile, years, () => openFacts("equity")), [profile, yearsKey]);
   const actions = useTimelineActions({ profile, levers, events, facts, edit, selectedId: selectedEvent, setSelectedId: setSelectedEvent, setFocusYear });
@@ -261,6 +265,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} />}
         </section>
         <CalibrationCard profile={profile} />
+        <footer className="foot">Taxonomy is a planning aid, not tax, legal or financial advice, and not a filing tool. Every figure is an estimate; rules, thresholds and your facts change. Your data stays in files on this computer.</footer>
       </main>
 
       {selected && (

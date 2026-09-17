@@ -228,6 +228,15 @@ export type ScenarioEvent =
       company?: string;
       /** Share price at the event; sets that year's price. Defaults to the modeled price. */
       price?: number;
+    }
+  | {
+      id: string;
+      kind: "give";
+      year: number;
+      date?: string;
+      /** Cash, appreciated shares at fair value, or a donor-advised fund contribution. */
+      how: "cash" | "stock" | "daf";
+      amount: number;
     };
 
 /** One sale as the engine sees it. */
@@ -256,6 +265,8 @@ export interface Levers {
   sales?: Record<number, SaleLever[]>;
   /** Liquidity events by company id ("*" for all): the year settles double-trigger RSUs and the price, if given, pins that year's share price. */
   liquidity?: Record<string, { year: number; price?: number }>;
+  /** Gifts per year on top of the profile's recurring giving: cash (with donor-advised fund contributions) and appreciated shares at fair value. */
+  gifts?: Record<number, { cash: number; stock: number }>;
 }
 
 /** A dated change to any profile value, in force from that year on. */
@@ -263,6 +274,8 @@ export interface TimelineEntry {
   /** Assigned on read when missing, so the app can select an entry regardless of its position. */
   id?: string;
   year: number;
+  /** Last year it applies; omitted means from `year` on. Equal to `year` for a one-year item (a gift, a one-time gain). */
+  until?: number;
   /** Dot path into the profile, e.g. "people.self.salary" or "filer.filingStatus". */
   path: string;
   value: unknown;
@@ -304,6 +317,8 @@ export interface PendingChange {
   value: unknown;
   /** When set, the change goes on the timeline from that year instead of replacing the fact. */
   from?: number;
+  /** With `from`: the last year the change applies. */
+  until?: number;
   /** Where the agent got it: the document, or "told in chat". */
   source?: string;
   proposed?: string;

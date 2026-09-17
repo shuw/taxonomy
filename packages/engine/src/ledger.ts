@@ -21,7 +21,9 @@ export class Ledger {
   }
 }
 
-export const usd = (n: number): string =>
-  (n < 0 ? "-" : "") + "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
+// One shared formatter: toLocaleString builds a new one per call, and the app formats thousands of numbers per render.
+const INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+export const int = (n: number): string => INT.format(Math.round(n));
+export const usd = (n: number): string => (n < 0 ? "-" : "") + "$" + int(Math.abs(n));
 
 export const pct = (r: number): string => `${(r * 100).toFixed(r * 100 % 1 === 0 ? 0 : 1)}%`;

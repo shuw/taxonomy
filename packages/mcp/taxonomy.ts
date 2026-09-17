@@ -127,6 +127,7 @@ const eventInput = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("exercise"), type: z.enum(["iso", "nso"]), year: z.number().int(), shares: z.number().min(0), company: z.string().optional().describe("company id or name; defaults to the first company"), date: z.string().optional().describe("YYYY-MM-DD; defaults to January 1 of the year") }),
   z.object({ kind: z.literal("sell"), year: z.number().int(), shares: z.number().min(0), price: z.string().or(z.number()).optional().describe("per share; defaults to the modeled price"), date: z.string().optional().describe("YYYY-MM-DD; defaults to December 31"), lots: z.record(z.number()).optional().describe("lot id to shares, to name lots instead of lowest-tax-first") }),
   z.object({ kind: z.literal("liquidity"), year: z.number().int(), price: z.number().optional().describe("share price at the event; pins that year's price"), company: z.string().optional() }),
+  z.object({ kind: z.literal("give"), year: z.number().int(), how: z.enum(["cash", "stock", "daf"]).describe("cash, appreciated shares at fair value, or a donor-advised fund contribution"), amount: z.number().min(0).describe("dollars; for stock, the fair value given") }),
 ]);
 const toEvents = (list: z.infer<typeof eventInput>[]): EventInput[] => list.map((e) => (e.kind === "sell" && typeof e.price === "string" ? { ...e, price: Number(e.price) } : e)) as EventInput[];
 
@@ -165,6 +166,7 @@ const factChange = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]).describe("in the field's type; percentages as 0.2, 20 or '20%'; money as 400000 or '400k'"),
   company: z.string().optional().describe("company id or name, for per-company fields such as share price or growth"),
   from: z.number().int().optional().describe("a plan year: the change starts then (a raise, a law change) instead of replacing the fact now"),
+  until: z.number().int().optional().describe("with from: the last year it applies; the same year as from for a one-year item (a gift, a one-time gain)"),
   source: z.string().optional().describe("where it came from: 'told in chat', or the document"),
 });
 

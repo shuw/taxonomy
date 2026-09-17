@@ -1,6 +1,6 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
-import { eventsFromLevers } from "./events.ts";
+import { eventsFromLevers, newEventId } from "./events.ts";
 import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PendingChange, PendingIntake, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
 
 /** The per-year lever table older files stored directly: a share count per year. */
@@ -81,6 +81,22 @@ export function parseProfile(text: string): Profile {
   if (raw.scenarios) scenarios = Object.fromEntries(Object.entries(raw.scenarios).map(([k, v]) => [k, normalizeScenario(v)]));
   else if (raw.levers) scenarios = { default: { events: eventsFromLevers(normalizeLevers(raw.levers)) } };
 
+  // A one-year gift written as a dated fact (files from before gifts were decisions) becomes a gift in every scenario.
+  // The file is rewritten without the entry on its next read (isLegacyProfileText), so this runs once per file.
+  let timeline = withTimelineIds(raw.timeline);
+  const oneYearGifts = giftEntries(timeline);
+  if (oneYearGifts.length) {
+    timeline = timeline!.filter((t) => !oneYearGifts.includes(t));
+    scenarios ??= { default: { events: [] } };
+    for (const s of Object.values(scenarios)) {
+      for (const t of oneYearGifts) {
+        const how = GIFT_PATHS[t.path]!, amount = t.value as number;
+        if (s.events.some((e) => e.kind === "give" && e.year === t.year && e.how === how && e.amount === amount)) continue;
+        s.events.push({ id: newEventId(s.events), kind: "give", year: t.year, how, amount });
+      }
+    }
+  }
+
   return {
     version: 3,
     name: typeof raw.name === "string" ? raw.name : undefined,
@@ -94,7 +110,7 @@ export function parseProfile(text: string): Profile {
     equity,
     home,
     deductions: { stateIncomeTax: d.stateIncomeTax, charitable: typeof d.charitable === "number" ? { cash: d.charitable } : d.charitable, medical: d.medical },
-    timeline: withTimelineIds(raw.timeline),
+    timeline: timeline?.length ? timeline : undefined,
     scenarios,
     activeScenario: raw.activeScenario ?? (scenarios ? Object.keys(scenarios)[0] : undefined),
     sources: rekeySources(raw.sources, equity, raw.equity?.isoGrants?.length ?? 0),
@@ -218,9 +234,13 @@ function rekeySources(sources: Record<string, Source> | undefined, equity: Profi
 }
 
 /** Whether a file predates the current schema. */
+const GIFT_PATHS: Record<string, "cash" | "stock" | "daf"> = { "deductions.charitable.cash": "cash", "deductions.charitable.appreciatedStock": "stock", "deductions.charitable.daf": "daf" };
+const giftEntries = (timeline: TimelineEntry[] | undefined) => (timeline ?? []).filter((t) => t.until === t.year && t.path in GIFT_PATHS && typeof t.value === "number" && t.value > 0);
+
+/** Files in an older shape, or carrying one-year gift facts from before gifts were decisions; both are rewritten on read. */
 export function isLegacyProfileText(text: string): boolean {
   const raw = parse(text) as RawProfile | null;
-  return !!raw && raw.version !== CURRENT_VERSION;
+  return !!raw && (raw.version !== CURRENT_VERSION || giftEntries(raw.timeline).length > 0);
 }
 
 /** Rewrite an old file into the current shape. Comments do not survive a version bump; the structure is re-emitted with fresh ones. */
@@ -240,8 +260,8 @@ const COMMENTS: Record<string, string> = {
   equity: "companies with a share price; grants by the portal's three counts (granted, vestedToDate, exercisedToDate); holdings are lots you own",
   home: "the mortgage as a loan; interest and the $750k cap are computed",
   deductions: "charitable by kind; stateIncomeTax; medical",
-  timeline: "dated changes to any value above, in force from that year on: { year, path, value }",
-  scenarios: "named lists of decisions on the timeline: exercise, sell and liquidity events; activeScenario picks one",
+  timeline: "dated changes to any value above, from that year on, or through `until`: { year, until?, path, value }",
+  scenarios: "named lists of decisions on the timeline: exercise, sell, liquidity and give events; activeScenario picks one",
   sources: "where each number came from, keyed by path (grants and holdings by id)",
   followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
   pending: "changes to facts your agent proposed; nothing here counts until you accept it in the app",

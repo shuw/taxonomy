@@ -2,8 +2,9 @@ import { netCapital } from "./capital.ts";
 import { Ledger, pct, usd } from "./ledger.ts";
 import { bracketRate, bracketTax, capGainsTax, type FederalParams } from "./params.ts";
 import type { YearInputs } from "./types.ts";
+import { int } from "./ledger.ts";
 
-const n = (x: number) => Math.round(x).toLocaleString("en-US");
+const n = int;
 
 /**
  * Federal income tax for one year: regular tax, AMT, the minimum tax credit, NIIT and the

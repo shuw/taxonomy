@@ -11,6 +11,8 @@ import type { Line, PendingChange, PendingIntake, PlanResult, Profile, Scenario,
 import { intakePrompt } from "./intake/prompt.ts";
 import { parseIntake } from "./intake/schema.ts";
 import { changesToEdits, followUpEdits, reviewIntake, type IntakeSection } from "./intake/apply.ts";
+import { int } from "./ledger.ts";
+import { profileGaps } from "./gaps.ts";
 
 /**
  * What an agent can do with a profile: read the picture, explain it, try changes, and propose
@@ -20,19 +22,24 @@ import { changesToEdits, followUpEdits, reviewIntake, type IntakeSection } from 
 
 /** The ledger lines worth showing an agent per year, in this order. */
 export const HEADLINE_LINES = [
-  "agi", "taxableIncome", "regularTax", "amt", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "additionalMedicare", "stateTax", "totalTax", "effectiveRate",
+  "agi", "taxableIncome", "regularTax", "amt", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "additionalMedicare", "stateTax", "totalTax", "effectiveRate", "effectiveRateWithSpread",
   "isoSharesExercised", "isoBargainElement", "nsoSharesExercised", "nsoIncome", "rsuSharesVested", "rsuIncome", "sharesSold", "saleProceeds", "netLongTermGain", "netShortTermGain",
-  "cashIn", "exerciseCost", "netCash",
+  "cashIn", "exerciseCost", "giving", "givingStock", "netCash",
 ] as const;
 
-export interface YearHeadline { year: number; lines: Record<string, number>; events: ScenarioEvent[]; }
+export interface YearHeadline { year: number; lines: Record<string, number>; why?: Record<string, string>; events: ScenarioEvent[]; }
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
+/** The lines whose reason is worth carrying without an explain call. */
+const WHY_LINES = ["amt", "amtCreditUsed", "amtCreditCarryforwardOut"];
+
 function headline(y: YearResult, events: ScenarioEvent[]): YearHeadline {
   const lines: Record<string, number> = {};
-  for (const id of HEADLINE_LINES) if (y.lines[id]) lines[id] = round(y.lines[id]!.value);
-  return { year: y.year, lines, events: events.filter((e) => e.year === y.year) };
+  for (const id of HEADLINE_LINES) { const l = y.lines[id]; if (l) lines[id] = l.unit === "rate" ? Math.round(l.value * 10_000) / 10_000 : Math.round(l.value); }
+  const why: Record<string, string> = {};
+  for (const id of WHY_LINES) { const l = y.lines[id]; if (l && l.value > 0) why[id] = l.why; }
+  return { year: y.year, lines, ...(Object.keys(why).length ? { why } : {}), events: events.filter((e) => e.year === y.year) };
 }
 
 /** The profile with another scenario made active, for running "as if". */
@@ -97,6 +104,7 @@ export function outstanding(profile: Profile) {
   return {
     questions: (profile.followUps ?? []).filter((f) => !f.resolved).map((f) => ({ id: f.id, text: f.text, about: f.about, kind: f.kind ?? "confirm" })),
     empty,
+    gaps: profileGaps(profile).map((g) => ({ id: g.id, section: g.section, text: g.text, oneClickInApp: !!g.fill })),
     documentsAwaitingReview: profile.pendingIntake?.length ?? 0,
     changesAwaitingReview: profile.pending?.length ?? 0,
   };
@@ -171,7 +179,7 @@ export function sellToCover(profile: Profile, year: number): { shares: number; y
 }
 
 /** Input shape an agent supplies for an event; ids are assigned here. */
-export type EventInput = Omit<Extract<ScenarioEvent, { kind: "exercise" }>, "id"> | Omit<Extract<ScenarioEvent, { kind: "sell" }>, "id"> | Omit<Extract<ScenarioEvent, { kind: "liquidity" }>, "id">;
+export type EventInput = Omit<Extract<ScenarioEvent, { kind: "exercise" }>, "id"> | Omit<Extract<ScenarioEvent, { kind: "sell" }>, "id"> | Omit<Extract<ScenarioEvent, { kind: "liquidity" }>, "id"> | Omit<Extract<ScenarioEvent, { kind: "give" }>, "id">;
 
 /** Check and complete agent-supplied events against the profile. */
 export function normalizeEvents(profile: Profile, inputs: EventInput[], existing: ScenarioEvent[] = [], reserved: string[] = []): ScenarioEvent[] {
@@ -189,11 +197,15 @@ export function normalizeEvents(profile: Profile, inputs: EventInput[], existing
     }
     if (e.kind === "exercise") {
       if (!["iso", "nso"].includes(e.type)) throw new Error(`exercise type must be iso or nso`);
-      if (!(e.shares >= 0)) throw new Error("shares must be a number of at least 0");
+      if (!(e.shares > 0)) throw new Error("shares must be more than 0");
       const c = resolveCompany(profile, e.company ?? "*");
       if (!profile.equity.grants.some((g) => g.type === e.type && (g.company ?? profile.equity.companies[0]?.id) === c)) throw new Error(`no ${e.type.toUpperCase()} grants for company ${c}`);
     }
-    if (e.kind === "sell" && !(e.shares >= 0)) throw new Error("shares must be a number of at least 0");
+    if (e.kind === "sell" && !(e.shares > 0)) throw new Error("shares must be more than 0");
+    if (e.kind === "give") {
+      if (!["cash", "stock", "daf"].includes(e.how)) throw new Error("how must be cash, stock or daf");
+      if (!(e.amount > 0)) throw new Error("amount must be more than 0");
+    }
     const id = newEventId([...out, ...[...taken].map((id) => ({ id }) as ScenarioEvent)]);
     taken.add(id);
     out.push({ ...e, id } as ScenarioEvent);
@@ -258,12 +270,13 @@ export function deleteScenario(profile: Profile, name: string): ProfileEdit[] {
 export function describeYear(profile: Profile, y: YearHeadline): string {
   const parts: string[] = [];
   for (const e of y.events) {
-    if (e.kind === "exercise") parts.push(`exercise ${e.shares.toLocaleString("en-US")} ${e.type.toUpperCase()}s${profile.equity.companies.length > 1 ? ` (${companyName(profile, e.company)})` : ""}`);
-    else if (e.kind === "sell") parts.push(`sell ${e.shares.toLocaleString("en-US")} shares`);
+    if (e.kind === "exercise") parts.push(`exercise ${int(e.shares)} ${e.type.toUpperCase()}s${profile.equity.companies.length > 1 ? ` (${companyName(profile, e.company)})` : ""}`);
+    else if (e.kind === "sell") parts.push(`sell ${int(e.shares)} shares`);
+    else if (e.kind === "give") parts.push(`give $${int(e.amount)} ${e.how === "stock" ? "in shares" : e.how === "daf" ? "to a donor-advised fund" : "cash"}`);
     else parts.push(`liquidity event${e.price ? ` at $${e.price}` : ""}`);
   }
   const l = y.lines;
-  const usd = (n = 0) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const usd = (n = 0) => `$${int(n)}`;
   return `${y.year}: ${parts.length ? parts.join(", ") + ". " : ""}AGI ${usd(l.agi)}, total tax ${usd(l.totalTax)}${l.amt ? ` of which AMT ${usd(l.amt)}` : ""}, net cash ${usd(l.netCash)}.`;
 }
 
@@ -368,7 +381,7 @@ function editableFields(profile: Profile) {
   }));
 }
 
-export interface FactChangeInput { field: string; value: unknown; company?: string; from?: number; source?: string; }
+export interface FactChangeInput { field: string; value: unknown; company?: string; from?: number; until?: number; source?: string; }
 
 function resolveField(profile: Profile, name: string, company?: string): { def: FieldDef; path: string } {
   const key = name.trim().replace(/^equity\.companies\.\d+\./, COMPANY_PREFIX);
@@ -423,7 +436,7 @@ export function profileWithPending(profile: Profile, pending: PendingChange[] = 
   const out = clone(profile);
   const timeline: TimelineEntry[] = [...(out.timeline ?? [])];
   for (const p of pending) {
-    if (p.from !== undefined) timeline.push({ id: newId("t", timeline.map((t) => t.id ?? "")), year: p.from, path: p.path, value: p.value, note: p.source });
+    if (p.from !== undefined) timeline.push({ id: newId("t", timeline.map((t) => t.id ?? "")), year: p.from, until: p.until, path: p.path, value: p.value, note: p.source });
     else setPath(out as unknown as Record<string, unknown>, p.path, p.value);
   }
   out.timeline = timeline.length ? timeline : undefined;
@@ -431,13 +444,13 @@ export function profileWithPending(profile: Profile, pending: PendingChange[] = 
   return out;
 }
 
-export interface PendingRow { id: string; field: string; label: string; current: unknown; proposed: unknown; from?: number; source?: string; }
+export interface PendingRow { id: string; field: string; label: string; current: unknown; proposed: unknown; from?: number; until?: number; source?: string; }
 
 function rowOf(profile: Profile, p: PendingChange): PendingRow {
   const def = FIELDS.find((f) => f.path === p.path.replace(/^equity\.companies\.\d+\./, COMPANY_PREFIX));
   const m = /^equity\.companies\.(\d+)\./.exec(p.path);
   const company = m ? profile.equity.companies[Number(m[1])] : undefined;
-  return { id: p.id, field: p.path, label: `${def?.label ?? p.path}${company && profile.equity.companies.length > 1 ? ` (${company.name})` : ""}`, current: getPath(profile, p.path), proposed: p.value, from: p.from, source: p.source };
+  return { id: p.id, field: p.path, label: `${def?.label ?? p.path}${company && profile.equity.companies.length > 1 ? ` (${company.name})` : ""}`, current: getPath(profile, p.path), proposed: p.value, from: p.from, until: p.until, source: p.source };
 }
 
 /** What is waiting for review, and what accepting all of it would do to the plan. */
@@ -464,10 +477,11 @@ export function updateFacts(profile: Profile, changes: FactChangeInput[]): { edi
     if (c.from !== undefined) {
       if (!def.timeline) throw new Error(`${def.label} cannot change from a year; leave "from" out`);
       if (!years.includes(c.from)) throw new Error(`year ${c.from} is not in the plan (${years[0]}–${years[years.length - 1]})`);
+      if (c.until !== undefined && (!years.includes(c.until) || c.until < c.from)) throw new Error(`until must be a plan year on or after ${c.from}`);
     }
     const id = newId("p", taken);
     taken.push(id);
-    return { id, path, value, from: c.from, source: c.source, proposed: today };
+    return { id, path, value, from: c.from, until: c.from !== undefined ? c.until : undefined, source: c.source, proposed: today };
   });
   const pending = [...existing.filter((p) => !added.some((a) => a.path === p.path && a.from === p.from)), ...added];
   const next = { ...profile, pending };
@@ -488,7 +502,7 @@ export function resolvePending(profile: Profile, ids: string[] | undefined, acce
     const source = { doc: "your agent", asOf: p.proposed, note: p.source };
     if (p.from !== undefined) {
       const id = newId("t", timeline.map((t) => t.id ?? ""));
-      timeline.push({ id, year: p.from, path: p.path, value: p.value, note: p.source });
+      timeline.push({ id, year: p.from, until: p.until, path: p.path, value: p.value, note: p.source });
       timelineChanged = true;
     } else {
       edits.push({ path: p.path.split(".").map((s) => (/^\d+$/.test(s) ? Number(s) : s)), value: p.value });

@@ -1,4 +1,5 @@
-import { nextShareSpread, sharesExercisable, type AmtCrossover, type Levers, type Profile, type ScenarioEvent } from "@taxonomy/engine";
+import { useMemo } from "react";
+import { nextShareSpread, sharesExercisable, type AmtCrossover, type Levers, type Profile, type ScenarioEvent, amtCrossover } from "@taxonomy/engine";
 import { shares } from "../../format.ts";
 import { LeverRow } from "../LeverRow.tsx";
 import { DateField, InspectorShell, YearSelect } from "./InspectorShell.tsx";
@@ -9,7 +10,8 @@ interface Props { profile: Profile; levers: Levers; years: number[]; event: Exer
 
 export function ExerciseInspector({ profile, levers, years, event: e, crossovers, companyLabel, onChange, onRemove }: Props) {
   const company = e.company ?? profile.equity.companies[0]?.id ?? "*";
-  const cross = crossovers.find((c) => c.year === e.year && c.company === company);
+  // The passed crossovers follow the hovered year; this event keeps its own.
+  const cross = useMemo(() => e.type === "iso" ? (crossovers.find((c) => c.year === e.year && c.company === company) ?? amtCrossover(profile, levers, e.year, company)) : undefined, [profile, levers, crossovers, e.type, e.year, company]);
   const available = e.type === "iso" ? (cross?.available ?? 0) : sharesExercisable(profile, levers, "nso", e.year, company);
   const value = Math.min(e.shares, available);
   const hasMark = e.type === "iso" && !!cross && cross.available > 0 && cross.sharesBeforeAmt < cross.available;

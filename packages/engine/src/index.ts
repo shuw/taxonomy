@@ -1,5 +1,5 @@
 export * from "./types.ts";
-export { Ledger, usd, pct } from "./ledger.ts";
+export { Ledger, usd, int, pct } from "./ledger.ts";
 export { federalParams, FEDERAL_2025, FEDERAL_2026, bracketTax, bracketRate, capGainsTax } from "./params.ts";
 export type { FederalParams, Bracket } from "./params.ts";
 export { computeFederal, statusName } from "./federal.ts";
@@ -29,7 +29,7 @@ export type { FieldDef, FieldType } from "./fields.ts";
 export type { IntakeChange, IntakeReview, IntakeSection } from "./intake/apply.ts";
 export { intakePrompt, knownFacts, INTAKE_SECTIONS, DOCUMENT_SECTIONS } from "./intake/prompt.ts";
 export type { PromptOptions, SectionInfo } from "./intake/prompt.ts";
-export { profileGaps } from "./gaps.ts";
+export { profileGaps, isPlanExerciseLot, lotAsExercise } from "./gaps.ts";
 export * as tools from "./tools.ts";
 export type { EventInput, YearHeadline, Delta, FactChangeInput, PendingRow } from "./tools.ts";
 export type { Gap } from "./gaps.ts";

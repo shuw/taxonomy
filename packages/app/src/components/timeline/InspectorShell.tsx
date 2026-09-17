@@ -16,11 +16,10 @@ interface Props { kind?: string; title: ReactNode; head?: ReactNode; onRemove?: 
 export function InspectorShell({ kind, title, head, onRemove, children }: Props) {
   return (
     <div className={"event-inspector" + (kind ? ` ${kind}` : "")}>
-      <div className="ei-head">
+      {onRemove && <button type="button" className="link danger ei-remove" onClick={onRemove}>Remove</button>}
+      <div className={"ei-head" + (onRemove ? " with-remove" : "")}>
         <strong>{title}</strong>
         {head}
-        <span className="spacer" />
-        {onRemove && <button type="button" className="link danger" onClick={onRemove}>Remove</button>}
       </div>
       {children}
     </div>

@@ -23,6 +23,7 @@ export function resolveLevers(profile: Profile, overrides?: Partial<Levers>): Le
     exerciseDates: overrides?.exerciseDates ?? base.exerciseDates,
     sales: overrides?.sales ?? base.sales,
     liquidity: overrides?.liquidity ?? base.liquidity,
+    gifts: overrides?.gifts ?? base.gifts,
   };
 }
 
@@ -97,8 +98,8 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     mortgageCapFraction: mortgage ? mortgage.capFraction : 1,
     propertyTax: profile.home?.propertyTax ?? 0,
     stateIncomeTax: ded.stateIncomeTax ?? 0,
-    charitableCash: (ch.cash ?? 0) + (ch.daf ?? 0),
-    charitableStock: ch.appreciatedStock ?? 0,
+    charitableCash: (ch.cash ?? 0) + (ch.daf ?? 0) + (levers.gifts?.[year]?.cash ?? 0),
+    charitableStock: (ch.appreciatedStock ?? 0) + (levers.gifts?.[year]?.stock ?? 0),
     charitableCarryIn: carries.charitable,
     medical: ded.medical ?? 0,
     isoSharesExercised: iso,
@@ -135,10 +136,14 @@ export function computeYear(profile: Profile, inputs: YearInputs): YearResult {
   const total = ledger.put("totalTax", "Total tax", ledger.get("federalTotal") + ledger.get("stateTax"), "Federal + state.", ["federalTotal", "stateTax"]);
   const agi = ledger.get("agi");
   ledger.put("effectiveRate", "Effective rate", agi > 0 ? total / agi : 0, `Total tax as a share of AGI (${usd(agi)}). ISO bargain element is not in AGI, so an exercise year can look expensive by this measure.`, ["totalTax", "agi"], "rate");
+  const bargain = ledger.lines.isoBargainElement?.value ?? 0;
+  if (bargain > 0) ledger.put("effectiveRateWithSpread", "Effective rate incl. ISO spread", total / (agi + bargain), `Total tax as a share of AGI plus the ISO bargain element (${usd(agi + bargain)}). The spread is income for AMT but not for AGI, so this is the fairer rate in an exercise year.`, ["totalTax", "agi", "isoBargainElement"], "rate");
   // Cash: what arrives and what leaves, before living costs. Equity income is not cash until sold.
   const cashIn = ledger.put("cashIn", "Cash in", inputs.salarySelf + inputs.salarySpouse + inputs.saleProceeds, "Salary and bonus received, plus proceeds of shares sold. RSU vests and option spreads are income but not cash.", ["salarySelf", ...(inputs.salarySpouse > 0 ? ["salarySpouse"] : []), "sharesSold"]);
   ledger.put("exerciseCost", "Exercise cost", inputs.exerciseCost, inputs.exerciseCost > 0 ? "Shares exercised × strike, paid to the company." : "No options exercised this year.", ["isoSharesExercised"]);
-  const cashOut = ledger.put("cashOut", "Cash out", inputs.exerciseCost + total, "Exercise cost + total tax.", ["exerciseCost", "totalTax"]);
+  const giving = ledger.put("giving", "Gifts", inputs.charitableCash, inputs.charitableCash > 0 ? "Cash gifts and donor-advised fund contributions: money that left. Shares given are not cash and are not counted here." : "No cash gifts this year.", []);
+  ledger.put("givingStock", "Shares given", inputs.charitableStock, inputs.charitableStock > 0 ? "Appreciated shares given at fair value. Not cash, so not in cash out; the deduction is in taxable income and the gain is never realized." : "No shares given this year.", []);
+  const cashOut = ledger.put("cashOut", "Cash out", inputs.exerciseCost + total + giving, "Exercise cost + total tax + cash gifts.", ["exerciseCost", "totalTax", "giving"]);
   ledger.put("netCash", "Net cash", cashIn - cashOut, "Cash in - cash out, before living costs and withholding timing. Negative means the year needs money from savings or a sale.", ["cashIn", "cashOut"]);
   return { year: inputs.year, inputs, lines: ledger.lines, order: ledger.order };
 }

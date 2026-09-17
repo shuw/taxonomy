@@ -38,7 +38,7 @@ export const clone = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.str
  * to the plan start (keep timeline values in the dollars of their own year).
  */
 export function profileInYear(profile: Profile, year: number): Profile {
-  const entries = (profile.timeline ?? []).filter((e) => e.year <= year).sort((a, b) => a.year - b.year);
+  const entries = (profile.timeline ?? []).filter((e) => e.year <= year && (e.until === undefined || year <= e.until)).sort((a, b) => a.year - b.year);
   if (entries.length === 0) return profile;
   const out = clone(profile) as unknown as Record<string, unknown>;
   for (const e of entries) {

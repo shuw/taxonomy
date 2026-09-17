@@ -1,6 +1,6 @@
 export { pct } from "@taxonomy/engine";
 import type { Line } from "@taxonomy/engine";
-import { usd as realUsd, pct } from "@taxonomy/engine";
+import { usd as realUsd, int, pct } from "@taxonomy/engine";
 
 /**
  * Demo mode shows every amount in a made-up currency at a fixed scale, so a screenshot or a
@@ -26,12 +26,12 @@ export function demoText(s: string): string {
   if (!demo.on) return s;
   return s.replace(/\$([\d,]+(?:\.\d+)?)([kKmM]?)\b/g, (_m, num: string, suf: string) => {
     const v = Number(num.replace(/,/g, "")) * demo.scale;
-    const text = suf ? (Math.round(v * 10) / 10).toString() : Math.round(v).toLocaleString("en-US");
+    const text = suf ? (Math.round(v * 10) / 10).toString() : int(v);
     return `${demo.symbol}${text}${suf}`;
   });
 }
 
-export const shares = (n: number): string => Math.round(n).toLocaleString("en-US");
+export const shares = (n: number): string => int(n);
 
 export function fmtLine(line: Line): string {
   switch (line.unit) {

@@ -167,6 +167,7 @@ Everything else: fill it when a document shows it, leave it out otherwise.
 - Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`. Name the file exactly as it is stored or attached, so the tool can link the value to the page.
 - Filed return beats portal beats pay stub beats memory. If sources disagree, ask me; if I can't settle it, use the stronger source and note the other in \`questions\`.
 - Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575). Paths use dots for list positions: \`equity.holdings.0.amtBasis\`.
+- An option lot exercised on or after the first plan year still goes under \`holdings\` with its date and AMT basis (Form 3921 box 4); the tool models it as an exercise decision in that year and taxes the spread itself.
 - Dependents as the return lists them: \`[{ name: Sophie, birthYear: 2019 }]\`; leave birthYear out when the return does not show it and the tool asks me.
 - A mortgage with only its balance is fine; leave rate or originated out and they become questions.
 - If the return shows AMT (Form 6251) with an ISO exercise but no Form 8801, say so under \`questions\`; the credit that carries forward is worked out from it.

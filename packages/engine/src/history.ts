@@ -1,5 +1,6 @@
 import { fieldByPath, type FieldDef } from "./fields.ts";
 import type { PendingChange, PendingIntake, Profile, ScenarioEvent, TimelineEntry } from "./types.ts";
+import { int } from "./ledger.ts";
 
 /** One saved change to a profile: when, who, and what it did in plain words. */
 export interface HistoryEntry {
@@ -11,9 +12,9 @@ export interface HistoryEntry {
   before?: string;
 }
 
-const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+const money = (n: number) => `$${int(n)}`;
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
-const count = (n: number) => Math.round(n).toLocaleString("en-US");
+const count = int;
 
 function fmt(def: FieldDef | undefined, v: unknown): string {
   if (v === undefined || v === null || v === "") return "unset";
@@ -34,9 +35,10 @@ function scalar(path: string, from: unknown, to: unknown): string {
 const event = (e: ScenarioEvent): string =>
   e.kind === "exercise" ? `exercise ${count(e.shares)} ${e.type.toUpperCase()} shares in ${e.year}`
   : e.kind === "sell" ? `sell ${count(e.shares)} shares in ${e.year}`
+  : e.kind === "give" ? `give ${money(e.amount)} ${e.how === "stock" ? "in shares" : e.how === "daf" ? "to a donor-advised fund" : "cash"} in ${e.year}`
   : `liquidity event in ${e.year}`;
 
-const dated = (t: TimelineEntry): string => scalar(t.path, undefined, t.value).replace(/^/, "").concat(` from ${t.year}`);
+const dated = (t: TimelineEntry): string => scalar(t.path, undefined, t.value) + (t.until === undefined ? ` from ${t.year}` : t.until === t.year ? ` in ${t.year} only` : ` ${t.year}–${t.until}`);
 
 const proposal = (p: PendingChange): string => scalar(p.path, undefined, p.value) + (p.from ? ` from ${p.from}` : "");
 

@@ -1,8 +1,10 @@
 import { newId } from "../equity.ts";
 import { fieldByIntake, FIELDS } from "../fields.ts";
 import type { ProfileEdit, ProfilePath } from "../profile.ts";
-import { getPath } from "../timeline.ts";
-import type { Company, Dependent, EquityGrant, FollowUp, Holding, PriorReturn, Profile } from "../types.ts";
+import { DEFAULT_SCENARIO, getPath } from "../timeline.ts";
+import { activeScenario } from "../events.ts";
+import { isPlanExerciseLot, lotAsExercise } from "../gaps.ts";
+import type { Company, Dependent, EquityGrant, FollowUp, Holding, PriorReturn, Profile, ScenarioEvent } from "../types.ts";
 import type { IntakeDocument, IntakeGrant, IntakeQuestion } from "./schema.ts";
 
 export type IntakeSection = "basics" | "pay" | "prior_return" | "income" | "equity" | "home" | "giving" | "assumptions";
@@ -17,7 +19,7 @@ export interface IntakeChange {
   proposed: unknown;
   source?: string;
   status: "new" | "changed" | "same";
-  format: "usd" | "number" | "pct" | "text" | "date" | "year" | "enum" | "bool" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn" | "companies";
+  format: "usd" | "number" | "pct" | "text" | "date" | "year" | "enum" | "bool" | "shares" | "grant" | "holdings" | "mortgage" | "priorReturn" | "companies" | "events";
   note?: string;
   /** Key under `sources` when applied (grants and holdings use ids). */
   sourceKey: string;
@@ -103,12 +105,12 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
       const company = strip({ id: "c1", name: eq.company ?? "Company", sharePrice: sp ?? 0, sharePriceAsOf: typeof eq.sharePrice === "object" ? eq.sharePrice?.asOf : undefined }) as Company;
       add({ section: "equity", label: "Company", path: ["equity", "companies"], current: undefined, proposed: [company], format: "companies", source: src("equity.sharePrice"), sourceKey: "companies.c1.sharePrice" });
     }
+    const built: { g: IntakeGrant; proposed: EquityGrant }[] = [];
     if (eq.grants) {
       const byName = new Map(profile.equity.grants.map((g, i) => [g.name, { grant: g, index: i }]));
       const taken = profile.equity.grants.map((g) => g.id);
       let added = 0;
       const idOf = new Map<string, string>();
-      const built: { g: IntakeGrant; proposed: EquityGrant }[] = [];
       eq.grants.forEach((g, i) => {
         const hit = byName.get(g.name);
         const id = hit?.grant.id ?? newId("g", taken);
@@ -124,14 +126,35 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
     }
     if (eq.holdings) {
       const taken: string[] = [];
-      const proposed: Holding[] = eq.holdings.map((h) => {
+      const all: Holding[] = eq.holdings.map((h) => {
         const id = newId("h", taken);
         taken.push(id);
         return strip({ id, lot: h.lot, owner: h.owner, quantity: h.quantity, acquired: h.acquired, via: h.via, costBasis: h.costBasis, amtBasis: h.amtBasis, grantDate: h.grantDate }) as Holding;
       });
+      // An exercise dated inside the plan is a decision: the plan taxes the spread and creates the lot itself.
+      const inPlan = all.filter((h) => isPlanExerciseLot(profile, h));
+      const proposed = all.filter((h) => !inPlan.includes(h));
       const current = profile.equity.holdings?.length ? profile.equity.holdings : undefined;
       const unchanged = current && same(current.map(({ id: _id, ...h }) => h), proposed.map(({ id: _id, ...h }) => h));
-      add({ section: "equity", label: `Holdings (${proposed.length} lot${proposed.length === 1 ? "" : "s"})`, path: ["equity", "holdings"], current, proposed: unchanged ? current : proposed, format: "holdings", source: src("equity.holdings"), sourceKey: "holdings" });
+      if (proposed.length || current) add({ section: "equity", label: `Holdings (${proposed.length} lot${proposed.length === 1 ? "" : "s"})`, path: ["equity", "holdings"], current, proposed: unchanged ? current : proposed, format: "holdings", source: src("equity.holdings"), sourceKey: "holdings" });
+      if (inPlan.length) {
+        const name = profile.activeScenario ?? DEFAULT_SCENARIO;
+        const scenario = activeScenario(profile);
+        const events: ScenarioEvent[] = [...scenario.events];
+        const notes: string[] = [];
+        for (const h of inPlan) {
+          const r = lotAsExercise(profile, h, events, doc.as_of);
+          events.push(r.event);
+          const type = r.event.kind === "exercise" ? r.event.type : "iso";
+          if (r.price) add({ section: "equity", label: `${profile.equity.companies[r.price.companyIndex]?.name ?? "Company"} price in ${r.price.year}`, path: ["equity", "companies", r.price.companyIndex, "pricePath", String(r.price.year)], current: undefined, proposed: r.price.value, format: "usd", source: `lot "${h.lot}": value at exercise`, sourceKey: `companies.${profile.equity.companies[r.price.companyIndex]?.id}.pricePath.${r.price.year}` });
+          // Counts read after the exercise already include it; the event supplies those shares instead.
+          const inDoc = built.find(({ proposed: g }) => g.type === type && (g.exercisedToDate ?? 0) >= h.quantity && (doc.as_of ?? "9999") >= h.acquired);
+          if (inDoc) inDoc.proposed.exercisedToDate = inDoc.proposed.exercisedToDate! - h.quantity;
+          else if (r.exercised) add({ section: "equity", label: `${profile.equity.grants[r.exercised.grantIndex]!.name}: exercised before the plan`, path: ["equity", "grants", r.exercised.grantIndex, "exercisedToDate"], current: profile.equity.grants[r.exercised.grantIndex]!.exercisedToDate, proposed: r.exercised.value, format: "shares", source: `lot "${h.lot}" moved into the plan`, sourceKey: `grants.${profile.equity.grants[r.exercised.grantIndex]!.id}` });
+          notes.push(`${h.lot} (${h.quantity} ${type.toUpperCase()}, ${h.acquired})`);
+        }
+        add({ section: "equity", label: `Exercises inside the plan (${inPlan.length})`, path: ["scenarios", name, "events"], current: scenario.events.length ? scenario.events : undefined, proposed: events, format: "events", source: src("equity.holdings"), sourceKey: "holdings", note: `Exercised on or after ${profile.plan.startYear}, so modeled as decisions in the "${name}" scenario rather than opening lots: ${notes.join("; ")}.` });
+      }
     }
   }
 

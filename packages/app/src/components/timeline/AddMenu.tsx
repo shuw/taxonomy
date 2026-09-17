@@ -11,6 +11,9 @@ const LIKELY_ORDER = [
 ];
 const likelyRank = (path: string) => { const i = LIKELY_ORDER.indexOf(path); return i === -1 ? LIKELY_ORDER.length : i; };
 
+/** A gift is a decision in the scenario; the recurring annual figures under Edit my information stay facts. */
+const GIVING: { how: "cash" | "stock" | "daf"; label: string }[] = [{ how: "cash", label: "Cash" }, { how: "stock", label: "Appreciated stock" }, { how: "daf", label: "To a donor-advised fund" }];
+
 const FACT_CATEGORIES: { key: IntakeSection[]; label: string }[] = [
   { key: ["pay", "basics"], label: "Pay and household" },
   { key: ["income"], label: "Other income" },
@@ -36,7 +39,10 @@ interface Props { year: number; profile: Profile; open: boolean; onOpen: (open: 
 /** The + under a year: decisions first, then dated changes by category. */
 export function AddMenu({ year, profile, open, onOpen, onAdd, onAddFact }: Props) {
   const [category, setCategory] = useState<number | null>(null);
+  // The flyout sits beside the hovered row, and flips left when the screen ends.
+  const [fly, setFly] = useState<{ top: number; left: boolean }>({ top: 0, left: false });
   const ref = useRef<HTMLDivElement>(null);
+  const openCategory = (i: number, el: HTMLElement) => { setCategory(i); setFly({ top: el.offsetTop, left: window.innerWidth - el.getBoundingClientRect().right < 240 }); };
   const kinds = decisionKinds(profile);
   const fields: FieldDef[] = [...timelineFields()].sort((x, y) => likelyRank(x.path) - likelyRank(y.path));
 
@@ -52,19 +58,18 @@ export function AddMenu({ year, profile, open, onOpen, onAdd, onAddFact }: Props
       <button type="button" className={"ev-add" + (open ? " on" : "")} title={`Add something in ${year}`} aria-label={`Add something in ${year}`} onClick={() => onOpen(!open)}>+</button>
       {open && (
         <div className="ev-menu">
-          {category === null ? (
-            <>
-              {kinds.map((k) => <button type="button" key={k.key} onClick={() => onAdd(k.what)}>{k.label}</button>)}
-              {kinds.length > 0 && <div className="ev-menu-sep">Change from {year} on</div>}
-              {FACT_CATEGORIES.map((c, i) => fields.some((f) => c.key.includes(f.section)) && (
-                <button type="button" key={c.label} className="cat" onClick={() => setCategory(i)}>{c.label} <span className="chev">›</span></button>
-              ))}
-            </>
-          ) : (
-            <>
-              <button type="button" className="cat back" onClick={() => setCategory(null)}>‹ {FACT_CATEGORIES[category]!.label}</button>
-              {fields.filter((f) => FACT_CATEGORIES[category]!.key.includes(f.section)).map((f) => <button type="button" key={f.path} onClick={() => onAddFact(f.path)}>{f.label}</button>)}
-            </>
+          {kinds.map((k) => <button type="button" key={k.key} onMouseEnter={() => setCategory(null)} onClick={() => onAdd(k.what)}>{k.label}</button>)}
+          <button type="button" className={"cat" + (category === -1 ? " on" : "")} onMouseEnter={(e) => openCategory(-1, e.currentTarget)} onClick={(e) => openCategory(-1, e.currentTarget)}>Give <span className="chev">›</span></button>
+          <div className="ev-menu-sep">Change in {year}</div>
+          {FACT_CATEGORIES.map((c, i) => fields.some((f) => c.key.includes(f.section)) && (
+            <button type="button" key={c.label} className={"cat" + (category === i ? " on" : "")} onMouseEnter={(e) => openCategory(i, e.currentTarget)} onClick={(e) => openCategory(i, e.currentTarget)}>{c.label} <span className="chev">›</span></button>
+          ))}
+          {category !== null && (
+            <div className={"ev-submenu" + (fly.left ? " left" : "")} style={{ top: fly.top }}>
+              {category === -1
+                ? GIVING.map((g) => <button type="button" key={g.how} onClick={() => onAdd({ kind: "give", how: g.how })}>{g.label}</button>)
+                : fields.filter((f) => FACT_CATEGORIES[category]!.key.includes(f.section)).map((f) => <button type="button" key={f.path} onClick={() => onAddFact(f.path)}>{f.label}</button>)}
+            </div>
           )}
         </div>
       )}

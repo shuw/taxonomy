@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { kindStyle } from "../../series.ts";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { companyName, companyPrice, type AmtCrossover, type Levers, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { shares, usd, usdCompact } from "../../format.ts";
 import { useWidth } from "../../useWidth.ts";
@@ -9,6 +10,7 @@ import { FactChangeInspector } from "./FactChangeInspector.tsx";
 import { InspectorShell } from "./InspectorShell.tsx";
 import { LiquidityInspector } from "./LiquidityInspector.tsx";
 import { SaleInspector } from "./SaleInspector.tsx";
+import { GiveInspector, giveHow } from "./GiveInspector.tsx";
 import { STRIP_MARGIN as M, type AddKind, type FactMarker } from "./types.ts";
 import { useChipDrag } from "./useChipDrag.ts";
 
@@ -53,16 +55,17 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
     const order = (levers.sales?.[e.year] ?? []).map((s) => s.id);
     return yr?.sales?.[order.indexOf(e.id)];
   };
-  const chipKind = (e: ScenarioEvent) => e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()} · ${companyName(profile, e.company)}` : e.kind === "sell" ? `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}` : "Liquidity";
+  const chipKind = (e: ScenarioEvent) => e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()} · ${companyName(profile, e.company)}` : e.kind === "sell" ? `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}` : e.kind === "give" ? `Give · ${giveHow(e.how)}` : "Liquidity";
   const chipValue = (e: ScenarioEvent) => {
     if (e.kind === "exercise") return `${shares(e.shares)} sh`;
     if (e.kind === "sell") return `${shares(saleResult(e)?.shares ?? e.shares)} sh`;
+    if (e.kind === "give") return usdCompact(e.amount);
     const c = profile.equity.companies.find((x) => x.id === e.company) ?? profile.equity.companies[0];
     return `${usd(e.price ?? companyPrice(profile, c, e.year))}/sh`;
   };
   // The inspector floats right under the selected chip, as wide as it needs, kept inside the strip.
   const eventsRef = useRef<HTMLDivElement>(null);
-  const panelWidth = Math.min(selected?.kind === "sell" ? 900 : 720, Math.max(320, width));
+  const panelWidth = Math.min(selected?.kind === "sell" ? 760 : 640, Math.max(320, width));
   const [anchor, setAnchor] = useState<{ top: number; left: number; caret: number } | null>(null);
   useLayoutEffect(() => {
     const root = eventsRef.current;
@@ -72,6 +75,17 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
     const left = Math.max(0, Math.min(r.left - b.left, Math.max(0, b.width - panelWidth)));
     setAnchor({ top: r.bottom - b.top + 10, left, caret: Math.max(14, Math.min(panelWidth - 14, r.left - b.left - left + Math.min(r.width / 2, 60))) });
   }, [selectedId, width, panelWidth, events, facts]);
+  // A click anywhere else puts the inspector away; chips, the add menu and dialogs keep it.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest(".inspector-slot, .ev-chip, .ev-info, .ev-add-wrap, .ev-menu, .modal-backdrop")) return;
+      onSelect(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [selectedId, onSelect]);
   const anchorStyle = anchor ? ({ top: anchor.top, left: anchor.left, width: panelWidth, "--caret": `${anchor.caret}px` } as React.CSSProperties) : undefined;
   const canAdd = decisionKinds(profile).length > 0;
 
@@ -80,8 +94,9 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       <div className="event-strip" ref={ref}>
         {years.map((y) => (
           <div className={"event-col" + (y === focusYear ? " focus" : "") + (drag.drag?.moved && drag.drag.target === y ? " target" : "")} key={y} style={{ flex: `0 0 ${band}px` }}>
+            <AddMenu year={y} profile={profile} open={menuYear === y} onOpen={(o) => setMenuYear(o ? y : null)} onAdd={(what) => { onAdd(what, y); setMenuYear(null); }} onAddFact={(path) => { onAddFact(path, y); setMenuYear(null); }} />
             {events.filter((e) => e.year === y).map((e) => (
-              <button type="button" key={e.id} data-id={e.id} className={"ev-chip " + e.kind + " " + (e.kind === "exercise" ? e.type : "") + (e.id === selectedId ? " on" : "") + (drag.drag?.id === e.id && drag.drag.moved ? " dragging" : "")}
+              <button type="button" key={e.id} data-id={e.id} className={"ev-chip " + e.kind + (e.id === selectedId ? " on" : "") + (drag.drag?.id === e.id && drag.drag.moved ? " dragging" : "")} style={kindStyle(e.kind === "exercise" ? e.type : e.kind)}
                 onPointerDown={drag.start(e.id)} onPointerMove={drag.move} onPointerUp={drag.end(e)} onPointerCancel={drag.cancel} title="Drag to another year">
                 <span className="ev-kind">{chipKind(e)}</span>
                 <span className="ev-val">{chipValue(e)}</span>
@@ -92,7 +107,6 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
                 <span className="ev-dot" /><span className="ev-info-text"><span className="ev-info-label">{f.label}</span> <span className="ev-info-detail">{f.detail}</span></span>
               </button>
             ))}
-            <AddMenu year={y} profile={profile} open={menuYear === y} onOpen={(o) => setMenuYear(o ? y : null)} onAdd={(what) => { onAdd(what, y); setMenuYear(null); }} onAddFact={(path) => { onAddFact(path, y); setMenuYear(null); }} />
           </div>
         ))}
       </div>
@@ -102,6 +116,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
         {selected?.kind === "exercise" && <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} companyLabel={companyName(profile, selected.company)} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
         {selected?.kind === "liquidity" && <LiquidityInspector profile={profile} plan={plan} years={years} event={selected} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
         {selected?.kind === "sell" && <SaleInspector profile={profile} plan={plan} years={years} event={selected} result={saleResult(selected)} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} onSellToCover={() => onSellToCover(selected.id)} />}
+        {selected?.kind === "give" && <GiveInspector years={years} event={selected} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
         {selectedFact && selectedFact.entryIndex !== undefined && profile.timeline?.[selectedFact.entryIndex] && (
           <FactChangeInspector profile={profile} years={years} entry={profile.timeline[selectedFact.entryIndex]!} onChange={(e) => onChangeFact(selectedFact.entryIndex!, e)} onRemove={() => onRemoveFact(selectedFact.entryIndex!)} />
         )}

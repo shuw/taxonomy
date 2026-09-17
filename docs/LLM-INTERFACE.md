@@ -71,9 +71,9 @@ of the first design is gone; undo from History is the safety net.
 | `get_context` | facts, holdings, scenarios, outstanding items, pending changes, editable fields, vocabulary |
 | `get_plan`, `explain` | the years' headline lines; one line's reason and inputs |
 | `analyze` | `kind`: compare_years, amt_headroom, credit_recovery, hold_or_sell, lots, sell_to_cover |
-| `what_if` | try decisions without saving |
+| `what_if` | try decisions without saving (exercise, sell, liquidity, give) |
 | `scenario` | `action`: add, activate, delete |
-| `facts` | set facts and assumptions the user states |
+| `facts` | set facts and assumptions the user states; `from` dates a change, `until` bounds it (a one-year gift has `until` = `from`) |
 | `intake` | `action`: request, submit, attach (a page image, PDF or text file, kept beside the profile and linked from the values that cite it) |
 
 The engine functions below keep their own names; the table is the packaging.
@@ -122,7 +122,14 @@ by what the model needs to do.
   section at a time, not one sweep. The copy-and-paste path is the fallback.
 - `get_context` carries an `outstanding` section (unanswered follow-ups, empty essentials,
   documents and changes awaiting review) so the agent can ask for the simple things in chat and
-  route them through `update_facts`.
+  route them through `update_facts`. Its `gaps` list is the one place for "what the plan cannot
+  model as entered": figures last year's return had, grants with unvested shares and no
+  schedule, option lots exercised inside the plan window. Each says whether the app closes it
+  in one click (the "Probably missing" list under Last return).
+- `get_plan` reports whole dollars (rates keep four decimals), adds `effectiveRateWithSpread`
+  (total tax over AGI plus the ISO bargain element, the fairer rate in an exercise year), and
+  carries the reasons for the AMT, credit-used and credit-carried lines in `why`, so the usual
+  "why is the credit only $16k" needs no second call. Events with zero shares are refused.
 
 **The handshake.** The new-profile wizard ends when Claude connects: the user says "Connect to
 my Taxonomy profile "Me"", the agent calls `get_context` on it, and the heartbeat (which now

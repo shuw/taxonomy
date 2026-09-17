@@ -28,6 +28,9 @@ export function leversOf(scenario: Scenario | undefined, defaultCompany: string 
       (levers.sales![e.year] ??= []).push({ id: e.id, shares: e.shares, date: e.date, price: e.price, lots: e.lots });
     } else if (e.kind === "liquidity") {
       (levers.liquidity ??= {})[e.company ?? "*"] = { year: e.year, price: e.price };
+    } else if (e.kind === "give") {
+      const g = ((levers.gifts ??= {})[e.year] ??= { cash: 0, stock: 0 });
+      if (e.how === "stock") g.stock += e.amount; else g.cash += e.amount;
     }
   }
   return levers;

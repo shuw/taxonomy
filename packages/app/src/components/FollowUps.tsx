@@ -128,20 +128,20 @@ export function NotesFromClaude({ profile, edit }: { profile: Profile; edit: (ed
   );
 }
 
-/** Things this year's profile lacks that last year's return had: fill each with last year's figure, or say it no longer applies. */
+/** What the plan probably lacks: figures last year's return had, equity it cannot model as entered. One click fills each, or says it does not apply. */
 export function ProbablyMissing({ profile, edit }: { profile: Profile; edit: (edits: ProfileEdit[]) => void }) {
   const [dismissed, setDismissed] = usePersisted<string[]>("dismissedGaps", [], (v): v is string[] => Array.isArray(v));
   const gaps = profileGaps(profile).filter((g) => !dismissed.includes(g.id));
   if (gaps.length === 0) return null;
   return (
     <>
-      <div className="subhead">Probably missing, compared with this return</div>
+      <div className="subhead">Probably missing</div>
       <ul className="gaps">
         {gaps.map((g) => (
           <li key={g.id} className="gap-row">
             <span>{g.text} <span className="where">· {g.section}</span></span>
             <span className="gap-actions">
-              {g.fill && <button type="button" className="btn" onClick={() => edit([{ path: g.fill!.path, value: g.fill!.value }, { path: ["sources", g.fill!.path.join(".")], value: g.fill!.source }])}>{g.fill.label}</button>}
+              {g.fill && <button type="button" className="btn" onClick={() => edit(g.fill!.edits)}>{g.fill.label}</button>}
               <button type="button" className="link" onClick={() => setDismissed((d) => [...d, g.id])}>Not needed</button>
             </span>
           </li>
