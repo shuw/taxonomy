@@ -9,3 +9,4 @@ data/attachments/
 data/.agent
 data/.current
 data/.remote.json
+.claude/worktrees/
