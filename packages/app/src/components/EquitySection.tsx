@@ -1,7 +1,8 @@
 import { companyOf, grantFmv, grantsMissingVesting, newId, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
-import { sourceOf } from "../sources.ts";
+import { notesOf, sourceOf } from "../sources.ts";
+import { Info } from "./Info.tsx";
 import { Field, MoneyInput, NumberInput, PercentInput, Segmented, Select } from "./fields.tsx";
 import { Section } from "./Section.tsx";
 
@@ -124,7 +125,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
 
       {(profile.equity.holdings?.length ?? 0) > 0 && (
         <>
-          <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}</div>
+          <div className="subhead">Shares owned · {profile.equity.holdings!.length} lot{profile.equity.holdings!.length === 1 ? "" : "s"} {sourceOf(profile, ["holdings"]) && <span className="src" title={sourceOf(profile, ["holdings"])}>source</span>}{notesOf(profile, ["holdings"]) && <Info label="Note from Claude">{notesOf(profile, ["holdings"])}</Info>}</div>
           <p className="muted small">Kept for the sales lever (coming next); not in the tax math yet.</p>
           <div className="vest-rows">
             {profile.equity.holdings!.map((h) => (
@@ -198,6 +199,7 @@ function clean(g: EquityGrant): EquityGrant {
 function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGrant; profile: Profile; onChange: (patch: Partial<EquityGrant>) => void; onRemove: () => void }) {
   const [open, setOpen] = usePersisted<boolean>(`open.grant.${g.id}`, false, (v): v is boolean => typeof v === "boolean");
   const source = sourceOf(profile, ["grants", g.id]);
+  const note = notesOf(profile, ["grants", g.id]);
   const v = vestingOf(profile, g);
   const mode: "schedule" | "years" | "none" = g.schedule ? "schedule" : g.vesting ? "years" : "none";
   const years = Array.from({ length: profile.plan.years }, (_, i) => profile.plan.startYear + i);
@@ -225,7 +227,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
         <div className="grant-body">
           <div className="grant-head">
             <input className="grant-name" value={g.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Grant name" />
-            {source && <span className="src" title={source}>source</span>}
+            {source && <span className="src" title={source}>source</span>}{note && <Info label="Note from Claude">{note}</Info>}
             {profile.people.spouse && <Select options={[{ value: "self", label: "mine" }, { value: "spouse", label: "spouse's" }]} value={g.owner ?? "self"} onChange={(o) => onChange({ owner: o })} />}
             <button type="button" className="link danger" onClick={onRemove}>Remove</button>
           </div>

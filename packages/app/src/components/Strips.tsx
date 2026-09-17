@@ -29,7 +29,13 @@ const CREDIT_SERIES: Series[] = [
   { id: "credit", label: "Credit on hand at year end", color: "var(--series-amt)", value: (y) => y.lines.amtCreditCarryforwardOut!.value },
 ];
 
-interface StripProps { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void; }
+interface StripProps {
+  plan: PlanResult; pinned: PlanResult | null; focusYear: number;
+  /** Hovering a year focuses it. */
+  onFocus: (y: number) => void;
+  /** Clicking a year is a firmer choice: the app also drops a selection that belongs to another year. */
+  onPick?: (y: number) => void;
+}
 
 export const TaxStrip = (p: StripProps) => <ColumnStrip {...p} series={taxSeries(p.plan)} height={230} />;
 
@@ -57,12 +63,23 @@ export const MAX_BAND = 260;
 const barWidth = (band: number) => Math.round(Math.min(48, Math.max(24, band * 0.28)));
 
 /** A rounded-top rectangle grown from a baseline (square bottom corners). */
-function topRounded(x: number, y: number, w: number, h: number, r: number): string {
+/** A bar rounded at the top only, as rects so height changes can animate. */
+function TopRounded({ x, y, w, h, r, fill }: { x: number; y: number; w: number; h: number; r: number; fill: string }) {
   const rr = Math.min(r, h, w / 2);
-  return `M${x},${y + h} V${y + rr} Q${x},${y} ${x + rr},${y} H${x + w - rr} Q${x + w},${y} ${x + w},${y + rr} V${y + h} Z`;
+  return (
+    <>
+      <rect className="bar" x={x} y={y} width={w} height={h} rx={rr} fill={fill} />
+      {h > rr && <rect className="bar" x={x} y={y + h - rr} width={w} height={rr} fill={fill} />}
+    </>
+  );
 }
 
-function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLabel = "Total", capLabel, capLines, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; capLines?: (y: PlanResult["years"][number]) => { text: string; className: string }[]; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null }) {
+/** The soft band behind the focused year; it slides when the focus moves. */
+function FocusBand({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  return <rect className="focus-band" x={x + 2} y={y} width={Math.max(0, w - 4)} height={h} rx={10} />;
+}
+
+function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, series, height, totalLabel = "Total", capLabel, capLines, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; capLines?: (y: PlanResult["years"][number]) => { text: string; className: string }[]; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null }) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
@@ -78,6 +95,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
         <defs>
           <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--series-kept)" /><line x1="0" y1="0" x2="0" y2="6" stroke="var(--surface)" strokeWidth="2" /></pattern>
         </defs>
+        {years.some((y) => y.year === focusYear) && <FocusBand x={m.left + band * years.findIndex((y) => y.year === focusYear)} y={m.top - 4} w={band} h={plotH + m.bottom + 2} />}
         <AxisTicks ticks={ticks} yOf={yOf} left={m.left} right={width - m.right} />
         {years.map((y, i) => {
           const cx = m.left + band * i + band / 2;
@@ -96,21 +114,21 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
           return (
             <g key={y.year}>
               {hasPin && pinnedTotals![i]! > 0 && (
-                <path d={topRounded(pinX, yOf(pinnedTotals![i]!), BAR, baseY - yOf(pinnedTotals![i]!), 4)} fill="var(--series-pinned)" />
+                <TopRounded x={pinX} y={yOf(pinnedTotals![i]!)} w={BAR} h={baseY - yOf(pinnedTotals![i]!)} r={4} fill="var(--series-pinned)" />
               )}
               {segs.map((s, j) => {
                 const h = Math.max(0, s.y0 - s.y1 - (j < lastIdx ? GAP : 0));
                 const yTop = s.y1 + (j < lastIdx ? GAP : 0);
                 const fill = s.sr.hatch ? "url(#hatch)" : s.sr.color;
                 return j === lastIdx
-                  ? <path key={s.sr.id} d={topRounded(barX, yTop, BAR, h, 4)} fill={fill} />
-                  : <rect key={s.sr.id} x={barX} y={yTop} width={BAR} height={h} fill={fill} />;
+                  ? <TopRounded key={s.sr.id} x={barX} y={yTop} w={BAR} h={h} r={4} fill={fill} />
+                  : <rect className="bar" key={s.sr.id} x={barX} y={yTop} width={BAR} height={h} fill={fill} />;
               })}
               {(() => { const mk = marker?.(y); return mk ? <g><line x1={barX - 6} x2={barX + BAR + 6} y1={yOf(mk.value)} y2={yOf(mk.value)} stroke="var(--bad)" strokeWidth={2} /><text className="cap-label neg" x={barX + BAR + 8} y={yOf(mk.value) + 4}>{mk.label}</text></g> : null; })()}
               {totals[i]! > 0 && !capLines && <text className={"cap-label" + (capLabel?.(y).startsWith("−") ? " neg" : "")} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5} textAnchor="middle">{capLabel ? capLabel(y) : usdCompact(totals[i]!)}</text>}
               {totals[i]! > 0 && capLines && capLines(y).map((l, k, all) => <text key={k} className={"cap-label " + l.className} x={hasPin ? cx : barX + BAR / 2} y={yOf(Math.max(totals[i]!, pinnedTotals?.[i] ?? 0)) - 5 - (all.length - 1 - k) * 13} textAnchor="middle">{l.text}</text>)}
-              <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
-              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
+              <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onPick(y.year)}>{y.year}</text>
+              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onPick(y.year)} style={{ cursor: "pointer" }} />
             </g>
           );
         })}
@@ -133,7 +151,7 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, series, height, totalLa
 }
 
 /** Cash by year: what arrives (wages, sale proceeds) against what leaves (exercise cost, tax), with the net on top. */
-export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResult; pinned: PlanResult | null; focusYear: number; onFocus: (y: number) => void }) {
+export function CashStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus }: StripProps) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
@@ -160,12 +178,13 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
       const y1 = yOf(acc + val), y0 = yOf(acc);
       acc += val;
       const h = Math.max(0, y0 - y1 - (j < parts.length - 1 && val > 0 ? GAP : 0));
-      return val > 0 ? <rect key={p.key} x={x} y={y1 + (j < parts.length - 1 ? GAP : 0)} width={bar} height={h} fill={p.color} rx={3} /> : null;
+      return val > 0 ? <rect className="bar" key={p.key} x={x} y={y1 + (j < parts.length - 1 ? GAP : 0)} width={bar} height={h} fill={p.color} rx={3} /> : null;
     });
   };
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label="Cash by year">
+        {years.some((y) => y.year === focusYear) && <FocusBand x={m.left + band * years.findIndex((y) => y.year === focusYear)} y={m.top - 4} w={band} h={plotH + m.bottom + 2} />}
         <AxisTicks ticks={ticks} yOf={yOf} left={m.left} right={width - m.right} />
         {years.map((y, i) => {
           const r = rows[i]!;
@@ -177,8 +196,8 @@ export function CashStrip({ plan, pinned, focusYear, onFocus }: { plan: PlanResu
               {stack(outX, OUT, r)}
               <text className={"cap-label" + (r.net < 0 ? " neg" : "")} x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - (r.pinnedNet !== null ? 17 : 5)} textAnchor="middle">{r.net >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.net))}</text>
               {r.pinnedNet !== null && <text className="cap-label pinned" x={cx} y={yOf(Math.max(r.wages + r.proceeds, r.exercise + r.tax)) - 5} textAnchor="middle">pinned {r.pinnedNet >= 0 ? "+" : "−"}{usdCompact(Math.abs(r.pinnedNet))}</text>}
-              <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onFocus(y.year)}>{y.year}</text>
-              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onFocus(y.year)} style={{ cursor: "pointer" }} />
+              <text className={"year-label" + (y.year === focusYear ? " focus" : "")} x={cx} y={height - 8} textAnchor="middle" onClick={() => onPick(y.year)}>{y.year}</text>
+              <rect x={m.left + band * i} y={m.top} width={band} height={plotH + m.bottom} fill="transparent" onMouseEnter={() => { setHover(i); onFocus(y.year); }} onClick={() => onPick(y.year)} style={{ cursor: "pointer" }} />
             </g>
           );
         })}

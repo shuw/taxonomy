@@ -13,7 +13,7 @@ describe("agent tools", () => {
     expect(c.companies[0]!.id).toBe("c1");
     expect(c.grants.find((g) => g.id === "g1")!.exercisableIn[2026]).toBe(40_000);
     expect(c.scenarios[0]).toMatchObject({ name: "default", active: true });
-    expect(c.vocabulary.rules).toContain("propose_scenario");
+    expect(c.vocabulary.rules).toContain("scenario(add)");
   });
   test("plan lists headline lines and the year's events", () => {
     const p = tools.plan(profile);
@@ -83,12 +83,6 @@ describe("agent tools", () => {
     expect(p!.delta.totalTax).toBeGreaterThan(0);
     expect(tools.proposals({ ...two, activeScenario: "sell 1,000 in 2027" })).toEqual([]);
   });
-  test("askText grounds a question in the plan", () => {
-    const t = tools.askText(profile, 2027);
-    expect(t).toContain("2027:");
-    expect(t).toContain("asking about");
-    expect(t.endsWith("My question: ")).toBe(true);
-  });
   test("update_facts resolves fields by path, label or tail, coerces values, and leaves the fact alone until accepted", () => {
     const r = tools.updateFacts(profile, [
       { field: "salary", value: "400k", source: "told in chat" },
@@ -130,12 +124,28 @@ describe("agent tools", () => {
     expect(f.find((x) => x.field === "equity.companies.0.sharePrice")!.current).toEqual({ c1: 18 });
     expect(f.some((x) => x.field.startsWith("returns."))).toBe(false);
   });
-  test("intake tools produce the request and apply a document through the same review as the app", () => {
-    expect(tools.intakeRequest(profile, ["pay"])).toContain("Taxonomy");
-    const r = tools.applyIntake(profile, "taxonomy_intake: 1\npeople:\n  self:\n    baseSalary: 333000\n");
+  test("applyIntake writes the changed values with their sources and turns questions into follow-ups", () => {
+    const r = tools.applyIntake(profile, "taxonomy_intake: 1\npeople:\n  self:\n    baseSalary: 333000\nsources:\n  people.self.baseSalary: 'pay stub'\n");
     expect(r.problems).toEqual([]);
-    expect(r.applied.find((a) => a.path === "people.self.salary")).toMatchObject({ to: 333_000 });
-    expect(parseProfile(editProfileText(text, r.edits)).people.self.salary).toBe(333_000);
-    expect(tools.applyIntake(profile, "not: yaml intake").problems.length).toBeGreaterThan(0);
+    expect(r.applied.map((a) => [a.path, a.to])).toEqual([["people.self.salary", 333_000]]);
+    const next = parseProfile(editProfileText(text, r.edits));
+    expect(next.people.self.salary).toBe(333_000);
+    expect(next.sources?.["people.self.salary"]).toBeDefined();
+    expect(tools.applyIntake(profile, "nope").problems.length).toBeGreaterThan(0);
+  });
+  test("intake tools produce the request and park a document for review without touching the facts", () => {
+    expect(tools.intakeRequest(profile, ["pay"])).toContain("Taxonomy");
+    const doc = "taxonomy_intake: 1\npeople:\n  self:\n    baseSalary: 333000\n";
+    const r = tools.submitIntake(profile, doc, ["pay"]);
+    expect(r).toMatchObject({ problems: [], found: 1, questions: 0 });
+    const next = parseProfile(editProfileText(text, r.edits));
+    expect(next.people.self.salary).toBe(320_000);
+    expect(next.pendingIntake).toEqual([expect.objectContaining({ id: "d1", text: doc.trim(), sections: ["pay"] })]);
+    const again = parseProfile(editProfileText(editProfileText(text, r.edits), tools.submitIntake(next, "taxonomy_intake: 1\nbasics:\n  state: CA\n").edits));
+    expect(again.pendingIntake!.map((d) => d.id)).toEqual(["d1", "d2"]);
+    expect(tools.outstanding(again).documentsAwaitingReview).toBe(2);
+    expect(tools.outstanding(profile).empty).toContain("last filed return (no calibration until it is on file)");
+    expect(tools.outstanding(profile).empty).not.toContain("base salary (people.self.salary)");
+    expect(tools.submitIntake(profile, "not: yaml intake").problems.length).toBeGreaterThan(0);
   });
 });

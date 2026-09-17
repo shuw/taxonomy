@@ -1,7 +1,7 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument } from "yaml";
 import { newId } from "./equity.ts";
 import { eventsFromLevers } from "./events.ts";
-import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PendingChange, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
+import type { Charitable, Company, Dependent, EquityGrant, FilingStatus, GrantType, Holding, PendingChange, PendingIntake, PriorReturn, Profile, Source, Scenario, TimelineEntry } from "./types.ts";
 
 /** The per-year lever table older files stored directly: a share count per year. */
 type LegacyLevers = { exercises: { iso: Record<number, number>; nso: Record<number, number> } };
@@ -43,6 +43,7 @@ interface RawProfile {
   sources?: Record<string, Source>;
   followUps?: Profile["followUps"];
   pending?: Profile["pending"];
+  pendingIntake?: Profile["pendingIntake"] | PendingIntake;
 }
 
 /** Parse a profile file of any version into the current shape; fail loudly on anything the engine cannot work with. */
@@ -99,7 +100,21 @@ export function parseProfile(text: string): Profile {
     sources: rekeySources(raw.sources, equity, raw.equity?.isoGrants?.length ?? 0),
     followUps: raw.followUps,
     pending: withPendingIds(raw.pending),
+    pendingIntake: normalizePendingIntake(raw.pendingIntake),
   };
+}
+
+/** One document or a list; each gets an id so the app can review and drop them one at a time. */
+function normalizePendingIntake(raw: unknown): Profile["pendingIntake"] {
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const taken: string[] = [];
+  const out = list.flatMap((d): PendingIntake[] => {
+    if (!d || typeof d !== "object" || typeof (d as PendingIntake).text !== "string") return [];
+    const id = (d as PendingIntake).id ?? newId("d", taken);
+    taken.push(id);
+    return [{ ...(d as PendingIntake), id }];
+  });
+  return out.length ? out : undefined;
 }
 
 function withPendingIds(list: unknown): Profile["pending"] {
@@ -230,6 +245,7 @@ const COMMENTS: Record<string, string> = {
   sources: "where each number came from, keyed by path (grants and holdings by id)",
   followUps: "things your intake agent asked you to confirm; resolved ones stay for the record",
   pending: "changes to facts your agent proposed; nothing here counts until you accept it in the app",
+  pendingIntake: "intake documents your agent sent, each waiting for your review in the app",
 };
 
 /** Emit a profile as YAML with a comment on each top-level section. */

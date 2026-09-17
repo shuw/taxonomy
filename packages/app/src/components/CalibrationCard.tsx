@@ -1,3 +1,4 @@
+import { Info } from "./Info.tsx";
 import { calibrate, type Profile } from "@taxonomy/engine";
 import { fmtDelta, pct, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
@@ -17,9 +18,8 @@ export function CalibrationCard({ profile }: { profile: Profile }) {
         <h2>Your {cal.year} return, recomputed</h2>
         <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
-      {!expanded && <div className="sub"><span className={"cal-inline " + tone}>{verdict}</span> A check that the math reproduces your filed return; open for the line-by-line comparison.</div>}
+      {!expanded && <div className="sub"><span className={"cal-inline " + tone}>{verdict}</span> <Info label="About this check">The same math, run on the numbers from your filed return, as a check that the model reproduces it. Where it diverges is where a simplification matters for you. Open for the line-by-line comparison.</Info></div>}
       {expanded && <>
-      <div className="sub">The same math, run on the numbers from your filed return. Where it diverges is where a simplification matters for you.</div>
       <div className="cal-head">
         <div className="cal-big"><span className="label">{total.label}</span><span className="value">{usd(total.computed)}</span></div>
         <div className={"cal-verdict " + tone}>{verdict}</div>

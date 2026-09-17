@@ -7,7 +7,7 @@ import { amtCrossover, creditRecovery, holdOrSell, sharesToCover, sweepIsoExerci
 import { DEFAULT_SCENARIO, clone, getPath, setPath } from "./timeline.ts";
 import { FIELDS, type FieldDef } from "./fields.ts";
 import { newId } from "./equity.ts";
-import type { Line, PendingChange, PlanResult, Profile, Scenario, ScenarioEvent, TimelineEntry, YearResult } from "./types.ts";
+import type { Line, PendingChange, PendingIntake, PlanResult, Profile, Scenario, ScenarioEvent, TimelineEntry, YearResult } from "./types.ts";
 import { intakePrompt } from "./intake/prompt.ts";
 import { parseIntake } from "./intake/schema.ts";
 import { changesToEdits, followUpEdits, reviewIntake, type IntakeSection } from "./intake/apply.ts";
@@ -60,7 +60,7 @@ export function context(profile: Profile) {
     settlement: g.settlement, grantDate: g.grantDate,
   }));
   return {
-    profile: profile.name,
+    name: profile.name,
     filer: profile.filer,
     plan: { startYear: start, years, lastYear: years[years.length - 1] },
     people: { self: { salary: profile.people.self.salary, bonus: profile.people.self.bonus }, spouse: profile.people.spouse ? { salary: profile.people.spouse.salary } : undefined },
@@ -72,6 +72,7 @@ export function context(profile: Profile) {
     scenarios: Object.entries(profile.scenarios ?? {}).map(([name, s]) => ({ name, active: name === (profile.activeScenario ?? DEFAULT_SCENARIO), events: s.events.length, note: s.note })),
     timeline: profile.timeline,
     pending: profile.pending,
+    outstanding: outstanding(profile),
     fields: editableFields(profile),
     vocabulary: {
       events: {
@@ -80,9 +81,24 @@ export function context(profile: Profile) {
         liquidity: "{ kind: 'liquidity', year, price?, company? }: an IPO or tender; settles double-trigger RSUs that year and pins that year's share price.",
       },
       units: "shares are counts; prices and amounts are dollars; rates are fractions (0.1 = 10%); years are calendar years",
-      facts: "update_facts takes { field, value, company?, from?, source? }: field is a path or label from `fields`; company (id or name) picks the company for per-company fields; from is a year, for a change that starts then (a raise, a law change) instead of replacing the fact. Changes wait in `pending` until accepted in the app.",
-      rules: "Never state a tax figure you did not get from a tool. To change the plan, call what_if to show the effect, then propose_scenario. Facts and assumptions change only through update_facts (a sentence from the user) or apply_intake (documents); both are reviewed in the app before they count.",
+      facts: "facts takes changes of { field, value, company?, from?, source? }: field is a path or label from `fields`; company (id or name) picks the company for per-company fields; from is a year, for a change that starts then (a raise, a law change) instead of replacing the fact. Changes are applied at once and logged; the app can undo them.",
+      rules: "Never state a tax figure you did not get from a tool. To change the plan, call what_if to show the effect, then scenario(add). Facts and assumptions change only through facts (a sentence from the user) or intake(submit) (documents); every change is logged in the app and can be undone there.",
     },
+  };
+}
+
+/** What is still missing or waiting, so an agent can ask for it in conversation rather than all at once. */
+export function outstanding(profile: Profile) {
+  const empty: string[] = [];
+  if (!profile.people.self.salary) empty.push("base salary (people.self.salary)");
+  if (!(profile.returns?.length)) empty.push("last filed return (no calibration until it is on file)");
+  if (profile.equity.grants.length === 0) empty.push("equity grants (none on file; skip if there are none)");
+  if (profile.filer.dependents === undefined) empty.push("dependents");
+  return {
+    questions: (profile.followUps ?? []).filter((f) => !f.resolved).map((f) => ({ id: f.id, text: f.text, about: f.about, kind: f.kind ?? "confirm" })),
+    empty,
+    documentsAwaitingReview: profile.pendingIntake?.length ?? 0,
+    changesAwaitingReview: profile.pending?.length ?? 0,
   };
 }
 
@@ -251,6 +267,29 @@ export function describeYear(profile: Profile, y: YearHeadline): string {
   return `${y.year}: ${parts.length ? parts.join(", ") + ". " : ""}AGI ${usd(l.agi)}, total tax ${usd(l.totalTax)}${l.amt ? ` of which AMT ${usd(l.amt)}` : ""}, net cash ${usd(l.netCash)}.`;
 }
 
+/** What accepting `after` in place of `before` does to the plan. */
+export function effect(before: Profile, after: Profile) {
+  return deltas(runPlan(before), runPlan(after));
+}
+
+/**
+ * "Missing" follow-ups whose value has since arrived with a source (from a document, the agent,
+ * or an answer in the app) are marked resolved, so the queue only lists what is still open.
+ */
+export function answeredFollowUps(profile: Profile): ProfileEdit[] {
+  const list = profile.followUps ?? [];
+  const answered = (about: string): boolean => {
+    if (profile.sources?.[about]) return true;
+    if (about === "people.self.salary") return profile.people.self.salary > 0;
+    if (about === "filer.dependents") return profile.filer.dependents !== undefined && profile.filer.dependents.every((d) => d.birthYear !== undefined);
+    if (about === "home.mortgage.rate") return (profile.home?.mortgage?.rate ?? 0) > 0;
+    if (about === "carryforwards.amtCredit") return (profile.carryforwards?.amtCredit ?? 0) > 0;
+    return false;
+  };
+  const next = list.map((f) => (f.kind === "missing" && !f.resolved && f.about && answered(f.about) ? { ...f, resolved: true } : f));
+  return next.some((f, i) => f !== list[i]) ? [{ path: ["followUps"], value: next }] : [];
+}
+
 /** Scenarios an agent proposed (they carry a note) that are not the active one, each with its effect against the active plan. */
 export function proposals(profile: Profile): { name: string; note: string; events: ScenarioEvent[]; delta: ReturnType<typeof deltas> }[] {
   const active = scenarioOf(profile);
@@ -265,22 +304,6 @@ export function proposals(profile: Profile): { name: string; note: string; event
   });
 }
 
-/** A question to paste into any agent: the plan's headline years, the facts behind them and the decisions, so the answer can be grounded. */
-export function askText(profile: Profile, year?: number): string {
-  const p = plan(profile);
-  const c = context(profile);
-  const lines = [
-    `I'm planning US taxes with Taxonomy (${c.filer.filingStatus}, ${c.filer.state}, plan ${c.plan.startYear}–${c.plan.lastYear}, scenario "${p.scenario}").`,
-    `Companies: ${c.companies.map((x) => `${x.name} at $${x.sharePrice}/share`).join("; ") || "none"}.`,
-    `Grants: ${c.grants.map((g) => `${g.name} (${g.type.toUpperCase()}${g.strike ? `, strike $${g.strike}` : ""}, ${g.outstanding.toLocaleString("en-US")} outstanding)`).join("; ") || "none"}.`,
-    "Year by year:",
-    ...p.years.map((y) => `- ${describeYear(profile, y)}${year === y.year ? "  ← the year I'm asking about" : ""}`),
-    "",
-    "My question: ",
-  ];
-  return lines.join("\n");
-}
-
 export { exercisedIn, leversOf, activeScenario };
 
 /** The same request the app hands to an agent, for an agent that is already here: read the documents, then call apply_intake. */
@@ -289,23 +312,42 @@ export function intakeRequest(profile: Profile, sections: IntakeSection[]): stri
 }
 
 /**
- * Apply an intake document (the YAML an agent produces from documents). This is the one path
- * by which facts change from a conversation: every value is structured, validated and sourced,
- * and the review is the same one the app runs on a pasted document.
+ * Hand in an intake document. It is parsed here so the agent hears about shape problems at
+ * once, then stored on the profile for the same review the app runs on a pasted document.
+ * Nothing is written to the facts until the user accepts rows there.
  */
-export function applyIntake(profile: Profile, text: string): { edits: ProfileEdit[]; applied: { path: string; label: string; from: unknown; to: unknown; source?: string }[]; followUps: number; problems: string[]; warnings: string[] } {
+export function submitIntake(profile: Profile, text: string, sections?: IntakeSection[]): { edits: ProfileEdit[]; found: number; questions: number; problems: string[]; warnings: string[] } {
   const parsed = parseIntake(text);
-  if (!parsed.doc) return { edits: [], applied: [], followUps: 0, problems: parsed.problems.map((p) => `${p.path}: ${p.message}`), warnings: parsed.warnings.map((w) => `${w.path}: ${w.message}`) };
+  const warnings = parsed.warnings.map((w) => `${w.path}: ${w.message}`);
+  if (!parsed.doc) return { edits: [], found: 0, questions: 0, problems: parsed.problems.map((p) => `${p.path}: ${p.message}`), warnings };
+  const review = reviewIntake(parsed.doc, profile);
+  const existing = profile.pendingIntake ?? [];
+  const doc: PendingIntake = { id: newId("d", existing.map((d) => d.id)), text: text.trim(), submitted: new Date().toISOString(), sections };
+  return {
+    edits: [{ path: ["pendingIntake"], value: [...existing, doc] }],
+    found: review.changes.filter((c) => c.status !== "same").length,
+    questions: review.questions.length,
+    problems: [],
+    warnings,
+  };
+}
+
+/**
+ * Apply an intake document outright: every changed value is written with its source, the
+ * agent's questions become follow-ups. The change is logged like any other, so it can be undone.
+ */
+export function applyIntake(profile: Profile, text: string): { edits: ProfileEdit[]; applied: { path: string; label: string; from: unknown; to: unknown; source?: string }[]; questions: number; problems: string[]; warnings: string[] } {
+  const parsed = parseIntake(text);
+  const warnings = parsed.warnings.map((w) => `${w.path}: ${w.message}`);
+  if (!parsed.doc) return { edits: [], applied: [], questions: 0, problems: parsed.problems.map((p) => `${p.path}: ${p.message}`), warnings };
   const review = reviewIntake(parsed.doc, profile);
   const changes = review.changes.filter((c) => c.status !== "same");
-  const edits = [...changesToEdits(changes, profile), ...followUpEdits(review, profile)];
-  const followUps = edits.filter((e) => e.path[0] === "followUps").length;
   return {
-    edits,
+    edits: [...changesToEdits(changes, profile), ...followUpEdits(review, profile)],
     applied: changes.map((c) => ({ path: c.path.join("."), label: c.label, from: c.current, to: c.proposed, source: c.source })),
-    followUps,
+    questions: review.questions.length,
     problems: [],
-    warnings: parsed.warnings.map((w) => `${w.path}: ${w.message}`),
+    warnings,
   };
 }
 

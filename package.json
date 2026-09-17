@@ -8,6 +8,7 @@
     "test": "bun test packages/engine",
     "typecheck": "tsc -p packages/engine && tsc -p packages/app && tsc -p packages/mcp",
     "mcp": "bun packages/mcp/server.ts",
+    "mcp:http": "bun packages/mcp/http.ts",
     "plan": "bun packages/engine/src/cli.ts"
   },
   "devDependencies": {

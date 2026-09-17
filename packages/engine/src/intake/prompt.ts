@@ -20,7 +20,8 @@ export const INTAKE_SECTIONS: SectionInfo[] = [
   { id: "prior_return", title: "Last filed return", what: "The figures the model must reproduce, plus the carryforwards that enter this year: AMT credit, capital losses, unused charitable gifts.", documents: "Form 1040, Form 6251, Form 8801, Schedule D, Schedule A", search: "\"Form 1040\" and the tax year, \"tax return\", TurboTax or accountant PDFs, \"Form 8801\", \"Form 6251\"", shortcuts: ["\"no AMT\" means no Form 6251 or 8801 was filed: the AMT block is omitted and the credit carryforward is 0", "\"standard deduction\" means no Schedule A: itemized is omitted", "\"no capital losses\" sets both carryforwards to 0"] },
   { id: "income", title: "Investment and other income", what: "Interest, dividends (total and qualified), gains realized so far, K-1 or side income.", documents: "1099-INT, 1099-DIV, 1099-B or brokerage year-to-date", search: "1099-INT, 1099-DIV, 1099-B, \"consolidated 1099\", brokerage statements" },
   { id: "equity", title: "Equity", what: "Every grant with its type, strike, vesting and how much is vested, exercised and unexercised; the current share value; shares already owned with cost and AMT basis.", documents: "Shareworks, Carta, E*Trade, Schwab or Fidelity grant pages; the latest 409A notice; Form 3921 for ISO exercises", search: "Shareworks, Carta, E*Trade, \"stock option agreement\", \"grant notice\", 409A, \"Form 3921\", \"exercise confirmation\"", shortcuts: ["\"never exercised\" sets exercised to 0 for every option grant", "\"nothing owned\" means holdings is an empty list"] },
-  { id: "home", title: "Home and deductions", what: "The mortgage as a loan, property tax, state income tax, charitable giving by kind, medical.", documents: "Form 1098, county tax bill, donation receipts", search: "\"Form 1098\", mortgage statement, property tax bill, donation receipts", shortcuts: ["\"no mortgage\" omits the mortgage block", "\"rent\" omits home entirely"] },
+  { id: "home", title: "Home and deductions", what: "The mortgage as a loan, property tax, state income tax, medical.", documents: "Form 1098, county tax bill", search: "\"Form 1098\", mortgage statement, property tax bill", shortcuts: ["\"no mortgage\" omits the mortgage block", "\"rent\" omits home entirely"] },
+  { id: "giving", title: "Giving", what: "Charitable giving expected this year, by kind: cash, appreciated stock, donor-advised fund.", documents: "donation receipts, DAF statements, last year's Schedule A as a guide", search: "donation receipts, \"donor-advised\", DAF statement, Schedule A line 11-14", shortcuts: ["\"no giving\" sets all three to 0"] },
   { id: "assumptions", title: "Assumptions", what: "Growth rates you already use elsewhere. Skip if none.", documents: "none; these are yours", search: "nothing; ask me" },
 ];
 
@@ -101,7 +102,7 @@ function template(section: IntakeSection): string {
 }
 
 /** Sections whose answers live in documents rather than in the user's head; the request asks for these by default. */
-export const DOCUMENT_SECTIONS: IntakeSection[] = ["basics", "pay", "prior_return", "income", "equity", "home"];
+export const DOCUMENT_SECTIONS: IntakeSection[] = ["basics", "pay", "prior_return", "income", "equity", "home", "giving"];
 
 export interface PromptOptions {
   sections: IntakeSection[];
@@ -128,7 +129,8 @@ export function knownFacts(profile: Profile, sections: IntakeSection[]): string 
     grants: profile.equity.grants.map((g) => ({ name: g.name, type: g.type, granted: g.granted, vestedToDate: g.vestedToDate, exercisedToDate: g.exercisedToDate, strike: g.strike })),
     holdings: (profile.equity.holdings ?? []).length,
   };
-  if (sections.includes("home")) facts.home = { mortgage: profile.home?.mortgage, propertyTax: profile.home?.propertyTax, charitable: profile.deductions?.charitable };
+  if (sections.includes("home")) facts.home = { mortgage: profile.home?.mortgage, propertyTax: profile.home?.propertyTax };
+  if (sections.includes("giving")) facts.giving = { charitable: profile.deductions?.charitable };
   if (sections.includes("assumptions")) facts.assumptions = profile.assumptions;
   return stringifyProfile(facts as unknown as Profile).replace(/^#.*\n/gm, "").trim();
 }
@@ -144,29 +146,32 @@ export function intakePrompt(opts: PromptOptions): string {
 ## How we'll work
 
 1. **Look.** Search what you can reach (Drive, mail, my uploads, this chat) for: ${sections.map((s) => s.search).join("; ")}.
-2. **Report back, briefly.** What you found in a few lines, then a numbered list of what's missing. For each: the form and line, the portal page, or the number I should type. Suggest a document when that's faster than a question. Never guess a required item.${shortcuts.length ? `\n   One-word answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
-3. **Repeat** until nothing required is missing, or I say I can't provide it.
-4. **Finish** with a two-line summary and the YAML in one \`\`\`yaml block, nothing after it. The tool shows me each number with its source before saving.
+2. **Finish in the same message.** A few lines on what you found, then the YAML in one \`\`\`yaml block, nothing after it. The tool shows me each number with its source before saving, and asks me itself for anything you left out.
+3. **Don't wait on me for simple facts.** Anything I can type in a moment (base salary, a bonus, a birth year, a balance, a rate, withholding to date) is never a reason to stop: leave it out, list it under \`unknown\`, and finish. Never estimate or guess it either.
+4. **Ask only for documents.** The one thing worth a question is something that lives in a page or file you can't reach: a vesting schedule page, an exercise confirmation, a statement. Name the exact page or file, once, at the end of the same message, after the YAML. If I send it, produce the YAML again.${shortcuts.length ? `\n   One-word answers you should accept: ${shortcuts.map((x) => x.replace(/^"/, "").replace(/" means/, " means").replace(/" sets/, " sets").replace(/" omits/, " omits")).join("; ")}.` : ""}
 
 ## What I need${opts.profile ? " (skip what the tool already has, listed at the bottom)" : ""}
 
 ${sections.map((s) => `- **${s.title}**: ${s.what}\n  Documents: ${s.documents}.`).join("\n")}
 
-Required before you finish:
+Look hardest for these; they shape everything else. Not found after a real look? Under \`unknown\`, and finish:
 
 ${required.map(({ s, items }) => `**${s.title}**\n${items.map((i) => `- ${i}`).join("\n")}`).join("\n\n")}
 
-Everything else is optional: fill it when a document shows it, leave it out otherwise.
+Everything else: fill it when a document shows it, leave it out otherwise.
 
 ## Rules
 
 - Copy from documents or my answers. Never estimate.
 - Every number gets a \`sources\` entry: its path, then the document and line, box or page, or "answered by user". Example: \`prior_return.agi: "2025 Form 1040 line 11 (2025-return.pdf)"\`.
 - Filed return beats portal beats pay stub beats memory. If sources disagree, ask me; if I can't settle it, use the stronger source and note the other in \`questions\`.
-- Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575).
+- Whole dollars. Prices per share. Dates YYYY-MM-DD. Rates as fractions (0.0575). Paths use dots for list positions: \`equity.holdings.0.amtBasis\`.
+- Dependents as the return lists them: \`[{ name: Sophie, birthYear: 2019 }]\`; leave birthYear out when the return does not show it and the tool asks me.
+- A mortgage with only its balance is fine; leave rate or originated out and they become questions.
+- If the return shows AMT (Form 6251) with an ISO exercise but no Form 8801, say so under \`questions\`; the credit that carries forward is worked out from it.
 - Base salary is base pay only; the tool adds RSU and option income from the grants.
 - Options: granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO is \`nso\`. No spouse, no \`spouse\` block.
-- Optional items you couldn't find go under \`unknown\`.
+- Whatever you couldn't find goes under \`unknown\`, one path per line; the tool turns each into a question for me.
 - \`questions\` is for judgment calls I should double-check later: a derived value, disagreeing sources, something hinted but not shown. One sentence each, with \`about\` (the path) and \`proposed\` (the value you used).${opts.onlyPaths?.length ? `\n- Follow-up: report only these paths: ${opts.onlyPaths.join(", ")}.` : ""}
 
 ## The shape

@@ -30,9 +30,13 @@ describe("intake parsing", () => {
     expect(r.doc?.income?.interest).toBe(100);
   });
   test("reports precise problems", () => {
-    const r = parseIntake("taxonomy_intake: 1\nequity:\n  grants:\n    - name: x\n      type: warrant\n    - name: y\n      type: iso\n      granted: 10\nhome:\n  mortgage: { balance: 1 }\n");
+    const r = parseIntake("taxonomy_intake: 1\nequity:\n  grants:\n    - name: x\n      type: warrant\n    - name: y\n      type: iso\n      granted: 10\nhome:\n  mortgage: { rate: 0.05 }\n");
     expect(r.doc).toBeNull();
     expect(r.problems.map((p) => p.path)).toEqual(expect.arrayContaining(["equity.grants[0].type", "equity.grants[1].strike", "home.mortgage"]));
+    // A mortgage with only its balance is accepted; the rest becomes questions.
+    const partial = parseIntake("taxonomy_intake: 1\nhome:\n  mortgage: { balance: 500000 }\n");
+    expect(partial.problems).toEqual([]);
+    expect(partial.warnings.map((w) => w.path)).toContain("home.mortgage");
   });
   test("unfence finds the document inside a chatty reply", () => {
     expect(unfence("```yaml\na: 1\n```")).toBe("a: 1");
@@ -142,7 +146,8 @@ describe("intake prompt", () => {
     expect(text).not.toContain("prior_return:");
     expect(text).toContain("Never estimate");
     expect(text).toContain("## How we'll work");
-    expect(text).toContain("Required before you finish");
+    expect(text).toContain("Look hardest for these");
+    expect(text).toContain("Don't wait on me for simple facts");
     expect(text).toContain("people.self.baseSalary");
     expect(text).toContain("equity.sharePrice.value");
     expect(text).toContain("never exercised");
@@ -153,7 +158,7 @@ describe("intake prompt", () => {
     expect(text).toContain("sharePrice: 18");
     expect(text).toContain("granted: 40000");
     expect(text).toContain("1040 line 11");
-    expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(7);
+    expect(INTAKE_SECTIONS.map((s) => s.id)).toHaveLength(8);
   });
   test("a follow-up restricts to the listed paths", () => {
     const text = intakePrompt({ sections: ["basics"], onlyPaths: ["people.self.expectedBonus"] });
@@ -170,7 +175,7 @@ describe("dependents", () => {
     const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
     const parsed = parseIntake("taxonomy_intake: 1\npay:\n  dependents: [2019, 2022]\n");
     expect(parsed.problems).toEqual([]);
-    expect(parsed.doc?.pay?.dependents).toEqual([2019, 2022]);
+    expect(parsed.doc?.pay?.dependents).toEqual([{ birthYear: 2019 }, { birthYear: 2022 }]);
     const review = reviewIntake(parsed.doc!, profile);
     const row = review.changes.find((c) => c.id === "filer.dependents")!;
     expect(row.proposed).toBe("2019, 2022");

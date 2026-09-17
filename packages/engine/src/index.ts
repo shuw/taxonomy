@@ -33,3 +33,5 @@ export { profileGaps } from "./gaps.ts";
 export * as tools from "./tools.ts";
 export type { EventInput, YearHeadline, Delta, FactChangeInput, PendingRow } from "./tools.ts";
 export type { Gap } from "./gaps.ts";
+export { describeChanges } from "./history.ts";
+export type { HistoryEntry } from "./history.ts";

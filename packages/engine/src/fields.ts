@@ -24,7 +24,7 @@ export interface FieldDef {
   review?: boolean;
   /** Offered in the timeline picker. */
   timeline?: boolean;
-  /** The agent must resolve this with the user before answering, when its section is requested. */
+  /** Listed first in the request as worth looking hardest for; still reported under `unknown` rather than waited on. */
   required?: boolean;
 }
 
@@ -46,7 +46,7 @@ export const FIELDS: FieldDef[] = [
   basics({ path: "filer.state", intake: "basics.state", label: "State", type: "text", hint: "two-letter code, from the last return's address or a pay stub", timeline: true, required: true }),
   basics({ path: "plan.startYear", label: "First plan year", type: "year" }),
   basics({ path: "plan.years", label: "Years to plan", type: "number" }),
-  pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", example: "[]", hint: "birth years of the dependents claimed on the last return (Form 1040 dependents table), e.g. [2019, 2022]; [] if none", required: true }),
+  pay({ path: "filer.dependents", intake: "pay.dependents", label: "Dependents", type: "number", example: "[]", hint: "the dependents claimed on the last return (Form 1040 dependents table) as { name, birthYear } with the year left out when it is not shown; [] if none", required: true }),
   ...person("self"),
   ...person("spouse"),
 
@@ -101,9 +101,9 @@ export const FIELDS: FieldDef[] = [
   { path: "home.mortgage.termYears", intake: "home.mortgage.termYears", label: "Mortgage term", section: "home", type: "number", review: false },
   { path: "home.propertyTax", intake: "home.propertyTax", label: "Property tax", section: "home", type: "usd", hint: "Form 1098 box 10 or the county bill", timeline: true },
   { path: "deductions.stateIncomeTax", intake: "deductions.stateIncomeTax", label: "State income tax", section: "home", type: "usd", hint: "0 in states without one", timeline: true },
-  { path: "deductions.charitable.cash", intake: "deductions.charitable.cash", label: "Charitable: cash", section: "home", type: "usd", hint: "expected for the year", timeline: true },
-  { path: "deductions.charitable.appreciatedStock", intake: "deductions.charitable.appreciatedStock", label: "Charitable: appreciated stock", section: "home", type: "usd", hint: "fair market value of securities given", timeline: true },
-  { path: "deductions.charitable.daf", intake: "deductions.charitable.daf", label: "Charitable: donor-advised fund", section: "home", type: "usd", timeline: true },
+  { path: "deductions.charitable.cash", intake: "deductions.charitable.cash", label: "Cash gifts", section: "giving", type: "usd", hint: "expected for the year", timeline: true },
+  { path: "deductions.charitable.appreciatedStock", intake: "deductions.charitable.appreciatedStock", label: "Appreciated stock given", section: "giving", type: "usd", hint: "fair market value of securities given", timeline: true },
+  { path: "deductions.charitable.daf", intake: "deductions.charitable.daf", label: "Donor-advised fund", section: "giving", type: "usd", timeline: true },
   { path: "deductions.medical", intake: "deductions.medical", label: "Medical expenses", section: "home", type: "usd", timeline: true },
 
   { path: "assumptions.fmvGrowth", intake: "assumptions.fmvGrowth", label: "Share value growth", section: "assumptions", type: "pct", hint: "annual, as a fraction", timeline: true },

@@ -199,13 +199,15 @@ summary above a single YAML block. The tool accepts the whole reply pasted, not 
 block. What the profile already holds is sent as a compact summary of the requested sections,
 never the raw file.
 
-The request is two-phase. The agent first reads what it can, then asks the user, in one
-batched message, for anything *required* it could not find: naming the form and line, the
-portal page, or the number to type, and suggesting which document to upload. Only when every
-required item is resolved (or the user says they cannot provide it) does it produce the
-document. Required items come from the field registry (`required: true`) plus the structured
-essentials (a grant's counts and strike, a mortgage's balance, rate and origination). Optional
-items are simply left out and listed under `unknown`; `questions` holds only what stayed open.
+The request is one-shot. The agent reads what it can and produces the document in the same
+message; it never waits on the user for a fact they can type in a moment (a salary, a birth
+year, a bonus, a balance), and never guesses one either: such things go under `unknown`, and the
+app asks the user itself, in the review table and as follow-ups on the main screen. The only
+question the agent may ask, once and after the YAML, is for a document it cannot reach (a
+vesting page, an exercise confirmation, a statement). Fields marked `required: true` in the
+registry, plus the structured essentials (a grant's counts and strike, a mortgage's balance,
+rate and origination), are listed first as the things to look hardest for, but they do not
+block. `questions` holds judgment calls that stayed open.
 
 Rules the agent is given:
 

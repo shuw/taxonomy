@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editProfileText, parseProfile, type Profile, type ProfileEdit } from "@taxonomy/engine";
-import { api, ConflictError, type ProfileSummary } from "./api.ts";
+import { api, ApiError, ConflictError, type ProfileSummary } from "./api.ts";
 
 export interface ProfileFile {
   id: string;
@@ -70,6 +70,14 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
         let error = "The file changed on disk, so your last edit was dropped and the file reloaded.";
         try { profile = parseProfile(e.file.text); } catch (pe) { error = String((pe as Error).message ?? pe); }
         setFile((prev) => ({ id, path: e.file.path, text: e.file.text, profile: profile ?? prev?.profile ?? null, error }));
+      } else if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+        // The server said no to this edit: drop it, reload the file, and show why.
+        pendingText.current = null;
+        try {
+          const body = await api.get(id);
+          lastMtime.current = body.mtime;
+          setFile({ id, path: body.path, text: body.text, profile: parseProfile(body.text), error: e.message });
+        } catch { setFile((prev) => (prev ? { ...prev, error: e.message } : prev)); }
       } else {
         // Keep the edit pending and try again shortly; polling stays paused meanwhile.
         pendingText.current = text;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { companyName, companyPrice, type AmtCrossover, type Levers, type PlanResult, type Profile, type SaleResult, type ScenarioEvent, type TimelineEntry } from "@taxonomy/engine";
 import { shares, usd, usdCompact } from "../../format.ts";
 import { useWidth } from "../../useWidth.ts";
@@ -23,6 +23,7 @@ interface Props {
   facts: FactMarker[];
   crossovers: AmtCrossover[];
   selectedId: string | null;
+  focusYear: number;
   onSelect: (id: string | null) => void;
   onAdd: (what: AddKind, year: number) => void;
   onChange: (id: string, patch: Partial<ScenarioEvent>) => void;
@@ -34,11 +35,10 @@ interface Props {
 }
 
 /** The strip under the chart: one column per plan year with decision chips, fact lines and a +; one inspector for the selection. */
-export function EventTimeline({ profile, levers, plan, years, events, facts, crossovers, selectedId, onSelect, onAdd, onChange, onRemove, onSellToCover, onAddFact, onChangeFact, onRemoveFact }: Props) {
+export function EventTimeline({ profile, levers, plan, years, events, facts, crossovers, selectedId, focusYear, onSelect, onAdd, onChange, onRemove, onSellToCover, onAddFact, onChangeFact, onRemoveFact }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const band = columnBand(width, years.length);
   const [menuYear, setMenuYear] = useState<number | null>(null);
-  const multi = profile.equity.companies.length > 1;
   const columnAt = (clientX: number): number | null => {
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return null;
@@ -53,27 +53,33 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
     const order = (levers.sales?.[e.year] ?? []).map((s) => s.id);
     return yr?.sales?.[order.indexOf(e.id)];
   };
-  const chipKind = (e: ScenarioEvent) => e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()}${multi ? ` · ${companyName(profile, e.company)}` : ""}` : e.kind === "sell" ? `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}` : "Liquidity";
+  const chipKind = (e: ScenarioEvent) => e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()} · ${companyName(profile, e.company)}` : e.kind === "sell" ? `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}` : "Liquidity";
   const chipValue = (e: ScenarioEvent) => {
     if (e.kind === "exercise") return `${shares(e.shares)} sh`;
     if (e.kind === "sell") return `${shares(saleResult(e)?.shares ?? e.shares)} sh`;
     const c = profile.equity.companies.find((x) => x.id === e.company) ?? profile.equity.companies[0];
     return `${usd(e.price ?? companyPrice(profile, c, e.year))}/sh`;
   };
-  // The inspector sits under the selected item's year, as wide as it needs, kept inside the strip.
-  const anchorYear = selected?.year ?? selectedFact?.year;
-  const panelWidth = Math.min(selected?.kind === "sell" ? 900 : 720, width);
-  const anchorStyle = anchorYear === undefined ? undefined : (() => {
-    const colLeft = M.left + band * years.indexOf(anchorYear);
-    return { marginLeft: Math.max(0, Math.min(colLeft, width - panelWidth)), width: panelWidth } as React.CSSProperties;
-  })();
+  // The inspector floats right under the selected chip, as wide as it needs, kept inside the strip.
+  const eventsRef = useRef<HTMLDivElement>(null);
+  const panelWidth = Math.min(selected?.kind === "sell" ? 900 : 720, Math.max(320, width));
+  const [anchor, setAnchor] = useState<{ top: number; left: number; caret: number } | null>(null);
+  useLayoutEffect(() => {
+    const root = eventsRef.current;
+    const el = root && selectedId ? (root.querySelector(`[data-id="${CSS.escape(selectedId)}"]`) as HTMLElement | null) : null;
+    if (!root || !el) { setAnchor(null); return; }
+    const r = el.getBoundingClientRect(), b = root.getBoundingClientRect();
+    const left = Math.max(0, Math.min(r.left - b.left, Math.max(0, b.width - panelWidth)));
+    setAnchor({ top: r.bottom - b.top + 10, left, caret: Math.max(14, Math.min(panelWidth - 14, r.left - b.left - left + Math.min(r.width / 2, 60))) });
+  }, [selectedId, width, panelWidth, events, facts]);
+  const anchorStyle = anchor ? ({ top: anchor.top, left: anchor.left, width: panelWidth, "--caret": `${anchor.caret}px` } as React.CSSProperties) : undefined;
   const canAdd = decisionKinds(profile).length > 0;
 
   return (
-    <div className="events">
+    <div className="events" ref={eventsRef}>
       <div className="event-strip" ref={ref}>
         {years.map((y) => (
-          <div className={"event-col" + (drag.drag?.moved && drag.drag.target === y ? " target" : "")} key={y} style={{ flex: `0 0 ${band}px` }}>
+          <div className={"event-col" + (y === focusYear ? " focus" : "") + (drag.drag?.moved && drag.drag.target === y ? " target" : "")} key={y} style={{ flex: `0 0 ${band}px` }}>
             {events.filter((e) => e.year === y).map((e) => (
               <button type="button" key={e.id} data-id={e.id} className={"ev-chip " + e.kind + " " + (e.kind === "exercise" ? e.type : "") + (e.id === selectedId ? " on" : "") + (drag.drag?.id === e.id && drag.drag.moved ? " dragging" : "")}
                 onPointerDown={drag.start(e.id)} onPointerMove={drag.move} onPointerUp={drag.end(e)} onPointerCancel={drag.cancel} title="Drag to another year">
@@ -82,7 +88,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
               </button>
             ))}
             {facts.filter((f) => f.year === y).map((f) => (
-              <button type="button" key={f.id} className={"ev-info" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
+              <button type="button" key={f.id} data-id={f.id} className={"ev-info" + (f.id === selectedId ? " on" : "")} onClick={() => onSelect(f.id === selectedId ? null : f.id)} title={`${f.label} · ${f.detail}`}>
                 <span className="ev-dot" /><span className="ev-info-text"><span className="ev-info-label">{f.label}</span> <span className="ev-info-detail">{f.detail}</span></span>
               </button>
             ))}
@@ -92,8 +98,8 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
       </div>
 
       {drag.drag?.moved && (() => { const e = events.find((x) => x.id === drag.drag!.id); return e ? <div className="ev-ghost" style={{ left: drag.drag.x + 10, top: drag.drag.y - 10 }}>{chipKind(e)} → {drag.drag.target ?? "…"}</div> : null; })()}
-      <div className="inspector-slot" style={anchorStyle}>
-        {selected?.kind === "exercise" && <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} companyLabel={multi ? companyName(profile, selected.company) : ""} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
+      {anchor && <div className="inspector-slot floating" style={anchorStyle}>
+        {selected?.kind === "exercise" && <ExerciseInspector profile={profile} levers={levers} years={years} event={selected} crossovers={crossovers} companyLabel={companyName(profile, selected.company)} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
         {selected?.kind === "liquidity" && <LiquidityInspector profile={profile} plan={plan} years={years} event={selected} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} />}
         {selected?.kind === "sell" && <SaleInspector profile={profile} plan={plan} years={years} event={selected} result={saleResult(selected)} onChange={(p) => onChange(selected.id, p)} onRemove={() => onRemove(selected.id)} onSellToCover={() => onSellToCover(selected.id)} />}
         {selectedFact && selectedFact.entryIndex !== undefined && profile.timeline?.[selectedFact.entryIndex] && (
@@ -104,7 +110,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
             <p className="muted small">A fact, not a decision: it applies to every scenario. Decisions are the chips above.</p>
           </InspectorShell>
         )}
-      </div>
+      </div>}
       {!selected && !selectedFact && events.length === 0 && (
         <p className="muted small events-empty">{canAdd ? "Nothing decided yet. Press + under a year to add an exercise, a sale, or a change like a raise." : "Press + under a year to add a change like a raise. Add option grants or shares you own under Edit my information for exercise and sale decisions."}</p>
       )}

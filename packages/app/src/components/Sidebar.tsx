@@ -1,3 +1,4 @@
+import { demo, setDemo } from "../format.ts";
 import { statusName, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, usdCompact } from "../format.ts";
 import { EquityKnobs } from "./EquitySection.tsx";
@@ -53,6 +54,7 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
       </Section>
       <div className="sidebar-foot">
         <button type="button" className="link muted" onClick={resetView} title="Forget which sections and cards are open, the focused year, dismissed suggestions and the selected decision. Your data and theme stay.">Reset view</button>
+        <button type="button" className="link muted" onClick={() => setDemo(!demo.on)} title="Show every amount in a made-up currency at a fixed scale, for screenshots and screen shares. Your file is unchanged.">{demo.on ? "Leave demo mode" : "Demo mode"}</button>
       </div>
     </div>
   );

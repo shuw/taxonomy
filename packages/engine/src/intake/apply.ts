@@ -2,10 +2,10 @@ import { newId } from "../equity.ts";
 import { fieldByIntake, FIELDS } from "../fields.ts";
 import type { ProfileEdit, ProfilePath } from "../profile.ts";
 import { getPath } from "../timeline.ts";
-import type { Company, EquityGrant, FollowUp, Holding, PriorReturn, Profile } from "../types.ts";
+import type { Company, Dependent, EquityGrant, FollowUp, Holding, PriorReturn, Profile } from "../types.ts";
 import type { IntakeDocument, IntakeGrant, IntakeQuestion } from "./schema.ts";
 
-export type IntakeSection = "basics" | "pay" | "prior_return" | "income" | "equity" | "home" | "assumptions";
+export type IntakeSection = "basics" | "pay" | "prior_return" | "income" | "equity" | "home" | "giving" | "assumptions";
 
 export interface IntakeChange {
   /** Stable id for selection. */
@@ -22,12 +22,15 @@ export interface IntakeChange {
   /** Key under `sources` when applied (grants and holdings use ids). */
   sourceKey: string;
   /** Dependents' birth years, when the agent gave them rather than a count. */
-  birthYears?: number[];
+  /** Dependents as people, when the document listed them. */
+  dependents?: Dependent[];
   /** The intake path this row came from, for matching the agent's questions. */
   intakeKey?: string;
 }
 
 export interface IntakeReview {
+  /** The document the review was made from. */
+  doc: IntakeDocument;
   changes: IntakeChange[];
   /** Paths the agent reported as not found, with a readable label. */
   unknown: { path: string; label: string }[];
@@ -56,17 +59,17 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
   // Scalars, from the registry -----------------------------------------------
   for (const f of FIELDS) {
     if (f.review === false || !f.intake) continue;
-    const proposed = getPath(doc, f.intake);
+    const proposed = f.path === "filer.dependents" ? (doc.pay?.dependents ?? doc.basics?.dependents) : getPath(doc, f.intake);
     if (proposed === undefined) continue;
     if (f.path.startsWith("equity.companies.0.") && profile.equity.companies.length === 0) continue; // handled by the companies row
     if (f.path === "filer.dependents") {
-      const years = Array.isArray(proposed) ? (proposed as number[]) : undefined;
-      const n = years ? years.length : typeof proposed === "number" ? Math.max(0, Math.round(proposed)) : 0;
+      const people = Array.isArray(proposed) ? (proposed as Dependent[]) : undefined;
+      const n = people ? people.length : typeof proposed === "number" ? Math.max(0, Math.round(proposed)) : 0;
+      const describe = (list: Dependent[]) => list.map((d) => [d.name, d.birthYear].filter(Boolean).join(" · ") || "?").join(", ");
       const existing = profile.filer.dependents;
-      const curYears = existing?.map((d) => d.birthYear).filter((y): y is number => typeof y === "number") ?? [];
-      const current = existing === undefined ? undefined : curYears.length === existing.length && existing.length > 0 ? curYears.join(", ") : String(existing.length);
-      const shown = years ? years.join(", ") : String(n);
-      add({ section: f.section, label: years ? "Dependents (birth years)" : "Dependents", path: ["filer", "dependents"], current, proposed: current === shown ? current : shown, source: src(f.intake), format: "text", sourceKey: f.path, birthYears: years });
+      const current = existing === undefined ? undefined : existing.length === 0 ? "none" : describe(existing);
+      const shown = people ? (people.length ? describe(people) : "none") : String(n);
+      add({ section: f.section, label: "Dependents", path: ["filer", "dependents"], current, proposed: current === shown ? current : shown, source: src(f.intake), format: "text", sourceKey: f.path, dependents: people });
       continue;
     }
     add({ section: f.section, label: f.label, path: toPath(f.path), current: getPath(profile, f.path), proposed, source: src(f.intake), format: f.type, sourceKey: f.path });
@@ -128,11 +131,14 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
 
   // Mortgage as one row -------------------------------------------------------------
   if (doc.home?.mortgage) {
-    add({ section: "home", label: "Mortgage", path: ["home", "mortgage"], current: profile.home?.mortgage, proposed: strip(doc.home.mortgage), format: "mortgage", source: src("home.mortgage"), sourceKey: "home.mortgage" });
+    const m = doc.home.mortgage;
+    // A loan with only its balance still counts; rate and origination become questions, with placeholders until answered.
+    const proposed = strip({ ...m, rate: m.rate ?? 0, originated: m.originated ?? `${profile.plan.startYear}-01-01` });
+    add({ section: "home", label: "Mortgage", path: ["home", "mortgage"], current: profile.home?.mortgage, proposed, format: "mortgage", source: src("home.mortgage"), sourceKey: "home.mortgage" });
   }
 
   const unknown = (doc.unknown ?? []).map((p) => ({ path: p, label: fieldByIntake(p)?.label ?? labelFor(p) }));
-  return { changes, unknown, questions: doc.questions ?? [], asOf: doc.as_of };
+  return { doc, changes, unknown, questions: doc.questions ?? [], asOf: doc.as_of };
 }
 
 /** An intake grant as the profile stores it: the portal's three counts, verbatim. */
@@ -185,7 +191,7 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
   for (const c of changes) {
     if (c.id === "filer.dependents") {
       const existing = profile.filer.dependents ?? [];
-      if (c.birthYears) edits.push({ path: ["filer", "dependents"], value: c.birthYears.map((birthYear) => ({ birthYear })) });
+      if (c.dependents) edits.push({ path: ["filer", "dependents"], value: c.dependents });
       else {
         const n = Math.max(0, Math.round(Number(c.proposed) || 0));
         edits.push({ path: ["filer", "dependents"], value: existing.length >= n ? existing.slice(0, n) : [...existing, ...Array.from({ length: n - existing.length }, () => ({}))] });
@@ -215,20 +221,30 @@ export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEd
     .filter((c) => c.format === "grant")
     .map((c) => c.proposed as EquityGrant)
     .filter((g) => !g.schedule && !g.vesting && g.granted - (g.vestedToDate ?? 0) > 0)
-    .map((g) => ({ id: "", text: `${g.name}: ${Math.round(g.granted - (g.vestedToDate ?? 0)).toLocaleString("en-US")} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Add the schedule on the grant card.`, about: `grants.${g.id}` }));
-  const fresh: FollowUp[] = [...scheduleGaps, ...review.questions.map((q) => ({ id: "", text: q.question, about: q.about ?? undefined }))].map((f) => {
+    .map((g): FollowUp => ({ id: "", text: `${g.name}: ${Math.round(g.granted - (g.vestedToDate ?? 0)).toLocaleString("en-US")} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Add the schedule on the grant card.`, about: `grants.${g.id}` }));
+  const missing: FollowUp[] = [];
+  const deps = review.changes.find((c) => c.id === "filer.dependents")?.dependents;
+  if (deps?.some((d) => d.birthYear === undefined)) missing.push({ id: "", text: `Birth year${deps.filter((d) => !d.birthYear).length > 1 ? "s" : ""} for ${deps.filter((d) => !d.birthYear).map((d) => d.name ?? "the dependent").join(", ")} (the return does not show them; they decide the child credit).`, about: "filer.dependents", kind: "missing" });
+  const mort = review.doc.home?.mortgage;
+  if (mort && mort.rate === undefined) missing.push({ id: "", text: "Mortgage interest rate, from the latest statement (the balance is in; interest is computed from the rate).", about: "home.mortgage.rate", kind: "missing" });
+  if (mort && mort.originated === undefined) missing.push({ id: "", text: "When the mortgage was taken out (Form 1098 box 3); it decides whether the $750k or $1M interest cap applies.", about: "home.mortgage.originated", kind: "missing" });
+  const pr = review.doc.prior_return;
+  if (pr && (pr.amt?.amt ?? 0) > 0 && (pr.inputs?.isoBargainElement ?? 0) > 0 && !(pr.amtCreditCarryforward ?? 0)) {
+    missing.push({ id: "", text: `Your ${pr.year} return paid ${Math.round(pr.amt!.amt!).toLocaleString("en-US")} of AMT with an ISO exercise in it. Most of that comes back as a credit from ${pr.year + 1} on. Enter Form 8801 line 26 if it was filed; otherwise the AMT amount itself is a fair starting figure.`, about: "carryforwards.amtCredit", kind: "missing" });
+  }
+  const fresh: FollowUp[] = [...missing, ...scheduleGaps, ...review.questions.map((q): FollowUp => ({ id: "", text: q.question, about: q.about ?? undefined }))].map((f) => {
     const id = newId("f", taken);
     taken.push(id);
     let about = f.about;
-    if (about && !about.startsWith("grants.")) {
-      const m = about.match(/^equity\.grants\[(\d+)\]/);
-      if (m) about = grantKeys.get(m[0]) ?? `grants.${m[1]}`;
+    if (about && !about.startsWith("grants.") && f.kind !== "missing") {
+      const m = about.match(/^equity\.grants[.[](\d+)\]?/);
+      if (m) about = grantKeys.get(`equity.grants[${m[1]}]`) ?? `grants.${m[1]}`;
       else if (/^equity\.holdings/.test(about)) about = "holdings";
       else if (/^home\.mortgage/.test(about)) about = "home.mortgage";
       else if (/^prior_return\.(?!amtCreditCarryforward|capitalLossCarryforward|charitableCarryforward)/.test(about)) about = "returns";
       else about = fieldByIntake(about)?.path ?? about;
     }
-    return { id, text: f.text, about, added };
+    return { id, text: f.text, about, added, ...(f.kind ? { kind: f.kind } : {}) };
   });
   return fresh.length ? [{ path: ["followUps"], value: [...existing, ...fresh] }] : [];
 }

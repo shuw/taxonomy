@@ -45,9 +45,11 @@ that the engine already implements, and its only way to change the plan should b
 One tool layer, two possible fronts:
 
 - **Phase 1: MCP server.** The user talks in the Claude they already use. Claude Code and Claude
-  Desktop both speak MCP; `claude mcp add taxonomy -- bun packages/mcp/server.ts` registers it.
-  No keys, no new UI surface, and the conversation can also drive intake later ("read my new pay
-  stub and update the salary").
+  Desktop speak MCP over stdio (`packages/mcp/server.ts`); claude.ai reaches the same tools over
+  HTTP (`packages/mcp/http.ts`, localhost only, behind a secret path) through a Tailscale Funnel
+  the user starts with one command, added in claude.ai as a custom connector. No keys, no new
+  UI surface, and the conversation can also drive intake ("read my new pay stub and update the
+  salary").
 - **Phase 3 (optional): in-app chat** over the same tools with a bring-your-own key, plus
   dictation through the browser's speech API. Only worth it if talking outside the app proves
   too disconnected in practice.
@@ -55,13 +57,37 @@ One tool layer, two possible fronts:
 Phase 2 sits between: the app grows the small pieces that make proposals from an agent feel
 native.
 
+## The tools as claude.ai sees them
+
+Ten tools, so the permission prompts stay few. Six only read; four write. Writes apply at once:
+a fact is set with its source, a document's values are written with theirs, a scenario is added
+and made active. Every save is logged in the app's history with the text before it, and the
+Claude button in the top bar shows what came in since the user last looked, so the review step
+of the first design is gone; undo from History is the safety net.
+
+| Tool | Does |
+|---|---|
+| `list_profiles`, `create_profile` | which profile, or a new one |
+| `get_context` | facts, holdings, scenarios, outstanding items, pending changes, editable fields, vocabulary |
+| `get_plan`, `explain` | the years' headline lines; one line's reason and inputs |
+| `analyze` | `kind`: compare_years, amt_headroom, credit_recovery, hold_or_sell, lots, sell_to_cover |
+| `what_if` | try decisions without saving |
+| `scenario` | `action`: add, activate, delete |
+| `facts` | set facts and assumptions the user states |
+| `intake` | `action`: request, submit |
+
+The engine functions below keep their own names; the table is the packaging.
+
 ## The tool layer
 
 Typed inputs and outputs, JSON in and out, every mutation validated by `parseProfile`. Grouped
 by what the model needs to do.
 
 **Orient**
-- `list_profiles()` → ids and names. `get_context(profile)` → the compact facts the intake
+- `list_profiles()` → ids, names, and which one the app is showing. Every other tool takes
+  `profile` as an id or a name (prefix is enough); without it the only profile, or the one open
+  in the app (the app tells the server on every switch), is used, and every result names the
+  profile it is about so the agent can say so when there are several. `get_context(profile)` → the compact facts the intake
   already builds (`knownFacts`), the plan years, the companies with ISO grants, the scenarios and
   which is active, and the vocabulary (event kinds and their fields).
 - `get_plan(profile, scenario?)` → per year: the ledger's headline lines (AGI, regular tax, AMT,
@@ -86,11 +112,39 @@ by what the model needs to do.
 - `set_active_scenario(profile, name)`, `delete_scenario(profile, name)`.
 
 **Intake**
+- `create_profile(name)` → a new profile from the example, for an agent starting from scratch.
 - `intake_request(profile, sections)` → the same request the app hands an agent, for an agent
   that is already connected and can see the documents.
-- `apply_intake(profile, document)` → runs the intake YAML through the parser and the same
-  review the paste flow uses (`reviewIntake`), writes the changed rows with their sources, and
-  turns the agent's questions into follow-ups the user answers in the app.
+- `submit_intake(profile, document, sections?)` → checks the intake YAML for shape and appends
+  it to the profile's `pendingIntake` list. Each document gets its own card in the app ("Claude
+  sent pay"); Review opens the same review table as a pasted reply, pre-filled, and only
+  accepted rows are written. Several submissions are expected: intake is a conversation, one
+  section at a time, not one sweep. The copy-and-paste path is the fallback.
+- `get_context` carries an `outstanding` section (unanswered follow-ups, empty essentials,
+  documents and changes awaiting review) so the agent can ask for the simple things in chat and
+  route them through `update_facts`.
+
+**The handshake.** The new-profile wizard ends when Claude connects: the user says "Connect to
+my Taxonomy profile "Me"", the agent calls `get_context` on it, and the heartbeat (which now
+records the profile each call was about) lets the wizard see a call about its draft since it
+started. Every step shows green and an "Open my plan" button takes the user in; filling in
+happens from there. A call about a different
+profile is shown as such and does not complete the step.
+- The server touches `data/.agent` on every call (with the client's name) so the app can say
+  "Connected · Claude Desktop · 3 minutes ago" in the intake and connect dialogs.
+- Setup is one click per step: `POST /api/agent/desktop` merges the `taxonomy` entry into Claude
+  Desktop's config (backup kept, other entries untouched, invalid JSON refused), and
+  `POST /api/agent/open` brings Claude Desktop to the front. For claude.ai, `POST /api/agent/remote`
+  starts or stops the local HTTP server; the app never runs the tunnel itself, it shows the
+  `tailscale funnel --bg <port>` command, reads Funnel's status, and composes the connector URL;
+  any other tunnel's address can be pasted instead (Funnel needs the tailnet's policy to grant
+  the `funnel` node attribute, which not every user can change; ngrok's free fixed domain is the
+  stable alternative). This is the route claude.ai's own team points at: connectors dial out from
+  Anthropic's servers, localhost URLs are refused at setup, and a server on the connector path
+  must either use claude.ai's OAuth flow or need no auth, which the secret path satisfies.
+  All same-origin only. The
+  new-profile screen, "Fill from documents" and the "Connect your agent" tab share the checklist;
+  the intake dialogs toggle between "With Claude Desktop" and "Copy a request".
 
 **Facts and assumptions from a sentence**
 - `update_facts(profile, changes[])` → each change names a registry field (path or label, with
@@ -125,9 +179,9 @@ them:
   detects the change; the banner is a few dozen lines on top of the scenario bar.
 - **Scenario origin**: scenarios carry an optional `note` ("proposed by agent, 2026-09-15"),
   shown in the scenario picker.
-- An **"Ask"** affordance on the plan card that copies a grounded question to the clipboard in
-  the same spirit as intake: the year's headline lines and the events, so a user without MCP set
-  up can still paste a good question into any model. Cheap, and it doubles as the fallback.
+- ~~An "Ask" affordance on the plan card that copies a grounded question to the clipboard.~~
+  Built, then dropped on 2026-09-16 once the connector path was in place: with MCP there is no
+  chat that needs the numbers pasted in.
 
 ## Phase 3, only if wanted: in-app chat
 
@@ -163,7 +217,6 @@ Phases 1 and 2 are built: `packages/engine/src/tools.ts` with tests, `packages/m
 over stdio (16 tools including the two intake tools), the repository `.mcp.json` for Claude
 Code, a "Connect your agent" tab in the information dialog with the Claude Desktop config
 generated by `GET /api/agent` (absolute `bun` path so Desktop finds it), the proposal banner
-(Accept, Compare, Discard, or hide for later), the scenario note in the top bar, "Ask your
-agent" on the plan card for Claude on the web, which cannot reach a local process, and
+(Accept, Compare, Discard, or hide for later), the scenario note in the top bar, and
 `update_facts` with its review card for facts and assumptions stated in conversation. Phase 3 is
 still a decision to make after using this for a while.

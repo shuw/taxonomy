@@ -1,9 +1,11 @@
+import { demo } from "../format.ts";
+import { Info } from "./Info.tsx";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export function Field({ label, hint, children, wide, source, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; error?: string }) {
+export function Field({ label, hint, children, wide, source, note, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; note?: string; error?: string }) {
   return (
     <label className={"field" + (wide ? " wide" : "") + (error ? " invalid" : "")}>
-      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}{source && <span className="src" title={source}>source</span>}</span>
+      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}{source && <span className="src" title={source}>source</span>}{note && <Info label="Note from Claude">{note}</Info>}</span>
       {children}
       {error && <span className="field-error">{error}</span>}
     </label>
@@ -48,18 +50,20 @@ export function parseAmount(raw: string): number | null {
   return n * mult;
 }
 
-export const MoneyInput = (p: Omit<NumProps, "prefix">) => <NumberInput prefix="$" min={0} {...p} />;
+export const MoneyInput = (p: Omit<NumProps, "prefix">) => demo.on
+  ? <span className="input-wrap demo"><span className="affix">{demo.symbol}</span><input value={Math.round(p.value * demo.scale).toLocaleString("en-US")} readOnly title="Demo mode: amounts are shown in a made-up currency and cannot be edited" /></span>
+  : <NumberInput prefix="$" min={0} {...p} />;
 
 /** Percent input over a fraction value: 0.15 shows as 15. */
 export function PercentInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return <NumberInput value={value * 100} onChange={(n) => onChange(n / 100)} suffix="%" decimals={1} />;
 }
 
-export function Segmented<T extends string>({ options, value, onChange, columns }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; columns?: number }) {
+export function Segmented<T extends string>({ options, value, onChange, columns }: { options: { value: T; label: string; key?: string }[]; value: T; onChange: (v: T) => void; columns?: number }) {
   return (
     <div className="segmented" role="radiogroup" style={columns ? { display: "grid", gridTemplateColumns: `repeat(${columns}, 1fr)` } : undefined}>
       {options.map((o) => (
-        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? "on" : ""} onClick={() => onChange(o.value)}>{o.label}</button>
+        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? "on" : ""} onClick={() => onChange(o.value)}>{o.label}{o.key && <kbd>{o.key}</kbd>}</button>
       ))}
     </div>
   );

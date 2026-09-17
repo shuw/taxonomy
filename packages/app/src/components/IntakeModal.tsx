@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type IntakeChange, type IntakeSection, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type IntakeChange, type IntakeSection, type PendingIntake, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
 import { Field, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+import { api } from "../api.ts";
+import { useProfile } from "../useProfile.ts";
+import { setHash } from "../hash.ts";
+import { AgentSetup } from "./ConnectAgent.tsx";
+import { Segmented } from "./fields.tsx";
+import { useAgentStatus } from "../hooks/useAgentStatus.ts";
 
-interface FillProps { mode: "fill"; profile: Profile; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
-interface CreateProps { mode: "create"; onCreate: (name: string, text: string) => Promise<void>; onClose?: () => void; }
+interface FillProps { mode: "fill"; profile: Profile; /** The agent's document being reviewed, if any. */ doc?: PendingIntake; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; }
+interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; }
 type Props = FillProps | CreateProps;
 
 interface Basics { name: string }
@@ -17,7 +23,7 @@ const REQUIRED_BASICS: { id: string; text: string; about: string }[] = [
 ];
 
 const thisYear = () => Math.max(2026, new Date().getFullYear());
-const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Filing", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", assumptions: "Assumptions" };
+const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Filing", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", giving: "Giving", assumptions: "Assumptions" };
 
 function profileTextFrom(b: Basics): string {
   return stringifyProfile({
@@ -43,76 +49,153 @@ export function clearDraft(scope: string): void {
 }
 
 export function IntakeModal(props: Props) {
-  const create = props.mode === "create";
-  const scope = create ? "new" : `fill.${props.profile.name ?? ""}`;
-  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me" }));
-  useEffect(() => { if (create) saveDraft(`${scope}.basics`, basics); }, [create, scope, basics]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nameNeeded, setNameNeeded] = useState(false);
-  const set = <K extends keyof Basics>(k: K, v: Basics[K]) => setBasics((b) => ({ ...b, [k]: v }));
-  const nameMissing = create && basics.name.trim() === "";
+  return props.mode === "create" ? <NewProfileWizard onDone={props.onDone} onOpen={props.onOpen} onClose={props.onClose} /> : <FillModal {...props} />;
+}
 
-  const baseText = useMemo(() => (create ? profileTextFrom(basics) : null), [create, basics]);
-  const profile: Profile = useMemo(() => (props.mode === "fill" ? props.profile : parseProfile(baseText!)), [props, baseText]);
-  const canCreate = true;
-  const onClose = props.onClose;
-
-  const finish = async (edits: ProfileEdit[], provided: Set<string> = new Set()) => {
-    if (nameMissing) {
-      setNameNeeded(true);
-      document.getElementById("profile-name")?.focus();
-      return;
-    }
-    if (props.mode === "fill") {
-      props.onApply(edits);
-      clearDraft(`${scope}.paste`);
-      props.onClose();
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    // Whatever the agent did not supply is asked on the main screen, not here.
-    const text = editProfileText(baseText!, edits);
-    const missing = REQUIRED_BASICS.filter((b) => !provided.has(b.id)).map((b, i) => ({ id: `m${i + 1}`, text: b.text, about: b.about, kind: "missing" as const, added: new Date().toISOString().slice(0, 10) }));
-    const existing = parseProfile(text).followUps ?? [];
-    const withMissing = missing.length ? editProfileText(text, [{ path: ["followUps"], value: [...missing, ...existing] }]) : text;
-    try { await props.onCreate(basics.name.trim() || "New profile", withMissing); clearDraft(`${scope}.basics`); clearDraft(`${scope}.paste`); }
-    catch (e) { setError(String((e as Error).message ?? e)); }
-    finally { setBusy(false); }
-  };
-
+/** Fill from documents for the profile on screen. */
+function FillModal({ profile, doc, onApply, onClose }: FillProps) {
+  const scope = `fill.${profile.name ?? ""}`;
+  const finish = async (edits: ProfileEdit[]) => { onApply(edits); clearDraft(`${scope}.paste`); onClose(); };
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label={create ? "New profile" : "Fill from documents"}>
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label="Fill from documents">
         <header className="modal-head">
           <div>
-            <h3>{create ? "New profile" : "Fill from documents"}</h3>
-            <div className="muted small" style={{ margin: 0 }}>{create ? "Name it. Your agent reads the rest from your documents; anything missing is asked afterward." : "Your agent reads the documents. You approve the numbers."}</div>
+            <h3>Fill from documents</h3>
+            <div className="muted small" style={{ margin: 0 }}>Claude reads the documents. You approve every number before it is saved.</div>
           </div>
-          {create && !onClose && <ThemeToggle />}
-          {onClose && <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>}
+          <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>
         </header>
-
-        {create && (
-          <div className="modal-body create-head">
-            <div className="create-basics">
-              <Field label="Name" hint="a person, a household, or a what-if" wide error={nameNeeded && nameMissing ? "Name this profile to continue." : undefined}><span className="input-wrap"><input id="profile-name" autoFocus value={basics.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Me, or Us if we marry in 2027" onFocus={(e) => e.currentTarget.select()} /></span></Field>
-            </div>
-          </div>
-        )}
-
-        <AgentIntake profile={profile} create={create} busy={busy} error={error} canFinish={true} onFinish={finish} scope={scope} onInteract={() => { if (nameMissing) setNameNeeded(true); }} />
+        <AgentIntake profile={profile} doc={doc} name={profile.name?.trim() || "Me"} create={false} busy={false} error={null} onFinish={finish} scope={scope} />
       </div>
     </div>
   );
 }
 
-function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope, onInteract }: { profile: Profile; create: boolean; busy: boolean; error: string | null; canFinish: boolean; onFinish: (edits: ProfileEdit[], provided?: Set<string>) => Promise<void>; scope: string; onInteract?: () => void }) {
+/** Nothing but a name: no pay, no equity, nothing pending, nothing dated. */
+function untouched(p: Profile): boolean {
+  return p.people.self.salary === 0 && !p.people.spouse && p.equity.grants.length === 0 && p.equity.companies.length === 0
+    && !(p.pendingIntake?.length) && !(p.pending?.length) && !(p.timeline?.length) && !(p.returns?.length) && (p.scenarios?.default?.events.length ?? 0) === 0;
+}
+
+/**
+ * New profile in two steps: a name, then the numbers. The profile file is created on leaving
+ * step 1 so Claude has something to send to; going back or closing removes it again while it
+ * is still empty.
+ */
+function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">) {
+  const scope = "new";
+  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me" }));
+  useEffect(() => { saveDraft(`${scope}.basics`, basics); }, [basics]);
+  const [draftId, setDraftIdState] = useState<string | null>(() => loadDraft(`${scope}.draft`, { id: null as string | null }).id);
+  // Written at once, not in an effect: closing the wizard unmounts it before an effect would run.
+  const setDraftId = (id: string | null) => { saveDraft(`${scope}.draft`, { id }); setDraftIdState(id); };
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nameNeeded, setNameNeeded] = useState(false);
+  const name = basics.name.trim();
+  const store = useProfile(draftId);
+  const draft = store.file?.id === draftId ? store.file.profile : null;
+  const step = draftId ? 2 : 1;
+  // A call about the draft after this moment is the handshake that ends the wizard.
+  const [since] = useState(() => loadDraft(`${scope}.since`, { t: Date.now() }).t);
+  useEffect(() => { saveDraft(`${scope}.since`, { t: since }); }, [since]);
+  // A remembered draft whose file is gone (deleted elsewhere, or an older session) goes back to the name.
+  useEffect(() => { if (draftId && store.file?.id === draftId && !store.file.profile && store.file.error) setDraftId(null); }, [draftId, store.file]);
+
+  const [taken, setTaken] = useState<{ id: string; name: string } | null>(null);
+  const next = async () => {
+    if (!name) { setNameNeeded(true); document.getElementById("profile-name")?.focus(); return; }
+    setBusy(true); setError(null); setTaken(null);
+    try {
+      // Two profiles with one name cannot be told apart in conversation, so the name has to be free.
+      const existing = (await api.list()).find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
+      if (existing) { setTaken(existing); return; }
+      // The hash keeps the wizard open across a refresh; the draft id and typed text live in session storage.
+      const created = await api.create(name, profileTextFrom(basics)); setDraftId(created.id); setHash("new");
+    }
+    catch (e) { setError(String((e as Error).message ?? e)); }
+    finally { setBusy(false); }
+  };
+  /** Only a draft nobody has put anything into is removed; a profile with data is never deleted here. */
+  const discard = async () => {
+    if (!draftId) return;
+    if (draft && untouched(draft)) { try { await api.remove(draftId); } catch { /* already gone */ } }
+    setDraftId(null);
+  };
+  const back = async () => { await discard(); };
+  const close = async () => { await discard(); onClose?.(); };
+
+  const finish = async (edits: ProfileEdit[], provided: Set<string> = new Set(), awaitAgent = false) => {
+    if (!draftId) return;
+    setBusy(true); setError(null);
+    try {
+      const cur = await api.get(draftId);
+      // Whatever the agent did not supply is asked on the main screen, not here.
+      const reviewed = draft?.pendingIntake?.[0];
+      const rest = (draft?.pendingIntake ?? []).filter((d) => d !== reviewed);
+      const text = editProfileText(cur.text, [...edits, ...(reviewed ? [{ path: ["pendingIntake"], value: rest.length ? rest : undefined }] : [])]);
+      const missing = REQUIRED_BASICS.filter((b) => !provided.has(b.id)).map((b, i) => ({ id: `m${i + 1}`, text: b.text, about: b.about, kind: "missing" as const, added: new Date().toISOString().slice(0, 10) }));
+      const existing = parseProfile(text).followUps ?? [];
+      const withMissing = missing.length ? editProfileText(text, [{ path: ["followUps"], value: [...missing, ...existing] }]) : text;
+      await api.put(draftId, withMissing, cur.mtime);
+      clearDraft(`${scope}.basics`); clearDraft(`${scope}.paste`); clearDraft(`${scope}.draft`); clearDraft(`${scope}.since`); clearDraft(`${scope}.mode`);
+      await onDone(draftId, awaitAgent);
+    } catch (e) { setError(String((e as Error).message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) void close(); }}>
+      <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label="New profile">
+        <header className="modal-head">
+          <div>
+            <h3>New profile <span className="muted step-count">step {step} of 2</span></h3>
+            <div className="muted small" style={{ margin: 0 }}>{step === 1 ? "Name it." : "Connect Claude. It fills the profile in with you, one thing at a time; every change is logged and can be undone."}</div>
+          </div>
+          {!onClose && <ThemeToggle />}
+          {onClose && <button type="button" className="btn icon" onClick={() => void close()} aria-label="Close">×</button>}
+        </header>
+
+        {step === 1 ? (
+          <div className="modal-body">
+            <Field label="Name" hint="you, or your household" wide error={nameNeeded && !name ? "Name this profile to continue." : undefined}>
+              <span className="input-wrap"><input id="profile-name" autoFocus value={basics.name} onChange={(e) => setBasics({ name: e.target.value })} placeholder="e.g. Me, or Us" onFocus={(e) => e.currentTarget.select()} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void next(); } }} /></span>
+            </Field>
+            {error && <div className="error">{error}</div>}
+            {taken && (
+              <div className="notice">A profile named “{taken.name}” already exists. Pick another name, or {onOpen ? <button type="button" className="link" onClick={() => onOpen(taken.id)}>open the existing one</button> : "open it from the profile menu"}.</div>
+            )}
+            <div className="modal-actions">
+              <span className="muted small" style={{ margin: 0 }}>Enter keeps “{name || "Me"}”.</span>
+              <span className="spacer" />
+              <button type="button" className="btn primary" disabled={busy} onClick={() => void next()}>{busy ? "…" : "Next"}</button>
+            </div>
+          </div>
+        ) : draft ? (
+          <AgentIntake profile={draft} doc={draft.pendingIntake?.[0]} name={draft.name?.trim() || name} create busy={busy} error={error} onFinish={finish} scope={scope} onBack={() => void back()} handshake={{ profile: draftId!, since }} />
+        ) : (
+          <div className="modal-body"><div className="muted">Loading…</div></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope, onBack, handshake }: { profile: Profile; doc?: PendingIntake; name: string; create: boolean; busy: boolean; error: string | null; onFinish: (edits: ProfileEdit[], provided?: Set<string>, awaitAgent?: boolean) => Promise<void>; scope: string; onBack?: () => void; handshake?: { profile: string; since: number } }) {
+  const onInteract = undefined as (() => void) | undefined;
+  const canFinish = true;
   const [sections, setSections] = useState<IntakeSection[]>(DOCUMENT_SECTIONS);
   const [copied, setCopied] = useState(false);
-  const [pasted, setPasted] = useState(() => loadDraft(`${scope}.paste`, { text: "" }).text);
+  const [mode, setMode] = useState<"agent" | "copy">(() => loadDraft(`${scope}.mode`, { mode: "agent" as const }).mode);
+  const [ready, setReady] = useState(false);
+  useEffect(() => { saveDraft(`${scope}.mode`, { mode }); }, [scope, mode]);
+  const sent = doc;
+  const [pasted, setPasted] = useState(() => sent?.text ?? loadDraft(`${scope}.paste`, { text: "" }).text);
   useEffect(() => { saveDraft(`${scope}.paste`, { text: pasted }); }, [scope, pasted]);
+  // A document the connected agent sends while this is open lands in the review on its own.
+  useEffect(() => { if (sent?.text) { setPasted(sent.text); setAccepted(null); } }, [sent?.text]);
+  const agent = useAgentStatus();
   const [accepted, setAccepted] = useState<Set<string> | null>(null);
   const [typed, setTyped] = useState<Record<string, string>>({});
   const [showSame, setShowSame] = useState(false);
@@ -154,28 +237,63 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope,
   const hasTyped = Object.values(typed).some((v) => v.trim());
   const sectionLabel = sections.length === INTAKE_SECTIONS.length ? "Everything" : sections.length === DOCUMENT_SECTIONS.length && DOCUMENT_SECTIONS.every((s) => sections.includes(s)) ? "Documents only" : `${sections.length} of ${INTAKE_SECTIONS.length} sections`;
 
+  const finishButton = (
+    <button type="button" id="create-profile" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set([...selected].filter((id) => review?.changes.find((c) => c.id === id && c.proposed !== 0 && c.proposed !== ""))), create && !review)}>
+      {busy ? "…" : create ? (review ? "Create profile" : "Create now, add numbers later") : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
+    </button>
+  );
+  const toggle = <Segmented options={[{ value: "agent", label: "With Claude" }, { value: "copy", label: "Paste a reply" }]} value={mode} onChange={(m) => { onInteract?.(); setMode(m); }} />;
+
+  if (create && mode === "agent" && handshake) {
+    return (
+      <div className="modal-body">
+        {toggle}
+        <AgentSetup status={agent} name={name} create expect={handshake} onConnected={() => setReady(true)} />
+        {error && <div className="error">{error}</div>}
+        {ready && <div className="notice good">All set. Claude is connected to this profile. From here it fills things in with you; what it changes shows up in the plan at once, and History can undo any of it.</div>}
+        <div className="modal-actions">
+          {onBack && !ready && <button type="button" className="btn" onClick={onBack}>Back</button>}
+          <span className="muted small" style={{ margin: 0 }}>{ready ? "" : "Every step turns green once Claude connects."}</span>
+          <span className="spacer" />
+          {ready
+            ? <button type="button" className="btn primary" disabled={busy} onClick={() => void onFinish([], new Set(), false)}>Open my plan</button>
+            : <button type="button" className="btn" disabled={busy} onClick={() => void onFinish([], new Set(), true)}>Skip for now</button>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="modal-body">
+      {toggle}
       <div className="two-col">
         <div className="col">
-          <div className="col-title"><span className="step-no">1</span> Give this to your agent</div>
-          <p className="muted small">Any agent that can see your files: Claude with Drive or mail, ChatGPT with uploads, a CLI agent in a folder. It reads your documents, asks you about gaps, and returns one block of YAML.</p>
-          <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
-          <div className="modal-actions">
-            <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
-            <details className="sections-details">
-              <summary>Asking for: {sectionLabel.toLowerCase()}</summary>
-              <ul>
-                {INTAKE_SECTIONS.map((s) => (
-                  <li key={s.id}><label><input type="checkbox" checked={sections.includes(s.id)} onChange={() => setSections((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))} /> <strong>{s.title}</strong> <span className="muted">{s.documents}</span></label></li>
-                ))}
-              </ul>
-            </details>
-          </div>
+          {mode === "agent" ? (
+            <AgentSetup status={agent} name={name} create={create} />
+          ) : (
+            <>
+              <div className="col-title"><span className="step-no">1</span> Give this to any agent that can see your files</div>
+              <p className="muted small">Claude with Drive or mail, ChatGPT with uploads, a CLI agent in a folder. It returns one block of YAML; paste that into step 2.</p>
+              <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
+              <div className="modal-actions">
+                <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
+                <details className="sections-details">
+                  <summary>Asking for: {sectionLabel.toLowerCase()}</summary>
+                  <ul>
+                    {INTAKE_SECTIONS.map((s) => (
+                      <li key={s.id}><label><input type="checkbox" checked={sections.includes(s.id)} onChange={() => setSections((cur) => (cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id]))} /> <strong>{s.title}</strong> <span className="muted">{s.documents}</span></label></li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            </>
+          )}
         </div>
         <div className="col">
-          <div className="col-title"><span className="step-no">2</span> Paste the reply here</div>
-          <textarea className="paste-box" placeholder="The whole reply is fine." value={pasted} onChange={(e) => { onInteract?.(); setPasted(e.target.value); setAccepted(null); }} />
+          <div className="col-title"><span className="step-no">{mode === "agent" ? "✓" : "2"}</span> Review what it found</div>
+          {sent && pasted === sent.text && <div className="muted small">Sent by Claude {new Date(sent.submitted).toLocaleString()}.</div>}
+          {mode === "agent" && !sent && !pasted.trim() && <div className="agent-status"><span className="dot pulse" /> Waiting for Claude…</div>}
+          <textarea className="paste-box" placeholder={mode === "agent" ? "Claude's reply appears here on its own." : "Paste the whole reply here."} value={pasted} onChange={(e) => { onInteract?.(); setPasted(e.target.value); setAccepted(null); }} />
           {parsed && parsed.problems.length > 0 && (
             <div className="error">
               Not quite the expected shape:
@@ -183,7 +301,7 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope,
             </div>
           )}
           {parsed && parsed.doc && parsed.warnings.length > 0 && <div className="muted small">Read with small corrections: {parsed.warnings.map((w) => `${w.path} (${w.message})`).join("; ")}.</div>}
-          {!review && <p className="muted small">{create ? "You can also skip this now and do it later from the sidebar." : "What changed will show here before anything is saved."}</p>}
+          {!review && <p className="muted small">{create ? "Nothing yet? Create the profile now; the numbers can arrive later." : "What changed shows here before anything is saved."}</p>}
         </div>
       </div>
 
@@ -231,11 +349,10 @@ function AgentIntake({ profile, create, busy, error, canFinish, onFinish, scope,
       )}
       {error && <div className="error">{error}</div>}
       <div className="modal-actions">
-        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Your agent's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
+        {onBack && <button type="button" className="btn" onClick={onBack}>Back</button>}
+        <span className="muted small" style={{ margin: 0 }}>{review?.questions.length ? "Claude's notes will wait for you on the main screen." : "Every number keeps its source."}</span>
         <span className="spacer" />
-        <button type="button" className="btn primary" disabled={busy || !canFinish || (!create && changeCount === 0 && !hasTyped)} onClick={() => void onFinish(edits(), new Set([...selected].filter((id) => review?.changes.find((c) => c.id === id && c.proposed !== 0 && c.proposed !== ""))))}>
-          {busy ? "Creating…" : create ? "Create profile" : review ? `Apply ${changeCount} value${changeCount === 1 ? "" : "s"}` : "Apply"}
-        </button>
+        {finishButton}
       </div>
     </div>
   );

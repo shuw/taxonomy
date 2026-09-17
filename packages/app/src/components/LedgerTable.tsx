@@ -40,7 +40,7 @@ export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Pro
   };
   return (
     <div className="table-wrap">
-      <table className="ledger">
+      <div className="table-wrap"><table className="ledger">
         <thead>
           <tr><th></th>{years.map((y) => <th key={y.year} className={y.year === focusYear ? "focus" : ""}>{y.year}</th>)}</tr>
         </thead>
@@ -51,7 +51,7 @@ export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Pro
           ])}
           {TOTALS.map((id) => row(id, true))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }

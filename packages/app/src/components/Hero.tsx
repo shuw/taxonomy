@@ -1,5 +1,6 @@
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, usd } from "../format.ts";
+import { useAnimatedNumber } from "../hooks/useAnimatedNumber.ts";
 
 function Delta({ value, lowerIsGood = true }: { value: number; lowerIsGood?: boolean }) {
   const text = fmtDelta(value);
@@ -11,11 +12,12 @@ function Delta({ value, lowerIsGood = true }: { value: number; lowerIsGood?: boo
 export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanResult | null; years: number[] }) {
   const t = plan.totals;
   const p = pinned?.totals;
+  const total = useAnimatedNumber(t.totalTax);
   return (
     <section className="card hero">
       <div>
         <div className="label">Total tax, {years[0]}–{years[years.length - 1]}</div>
-        <div className="big">{usd(t.totalTax)}</div>
+        <div className="big">{usd(total)}</div>
         {p && <div><Delta value={t.totalTax - p.totalTax} /></div>}
       </div>
       <div className="tiles">
@@ -29,10 +31,11 @@ export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanRe
 }
 
 function Tile({ label, value, pinned, color, lowerIsGood = true }: { label: string; value: number; pinned?: number; color: string; lowerIsGood?: boolean }) {
+  const shown = useAnimatedNumber(value);
   return (
     <div className="tile" style={{ "--tile": color } as React.CSSProperties}>
       <div className="label">{label}</div>
-      <div className="value">{usd(value)}</div>
+      <div className="value">{usd(shown)}</div>
       {pinned !== undefined && <Delta value={value - pinned} lowerIsGood={lowerIsGood} />}
     </div>
   );

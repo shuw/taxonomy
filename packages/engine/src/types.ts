@@ -287,6 +287,9 @@ export interface StatePolicy {
 
 export type Source = string | { doc: string; asOf?: string; note?: string };
 
+/** An intake document an agent sent; it waits here until reviewed in the app, exactly like a pasted one. */
+export interface PendingIntake { id: string; text: string; submitted: string; sections?: string[]; }
+
 /** A change to a fact or assumption an agent proposed; nothing takes effect until you accept it in the app. */
 export interface PendingChange {
   id: string;
@@ -344,6 +347,7 @@ export interface Profile {
   sources?: Record<string, Source>;
   followUps?: FollowUp[];
   pending?: PendingChange[];
+  pendingIntake?: PendingIntake[];
 }
 
 /** Fully resolved inputs for one tax year, after profile defaults, growth, the timeline and levers are applied. */

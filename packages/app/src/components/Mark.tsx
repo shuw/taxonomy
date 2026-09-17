@@ -1,12 +1,18 @@
-/** The Flow T: income enters along the crossbar and splits into regular tax, AMT, and what you keep. */
+/**
+ * The rolling coin: a stack of coins with the top one tipping off. What you keep stays stacked;
+ * the tax rolls away. Small sizes drop the motion marks and one coin so the shape stays clear.
+ */
 export function Mark({ size = 22 }: { size?: number }) {
-  const heavy = size < 28;
+  const small = size <= 20;
+  const sw = small ? 5 : 4;
+  const coin = (y: number, fill: string, extra = "") => <rect x="10" y={y} width="34" height="10" rx="5" fill={fill} stroke="var(--ink)" strokeWidth={sw} strokeLinejoin="round" {...(extra ? { transform: extra } : {})} />;
   return (
     <svg className="mark" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect x={heavy ? 4 : 6} y={heavy ? 6 : 8} width={heavy ? 56 : 52} height={heavy ? 14 : 12} rx="4" fill="currentColor" />
-      <path d={heavy ? "M18 20C18 36 10 38 10 56" : "M20 20C20 36 12 38 12 56"} stroke="var(--series-amt)" strokeWidth={heavy ? 10 : 8} strokeLinecap="round" fill="none" />
-      <path d={heavy ? "M46 20C46 36 54 38 54 56" : "M44 20C44 36 52 38 52 56"} stroke="var(--surface-3)" strokeWidth={heavy ? 10 : 8} strokeLinecap="round" fill="none" />
-      <path d="M32 20V56" stroke="var(--series-regular)" strokeWidth={heavy ? 12 : 10} strokeLinecap="round" />
+      {!small && coin(44, "var(--series-regular)")}
+      {coin(small ? 44 : 33, "var(--series-regular)")}
+      {coin(small ? 33 : 22, "var(--series-kept)")}
+      <rect x="18" y={small ? 16 : 8} width="34" height="10" rx="5" fill="var(--series-amt)" stroke="var(--ink)" strokeWidth={sw} strokeLinejoin="round" transform={`rotate(-18 35 ${small ? 21 : 13})`} />
+      {!small && <path d="M52 4l4 4M56 4l-4 4" stroke="var(--series-amt)" strokeWidth="3" strokeLinecap="round" />}
     </svg>
   );
 }

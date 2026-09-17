@@ -4,3 +4,7 @@ dist/
 # Your real numbers live here; only the example is committed.
 data/profile.yaml
 data/profiles/
+data/history/
+data/.agent
+data/.current
+data/.remote.json

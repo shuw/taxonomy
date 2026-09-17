@@ -4,6 +4,9 @@ import { getPath } from "../timeline.ts";
 import type { FilingStatus, Owner } from "../types.ts";
 
 /** Set a dotted path on a plain object, creating the objects between. */
+/** `equity.holdings[0].amtBasis` and `equity.holdings.0.amtBasis` mean the same path. */
+const dotted = (path: string) => path.trim().replace(/\[(\d+)\]/g, ".$1");
+
 function setAt(target: Record<string, unknown>, path: string, value: unknown): void {
   const segs = path.split(".");
   let node = target;
@@ -22,17 +25,19 @@ function setAt(target: Record<string, unknown>, path: string, value: unknown): v
  * Everything is optional; unknowns are listed, not guessed. Values are plain, provenance
  * sits in `sources` keyed by the path of the value it describes.
  */
+export interface IntakeDependent { name?: string; birthYear?: number; }
+
 export interface IntakeDocument {
   taxonomy_intake: 1;
   as_of?: string;
   basics?: {
     filingStatus?: FilingStatus;
     state?: string;
-    /** A count, or the dependents' birth years. */
-    dependents?: number | number[];
+    /** A count, birth years, or the dependents as the return lists them (name, and a birth year when known). */
+    dependents?: number | IntakeDependent[];
     planStartYear?: number;
   };
-  pay?: { dependents?: number | number[] };
+  pay?: { dependents?: number | IntakeDependent[] };
   people?: { self?: IntakePerson; spouse?: IntakePerson };
   prior_return?: IntakePriorReturn;
   income?: {
@@ -197,14 +202,20 @@ export function parseIntake(text: string): IntakeParse {
 
   const doc: IntakeDocument = { taxonomy_intake: 1, as_of: date("as_of", d.as_of) };
 
-  /** Dependents come as a count or as a list of birth years (numbers, or objects with birthYear). */
-  const dependents = (path: string, raw: unknown): number | number[] | undefined => {
+  /** Dependents come as a count, a list of birth years, or a list of people ({ name, birthYear? }) as the return lists them. */
+  const dependents = (path: string, raw: unknown): number | IntakeDependent[] | undefined => {
     if (raw === undefined || raw === null) return undefined;
     if (Array.isArray(raw)) {
-      const years = raw.map((x) => (x && typeof x === "object" ? (x as { birthYear?: unknown; year?: unknown }).birthYear ?? (x as { year?: unknown }).year : x)).map((x) => (typeof x === "string" ? Number(x) : x));
-      if (years.every((y) => typeof y === "number" && y >= 1900 && y <= 2100)) return years as number[];
-      problems.push({ path, message: "must be a count or a list of birth years" });
-      return undefined;
+      const out: IntakeDependent[] = [];
+      for (const x of raw) {
+        const y = x && typeof x === "object" ? (x as { birthYear?: unknown; year?: unknown }).birthYear ?? (x as { year?: unknown }).year : x;
+        const year = typeof y === "string" && /^\d{4}$/.test(y) ? Number(y) : y;
+        const name = x && typeof x === "object" && typeof (x as { name?: unknown }).name === "string" ? (x as { name: string }).name.trim() : undefined;
+        if (year !== undefined && !(typeof year === "number" && year >= 1900 && year <= 2100)) { problems.push({ path, message: "each dependent is a birth year, or { name, birthYear }" }); return undefined; }
+        if (year === undefined && !name) { problems.push({ path, message: "each dependent needs a name or a birth year" }); return undefined; }
+        out.push({ ...(name ? { name } : {}), ...(typeof year === "number" ? { birthYear: year } : {}) });
+      }
+      return out;
     }
     return num(path, raw, { min: 0 });
   };
@@ -286,7 +297,8 @@ export function parseIntake(text: string): IntakeParse {
 
   const home = obj("home", d.home);
   const m = home ? obj("home.mortgage", home.mortgage) : undefined;
-  if (m && (m.balance === undefined || m.rate === undefined || m.originated === undefined)) problems.push({ path: "home.mortgage", message: "needs balance, rate and originated" });
+  if (m && m.balance === undefined) problems.push({ path: "home.mortgage", message: "needs at least the balance" });
+  else if (m && (m.rate === undefined || m.originated === undefined)) warnings.push({ path: "home.mortgage", message: `missing ${[m.rate === undefined && "rate", m.originated === undefined && "originated"].filter(Boolean).join(" and ")}; kept as a question` });
 
   // Every scalar the registry knows is read by its intake path and coerced by its type; sections above only handle what is not a plain scalar.
   const out = doc as unknown as Record<string, unknown>;
@@ -315,7 +327,7 @@ export function parseIntake(text: string): IntakeParse {
 
   const sources = obj("sources", d.sources);
   if (sources) doc.sources = Object.fromEntries(Object.entries(sources).filter(([, v]) => typeof v === "string") as [string, string][]);
-  if (d.unknown !== undefined) doc.unknown = Array.isArray(d.unknown) ? d.unknown.map(String) : [];
+  if (d.unknown !== undefined) doc.unknown = Array.isArray(d.unknown) ? d.unknown.map((u) => dotted(String(u))) : [];
   if (d.questions !== undefined) {
     doc.questions = Array.isArray(d.questions)
       ? d.questions.map((q): IntakeQuestion | null => {
@@ -324,7 +336,7 @@ export function parseIntake(text: string): IntakeParse {
             const o = q as Record<string, unknown>;
             const question = String(o.question ?? o.text ?? "").trim();
             if (!question) return null;
-            return { question, about: typeof o.about === "string" ? o.about : undefined, proposed: typeof o.proposed === "number" || typeof o.proposed === "string" ? o.proposed : undefined };
+            return { question, about: typeof o.about === "string" ? dotted(o.about) : undefined, proposed: typeof o.proposed === "number" || typeof o.proposed === "string" ? o.proposed : undefined };
           }
           return null;
         }).filter((q): q is IntakeQuestion => q !== null)

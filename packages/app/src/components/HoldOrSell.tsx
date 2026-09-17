@@ -1,3 +1,4 @@
+import { Info } from "./Info.tsx";
 import type { HoldOrSell } from "@taxonomy/engine";
 import { shares, usd, usdCompact } from "../format.ts";
 
@@ -14,17 +15,16 @@ export function HoldOrSellCard({ h, companyName }: { h: HoldOrSell; companyName?
   ];
   return (
     <section className="card">
-      <h2>Hold or sell? {shares(h.shares)}{companyName ? ` ${companyName}` : ""} ISOs exercised in {h.year}</h2>
-      <div className="sub">Exercise and hold a year for long-term treatment, or exercise and sell the same day. Everything else on the timeline stays as it is.</div>
+      <h2>Hold or sell? {shares(h.shares)}{companyName ? ` ${companyName}` : ""} ISOs exercised in {h.year} <Info label="About this comparison">Exercise and hold a year for long-term treatment, or exercise and sell the same day. Everything else on the timeline stays as it is.</Info></h2>
       <div className="table-wrap">
-        <table className="ledger compare">
+        <div className="table-wrap"><table className="ledger compare">
           <thead><tr><th></th><th>Hold, sell in {h.hold.saleYear}</th><th>Sell the same day</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.label}><td>{r.label}{r.hint && <span className="muted"> · {r.hint}</span>}</td><td>{r.hold}</td><td>{r.sell}</td></tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
       <p className="muted small" style={{ margin: "10px 0 0" }}>
         {Math.abs(better) < 500

@@ -1,3 +1,4 @@
+import { demoText } from "../format.ts";
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, fmtLine } from "../format.ts";
 import type { Selection } from "../App.tsx";
@@ -19,7 +20,7 @@ export function ExplainPanel({ plan, pinned, selection, onSelect, onClose }: Pro
       <h3>{line.label}</h3>
       <div className="value">{fmtLine(line)}</div>
       {pinnedLine && <div className="pinned">Pinned scenario: {fmtLine(pinnedLine)} ({fmtDelta(line.value - pinnedLine.value, line.unit) || "same"})</div>}
-      <div className="why">{line.why}</div>
+      <div className="why">{demoText(line.why)}</div>
       {deps.length > 0 && (
         <>
           <h4>Computed from</h4>
