@@ -1,18 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { relative, resolve, sep } from "node:path";
+import { relative, resolve } from "node:path";
 import { homedir, platform } from "node:os";
-import { randomBytes } from "node:crypto";
 import { parse } from "yaml";
-import { describeChanges, editProfileText, migrateProfileText, parseProfile, tools, type HistoryEntry } from "@taxonomy/engine";
+import { editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
+// Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
+import { ID, attachmentPath, dataDir, examplePath, fileFor, listAttachments, nameTaken as nameIsTaken, profilesDir, readHistory, recordChange, remoteConfig, root, saveAttachment, saveRemoteConfig, uniqueId } from "../mcp/store.ts";
 const { answeredFollowUps } = tools;
-import { appendFileSync } from "node:fs";
 import index from "./index.html";
 
-const root = resolve(import.meta.dir, "../..");
-/** Where profiles and the small state files live. Tests point this at a throwaway directory. */
-const dataDir = process.env.TAXONOMY_DATA ? resolve(process.env.TAXONOMY_DATA) : resolve(root, "data");
-const profilesDir = resolve(dataDir, "profiles");
-const examplePath = resolve(root, "data/profile.example.yaml");
 const legacyPath = resolve(dataDir, "profile.yaml");
 
 mkdirSync(profilesDir, { recursive: true, mode: 0o700 });
@@ -24,27 +19,7 @@ if (existsSync(legacyPath)) {
   }
 }
 
-const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const fileFor = (id: string) => resolve(profilesDir, `${id}.yaml`);
-
-function slug(name: string): string {
-  const s = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
-  return s || "profile";
-}
-
-function uniqueId(name: string): string {
-  const base = slug(name);
-  let id = base;
-  for (let n = 2; existsSync(fileFor(id)); n++) id = `${base}-${n}`;
-  return id;
-}
-
-/** Names identify profiles in conversation, so no two profiles may share one. */
-function nameTaken(name: string, exceptId?: string): boolean {
-  const key = name.trim().toLowerCase();
-  return listProfiles().some((p) => p.id !== exceptId && p.name.trim().toLowerCase() === key);
-}
-
+/** The name inside a profile's text, or the id when it has none. */
 function nameOf(text: string, id: string): string {
   try {
     const raw = parse(text) as { name?: unknown } | null;
@@ -77,46 +52,6 @@ function readProfile(id: string) {
 }
 
 const bad = (message: string, status = 400) => Response.json({ error: message }, { status });
-
-// ---- attachments: the documents behind the numbers, in data/attachments/<profile>/ ----
-const ATTACHABLE = /\.(png|jpe?g|webp|gif|pdf|txt|csv|md|ya?ml|json)$/i;
-const MAX_ATTACHMENT = 25 * 1_048_576;
-const attachmentsDir = (id: string) => resolve(dataDir, "attachments", id);
-/** A plain file name: no directories, no control characters. */
-const safeName = (name: string) => name.replace(/[\\/]/g, "_").replace(/[^\x20-\x7E]/g, "").replace(/^\.+/, "").trim().slice(0, 120);
-function attachmentPath(id: string, name: string): string | null {
-  if (!ID.test(id)) return null;
-  let raw = name;
-  try { raw = decodeURIComponent(name); } catch { /* keep as is */ }
-  const clean = safeName(raw);
-  if (!clean || clean !== raw) return null;
-  const base = attachmentsDir(id);
-  const full = resolve(base, clean);
-  return full.startsWith(base + sep) ? full : null;
-}
-function listAttachments(id: string): { name: string; size: number; mtime: number }[] {
-  const dir = attachmentsDir(id);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => ATTACHABLE.test(f)).map((f) => { const st = statSync(resolve(dir, f)); return { name: f, size: st.size, mtime: st.mtimeMs }; }).sort((a, b) => b.mtime - a.mtime);
-}
-
-// ---- history: one line per save, with the text before it, in data/history/<id>.jsonl ----
-const historyDir = resolve(dataDir, "history");
-const historyFor = (id: string) => resolve(historyDir, `${id}.jsonl`);
-function recordChange(id: string, beforeText: string | null, afterText: string, actor: string, extra: string[] = []): void {
-  let lines: string[];
-  try {
-    const before = beforeText === null ? null : parseProfile(migrateProfileText(beforeText));
-    lines = [...extra, ...describeChanges(before, parseProfile(afterText))];
-  } catch { lines = [...extra, "edited the file"]; }
-  if (lines.length === 0) return;
-  const entry: HistoryEntry = { at: new Date().toISOString(), actor, lines, before: beforeText ?? undefined };
-  mkdirSync(historyDir, { recursive: true, mode: 0o700 });
-  appendFileSync(historyFor(id), JSON.stringify(entry) + "\n", { mode: 0o600 });
-}
-function readHistory(id: string): HistoryEntry[] {
-  try { return readFileSync(historyFor(id), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as HistoryEntry); } catch { return []; }
-}
 
 /**
  * Only the app's own page may change things. A browser sends Origin on cross-site requests;
@@ -215,17 +150,9 @@ async function openDesktop(): Promise<{ ok: boolean }> {
 
 // ---- claude.ai: the HTTP MCP server on localhost. Exposing it is the user's own `tailscale funnel` command;
 // this only starts the local server, reads Funnel's status, and composes the URL once both are up. ----
-const remoteFile = resolve(dataDir, ".remote.json");
 const tailscaleBin = Bun.which("tailscale") ?? (existsSync("/Applications/Tailscale.app/Contents/MacOS/Tailscale") ? "/Applications/Tailscale.app/Contents/MacOS/Tailscale" : null);
 let httpChild: ReturnType<typeof Bun.spawn> | null = null;
 
-interface RemoteConfig { token: string; port: number; tunnelHost?: string; pid?: number; /** false once the user turns it off; it then stays off across restarts */ enabled?: boolean }
-function remoteConfig(): RemoteConfig {
-  try { if (existsSync(remoteFile)) return JSON.parse(readFileSync(remoteFile, "utf8")) as RemoteConfig; } catch {}
-  const cfg = { token: randomBytes(24).toString("base64url"), port: 5182 };
-  writeFileSync(remoteFile, JSON.stringify(cfg), { mode: 0o600 });
-  return cfg;
-}
 async function read(args: string[]): Promise<string> {
   try { const p = Bun.spawn(args, { stdout: "pipe", stderr: "ignore" }); const out = await new Response(p.stdout).text(); await p.exited; return out; } catch { return ""; }
 }
@@ -252,7 +179,7 @@ async function remoteState() {
 }
 /** The child's pid is kept in the config so a restarted app can replace a child left over from the previous one. */
 function rememberChild(pid: number | undefined): void {
-  try { writeFileSync(remoteFile, JSON.stringify({ ...remoteConfig(), pid }), { mode: 0o600 }); } catch {}
+  try { saveRemoteConfig({ pid }); } catch {}
 }
 /** True when the process is still the MCP server we started, so a reused pid is never signalled. */
 function isOurHttpServer(pid: number): boolean {
@@ -270,7 +197,7 @@ async function serveLocal(on: boolean, fresh = false): Promise<void> {
   if (!on) { stopChild(); return; }
   if (fresh) { stopChild(); for (let i = 0; i < 20 && (await httpRunning(cfg.port)); i++) await Bun.sleep(100); }
   else if (await httpRunning(cfg.port)) return;
-  httpChild = Bun.spawn(["bun", resolve(root, "packages/mcp/http.ts")], { stdout: "ignore", stderr: "ignore", env: { ...process.env, TAXONOMY_DATA: dataDir } });
+  httpChild = Bun.spawn([Bun.which("bun") ?? "bun", resolve(root, "packages/mcp/http.ts")], { stdout: "ignore", stderr: "ignore", env: { ...process.env, TAXONOMY_DATA: dataDir } });
   rememberChild(httpChild.pid);
   for (let i = 0; i < 20 && !(await httpRunning(cfg.port)); i++) await Bun.sleep(100);
 }
@@ -300,14 +227,7 @@ Bun.serve({
         const { id } = req.params;
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
         const body = (await req.json()) as { name?: string; base64?: string };
-        const name = safeName(body.name ?? "");
-        if (!name) return bad("a file name is required");
-        if (!ATTACHABLE.test(name)) return bad("only images, PDFs and text files (png, jpg, webp, gif, pdf, txt, csv, md, yaml, json)");
-        const bytes = Buffer.from(body.base64 ?? "", "base64");
-        if (bytes.length === 0) return bad("the file is empty");
-        if (bytes.length > MAX_ATTACHMENT) return bad(`the file is over ${MAX_ATTACHMENT / 1_048_576} MB`);
-        mkdirSync(attachmentsDir(id), { recursive: true, mode: 0o700 });
-        writeFileSync(resolve(attachmentsDir(id), name), bytes, { mode: 0o600 });
+        try { saveAttachment(id, body.name ?? "", Buffer.from(body.base64 ?? "", "base64")); } catch (e) { return bad((e as Error).message); }
         return Response.json(listAttachments(id));
       },
     },
@@ -316,7 +236,7 @@ Bun.serve({
         const { id, name } = req.params;
         const file = attachmentPath(id, name);
         if (!file || !existsSync(file)) return bad("no such document", 404);
-        const shown = safeName(name).replace(/["\\]/g, "_");
+        const shown = name.replace(/["\\]/g, "_");
         return new Response(Bun.file(file), { headers: { "content-disposition": `inline; filename="${shown}"`, "x-content-type-options": "nosniff" } });
       },
       DELETE: (req) => {
@@ -364,14 +284,14 @@ Bun.serve({
       if (refused) return refused;
       const body = (await req.json()) as { on?: boolean; tunnelHost?: string };
       if (typeof body.on === "boolean") {
-        writeFileSync(remoteFile, JSON.stringify({ ...remoteConfig(), enabled: body.on }), { mode: 0o600 });
+        saveRemoteConfig({ enabled: body.on });
         await serveLocal(body.on);
       }
       // The tunnel's address is kept with the secret so every browser sees the same setup.
       if (typeof body.tunnelHost === "string") {
         const host = body.tunnelHost.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
         if (host && !/^[A-Za-z0-9.-]+(:\d{1,5})?$/.test(host)) return bad("that is not a host name");
-        writeFileSync(remoteFile, JSON.stringify({ ...remoteConfig(), tunnelHost: host || undefined }), { mode: 0o600 });
+        saveRemoteConfig({ tunnelHost: host || undefined });
       }
       return Response.json({ ...agentConnection(), remote: await remoteState() });
     } },
@@ -386,7 +306,7 @@ Bun.serve({
         const body = (await req.json()) as { name?: string; text?: string };
         const name = (body.name ?? "").trim();
         if (!name) return bad("name is required");
-        if (nameTaken(name)) return bad(`a profile named "${name}" already exists`, 422);
+        if (nameIsTaken(listProfiles(), name)) return bad(`a profile named "${name}" already exists`, 422);
         const text = editProfileText(body.text ?? readFileSync(examplePath, "utf8"), [{ path: ["name"], value: name }]);
         const problem = validate(text);
         if (problem) return bad(problem);
@@ -410,7 +330,7 @@ Bun.serve({
         const body = (await req.json()) as { text?: string; mtime?: number };
         const problem = validate(body.text);
         if (problem) return bad(problem);
-        if (nameTaken(nameOf(body.text as string, id), id)) return bad(`a profile named "${nameOf(body.text as string, id)}" already exists`, 422);
+        if (nameIsTaken(listProfiles(), nameOf(body.text as string, id), id)) return bad(`a profile named "${nameOf(body.text as string, id)}" already exists`, 422);
         // A write based on an older read must not clobber a newer file: hand back the current version instead.
         if (typeof body.mtime === "number" && statSync(fileFor(id)).mtimeMs !== body.mtime) return Response.json({ error: "the file changed on disk", ...readProfile(id) }, { status: 409 });
         const beforeText = readFileSync(fileFor(id), "utf8");

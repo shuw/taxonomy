@@ -54,6 +54,7 @@ export function parseProfile(text: string): Profile {
   if (![1, 2, 3].includes(raw.version as number)) problems.push("version must be 1, 2 or 3");
   if (!raw.filer || !FILING_STATUSES.includes(raw.filer.filingStatus)) problems.push(`filer.filingStatus must be one of ${FILING_STATUSES.join(", ")}`);
   if (!raw.filer?.state) problems.push("filer.state is required");
+  for (const t of raw.timeline ?? []) if (t.until !== undefined && t.until < t.year) problems.push(`timeline entry for ${t.path} ends in ${t.until}, before it starts in ${t.year}`);
   if (!raw.plan || !Number.isInteger(raw.plan.startYear) || !Number.isInteger(raw.plan.years) || raw.plan.years < 1) problems.push("plan.startYear and plan.years are required");
   if (!raw.assumptions) problems.push("assumptions is required");
 

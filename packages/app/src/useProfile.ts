@@ -55,8 +55,11 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
     return () => { cancelled = true; clearInterval(handle); };
   }, [id, pollMs]);
 
-  const write = useCallback(async (text: string) => {
+  // Saves go one at a time, so a retry of an older text can never overtake a newer edit.
+  const queue = useRef(Promise.resolve());
+  const save = useCallback(async (text: string) => {
     if (!id) return;
+    const forId = id;
     setSaving(true);
     try {
       const body = await api.put(id, text, lastMtime.current >= 0 ? lastMtime.current : undefined);
@@ -74,7 +77,8 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
         // The server said no to this edit: drop it, reload the file, and show why.
         pendingText.current = null;
         try {
-          const body = await api.get(id);
+          const body = await api.get(forId);
+          if (currentId.current !== forId) return;
           lastMtime.current = body.mtime;
           setFile({ id, path: body.path, text: body.text, profile: parseProfile(body.text), error: e.message });
         } catch { setFile((prev) => (prev ? { ...prev, error: e.message } : prev)); }
@@ -89,6 +93,9 @@ export function useProfile(id: string | null, pollMs = 1500): ProfileStore {
       setSaving(false);
     }
   }, [id]);
+  const write = useCallback((text: string) => { const run = queue.current.then(() => save(text)); queue.current = run.catch(() => {}); return run; }, [save]);
+  const currentId = useRef(id);
+  useEffect(() => { currentId.current = id; }, [id]);
 
   const edit = useCallback((edits: ProfileEdit[]) => {
     setFile((prev) => {

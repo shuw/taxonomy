@@ -59,10 +59,10 @@ export function AddMenu({ year, profile, open, onOpen, onAdd, onAddFact }: Props
       {open && (
         <div className="ev-menu">
           {kinds.map((k) => <button type="button" key={k.key} onMouseEnter={() => setCategory(null)} onClick={() => onAdd(k.what)}>{k.label}</button>)}
-          <button type="button" className={"cat" + (category === -1 ? " on" : "")} onMouseEnter={(e) => openCategory(-1, e.currentTarget)} onClick={(e) => openCategory(-1, e.currentTarget)}>Give <span className="chev">›</span></button>
+          <button type="button" className={"cat" + (category === -1 ? " on" : "")} aria-haspopup="menu" aria-expanded={category === -1} onMouseEnter={(e) => openCategory(-1, e.currentTarget)} onClick={(e) => openCategory(-1, e.currentTarget)}>Give <span className="chev">›</span></button>
           <div className="ev-menu-sep">Change in {year}</div>
           {FACT_CATEGORIES.map((c, i) => fields.some((f) => c.key.includes(f.section)) && (
-            <button type="button" key={c.label} className={"cat" + (category === i ? " on" : "")} onMouseEnter={(e) => openCategory(i, e.currentTarget)} onClick={(e) => openCategory(i, e.currentTarget)}>{c.label} <span className="chev">›</span></button>
+            <button type="button" key={c.label} className={"cat" + (category === i ? " on" : "")} aria-haspopup="menu" aria-expanded={category === i} onMouseEnter={(e) => openCategory(i, e.currentTarget)} onClick={(e) => openCategory(i, e.currentTarget)}>{c.label} <span className="chev">›</span></button>
           ))}
           {category !== null && (
             <div className={"ev-submenu" + (fly.left ? " left" : "")} style={{ top: fly.top }}>

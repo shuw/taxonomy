@@ -24,6 +24,10 @@ export interface FieldDef {
   review?: boolean;
   /** Offered in the timeline picker. */
   timeline?: boolean;
+  /** A dated change to this field is usually for one year (a one-time gain), not from then on. */
+  once?: boolean;
+  /** The plan means nothing without it; the app's first card will not let it go unanswered. */
+  essential?: boolean;
   /** Listed first in the request as worth looking hardest for; still reported under `unknown` rather than waited on. */
   required?: boolean;
 }
@@ -34,7 +38,7 @@ const person = (who: "self" | "spouse"): FieldDef[] => {
   const L = who === "self" ? "Your" : "Spouse";
   return [
     pay({ path: `people.${who}.name`, intake: `people.${who}.name`, label: `${L} name`, type: "text" }),
-    pay({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay from the latest pay stub or offer letter; not W-2 box 1, which includes equity income", timeline: true, required: who === "self" }),
+    pay({ path: `people.${who}.salary`, intake: `people.${who}.baseSalary`, label: `${L} base salary`, type: "usd", hint: "annual base pay from the latest pay stub or offer letter; not W-2 box 1, which includes equity income", timeline: true, required: who === "self", essential: who === "self" }),
     pay({ path: `people.${who}.bonus`, intake: `people.${who}.expectedBonus`, label: `${L} expected bonus`, type: "usd", hint: "target bonus for the year if the offer letter or pay stub shows it", timeline: true }),
     pay({ path: `people.${who}.pretaxContributions`, intake: `people.${who}.pretaxContributions`, label: `${L} pre-tax contributions`, type: "usd", hint: "401(k), HSA and similar for the year; W-2 box 12 codes D and W, or pay stub YTD annualized", timeline: true }),
     pay({ path: `people.${who}.withholdingToDate`, intake: `people.${who}.withholdingToDate`, label: `${L} withholding to date`, type: "usd", hint: "federal income tax withheld so far this year, from the pay stub" }),
@@ -85,9 +89,9 @@ export const FIELDS: FieldDef[] = [
   { path: "income.interest", intake: "income.interest", label: "Interest", section: "income", type: "usd", hint: "1099-INT box 1, expected for the year", timeline: true },
   { path: "income.ordinaryDividends", intake: "income.dividends.ordinary", label: "Total dividends", section: "income", type: "usd", hint: "1099-DIV box 1a", timeline: true },
   { path: "income.qualifiedDividends", intake: "income.dividends.qualified", label: "Qualified dividends", section: "income", type: "usd", hint: "1099-DIV box 1b", timeline: true },
-  { path: "income.shortTermGains", intake: "income.realizedGains.shortTerm", label: "Short-term gains realized", section: "income", type: "usd", hint: "year to date", timeline: true },
-  { path: "income.longTermGains", intake: "income.realizedGains.longTerm", label: "Long-term gains realized", section: "income", type: "usd", timeline: true },
-  { path: "income.otherOrdinary", intake: "income.other", label: "Other ordinary income", section: "income", type: "usd", hint: "K-1, rental, side income", timeline: true },
+  { path: "income.shortTermGains", intake: "income.realizedGains.shortTerm", label: "Short-term gains realized", section: "income", type: "usd", hint: "year to date", timeline: true, once: true },
+  { path: "income.longTermGains", intake: "income.realizedGains.longTerm", label: "Long-term gains realized", section: "income", type: "usd", timeline: true, once: true },
+  { path: "income.otherOrdinary", intake: "income.other", label: "Other ordinary income", section: "income", type: "usd", hint: "K-1, rental, side income", timeline: true, once: true },
 
   { path: "equity.companies.0.name", intake: "equity.company", label: "Company", section: "equity", type: "text" },
   { path: "equity.companies.0.sharePrice", intake: "equity.sharePrice.value", label: "Share value now", section: "equity", type: "usd", hint: "per share; 409A for private companies, market price otherwise", required: true },
@@ -132,4 +136,9 @@ export function exampleValue(f: FieldDef): string {
     case "enum": return f.enum?.[0] ?? "";
     default: return '""';
   }
+}
+
+/** Dependents from free text: four-digit birth years become people with a birth year, anything else a person without one. */
+export function parseBirthYears(text: string): { birthYear?: number }[] {
+  return text.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {}));
 }

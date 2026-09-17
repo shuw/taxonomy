@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { calibrate, latestReturn, statusName, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { calibrate, latestReturn, parseBirthYears, statusName, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, usd, usdCompact } from "../format.ts";
 import { notesOf, sourceOf } from "../sources.ts";
 import { EquityFacts, equitySummary } from "./EquitySection.tsx";
@@ -76,9 +76,9 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="facts-body">
-          <nav className="facts-nav">
+          <nav className="facts-nav" role="tablist" aria-label="Sections">
             {tabs.map((t) => (
-              <button type="button" key={t.id} className={"facts-tab" + (t.id === tab ? " on" : "") + (t.task ? " task" : "")} onClick={() => onTab(t.id)}>
+              <button type="button" role="tab" aria-selected={t.id === tab} key={t.id} className={"facts-tab" + (t.id === tab ? " on" : "") + (t.task ? " task" : "")} onClick={() => onTab(t.id)}>
                 {t.task ? <span className="task-count">{secondLook.notes}</span> : <span className="dot" style={{ background: t.color }} />}
                 <span className="facts-tab-text"><span className="facts-tab-title">{t.title}</span><span className="facts-tab-summary">{t.summary}</span></span>
               </button>
@@ -92,7 +92,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                   <Field label="State" source={src(["filer", "state"])} note={note(["filer", "state"])}><Select options={STATE_OPTIONS} value={profile.filer.state} onChange={(v) => set(["filer", "state"], v)} /></Field>
                   <Field label="Dependents" hint="birth years">
                     <span className="input-wrap"><input value={deps.map((d) => d.birthYear ?? "?").join(", ")} placeholder="e.g. 2019, 2022"
-                      onChange={(e) => set(["filer", "dependents"], e.target.value.split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {})))} /></span>
+                      onChange={(e) => set(["filer", "dependents"], parseBirthYears(e.target.value))} /></span>
                   </Field>
                   <span />
                   <Field label="First plan year"><NumberInput value={profile.plan.startYear} onChange={(n) => set(["plan", "startYear"], Math.round(n))} min={2026} grouping={false} /></Field>

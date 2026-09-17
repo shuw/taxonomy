@@ -28,7 +28,8 @@ import { CalibrationCard } from "./components/CalibrationCard.tsx";
 import { CreditRecoveryView } from "./components/CreditRecovery.tsx";
 import { HoldOrSellCard } from "./components/HoldOrSell.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
-import { AWAITING_KEY, ProposalBanner } from "./components/ProposalBanner.tsx";
+import { ProposalBanner } from "./components/ProposalBanner.tsx";
+import { setPersisted } from "./persist.ts";
 import { ShortcutsHelp } from "./components/ShortcutsHelp.tsx";
 import { ClaudePanel, ClaudeStatusButton } from "./components/ClaudePanel.tsx";
 import { HistoryModal } from "./components/HistoryModal.tsx";
@@ -74,7 +75,7 @@ export function App() {
 
   const switchTo = (id: string) => { setWantedId(id); setCreating(false); setFirstRun(false); };
   const done = async (id: string, awaitAgent: boolean) => {
-    if (awaitAgent) { try { localStorage.setItem(AWAITING_KEY(id), "true"); } catch {} }
+    if (awaitAgent) setPersisted(id, "awaitingAgent", true);
     await refresh();
     switchTo(id);
   };
@@ -181,7 +182,11 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
     { keys: ["c"], label: "Claude: status and things to say", run: () => setClaudeOpen(true) },
     { keys: ["h"], label: "History of changes", run: () => setHistoryOpen(true) },
     { keys: ["?"], label: "These shortcuts", run: () => setHelpOpen((o) => !o), always: true },
-    { keys: ["Escape"], label: "Close the panel or dialog", run: () => { setHelpOpen(false); setSelected(null); setSelectedEvent(null); setClaudeOpen(false); setHistoryOpen(false); }, always: true },
+    { keys: ["Escape"], label: "Close the panel or dialog", run: () => {
+      // A dialog closes itself; only when none is open does Escape clear what is selected on the page.
+      if (helpOpen || claudeOpen || historyOpen || factsTab || intakeOpen) { setHelpOpen(false); setClaudeOpen(false); setHistoryOpen(false); return; }
+      setSelected(null); setSelectedEvent(null);
+    }, always: true },
   ], [levers, plan, years, focusYear]);
   const keyed = useMemo<Shortcut[]>(() => shortcuts.flatMap((s) => s.keys[0] === "ArrowLeft"
     ? [{ ...s, keys: ["ArrowLeft"], run: () => stepYear(-1) }, { ...s, keys: ["ArrowRight"], run: () => stepYear(1) }]
@@ -250,7 +255,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
             {byCompany.map((c) => (
               <section className="card" key={c.company}>
                 <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${c.name} ` : ""}ISO shares exercised <Info label="About this chart">AMT for {sweepYear} as the number of ISO shares exercised that year varies, with other years{isoCompanies.length > 1 ? " and other companies" : ""} held as they are. Click the curve to set the exercise.</Info></h2>
-                <SweepChart sweep={c.sweep} crossover={c.crossover} current={exercisedIn(profile, levers, "iso", sweepYear, c.company)} onChange={(n) => actions.setIsoShares(sweepYear, n, c.company)} />
+                <SweepChart sweep={c.sweep} crossover={c.crossover} current={exercisedIn(engineProfile, engineLevers, "iso", sweepYear, c.company)} onChange={(n) => actions.setIsoShares(sweepYear, n, c.company)} />
               </section>
             ))}
           </div>

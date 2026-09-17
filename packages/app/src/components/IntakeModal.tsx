@@ -120,7 +120,7 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
   /** Only a draft nobody has put anything into is removed; a profile with data is never deleted here. */
   const discard = async () => {
     if (!draftId) return;
-    if (draft && untouched(draft)) { try { await api.remove(draftId); } catch { /* already gone */ } }
+    if (!draft || untouched(draft)) { try { await api.remove(draftId); } catch { /* already gone */ } }
     setDraftId(null);
   };
   const back = async () => { await discard(); };
@@ -146,7 +146,7 @@ function NewProfileWizard({ onDone, onOpen, onClose }: Omit<CreateProps, "mode">
   };
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) void close(); }}>
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) void close(); }} onKeyDown={(e) => { if (e.key === "Escape") void close(); }}>
       <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label="New profile">
         <header className="modal-head">
           <div>

@@ -24,7 +24,16 @@ export function Picker({ label, value, options, onChange, actions, panel, accent
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) dismiss(); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { dismiss(); return; }
+      // Arrow keys walk the menu; Home and End jump; focus leaving the menu closes it (see onBlur).
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key) || !ref.current) return;
+      const items = [...ref.current.querySelectorAll<HTMLElement>(".menu button:not([disabled])")];
+      if (!items.length) return;
+      const at = items.indexOf(document.activeElement as HTMLElement);
+      const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : e.key === "ArrowDown" ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
+      items[next]!.focus(); e.preventDefault();
+    };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey); };
@@ -32,7 +41,7 @@ export function Picker({ label, value, options, onChange, actions, panel, accent
   const current = options.find((o) => o.value === value);
   const close = () => dismiss();
   return (
-    <div className="picker" ref={ref}>
+    <div className="picker" ref={ref} onBlur={(e) => { if (open && !ref.current?.contains(e.relatedTarget as Node | null)) dismiss(); }}>
       <button type="button" className={"pill-btn" + (accent ? " accent" : "")} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => (open ? dismiss() : setOpen(true))}>
         <span className="pill-text">{current?.label ?? value}</span>
         <svg className="chev" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>

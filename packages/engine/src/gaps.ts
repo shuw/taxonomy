@@ -1,8 +1,9 @@
 import { latestReturn } from "./calibration.ts";
 import { activeScenario, newEventId } from "./events.ts";
+import { grantsMissingVesting } from "./equity.ts";
 import type { ProfileEdit } from "./profile.ts";
 import { DEFAULT_SCENARIO } from "./timeline.ts";
-import type { Holding, Profile, ScenarioEvent } from "./types.ts";
+import type { EquityGrant, Holding, Profile, ScenarioEvent } from "./types.ts";
 import { int } from "./ledger.ts";
 
 export interface Gap {
@@ -33,9 +34,22 @@ export function lotAsExercise(profile: Profile, h: Holding, events: ScenarioEven
   const event: ScenarioEvent = { id: newEventId(events), kind: "exercise", type, year, date: h.acquired, shares: h.quantity, ...(h.company ? { company: h.company } : {}) };
   const ci = profile.equity.companies.findIndex((c) => c.id === companyId);
   const price = h.amtBasis && h.amtBasis > 0 && ci >= 0 && profile.equity.companies[ci]!.pricePath?.[year] === undefined ? { companyIndex: ci, year, value: h.amtBasis } : undefined;
-  const gi = profile.equity.grants.findIndex((g) => g.type === type && (g.company ?? profile.equity.companies[0]?.id) === companyId && (g.exercisedToDate ?? 0) >= h.quantity && (countsAsOf ?? g.countsAsOf ?? "9999") >= h.acquired);
+  const gi = grantForLot(profile.equity.grants, h, profile.equity.companies[0]?.id, countsAsOf);
   const exercised = gi >= 0 ? { grantIndex: gi, value: profile.equity.grants[gi]!.exercisedToDate! - h.quantity } : undefined;
   return { event, price, exercised };
+}
+
+/**
+ * The grant whose exercised count already includes this lot's shares: same type and company,
+ * counts read on or after the exercise, enough exercised to cover it. The lot's grant date breaks
+ * a tie between grants; otherwise the first in file order. -1 when none qualifies.
+ */
+export function grantForLot(grants: EquityGrant[], h: Holding, defaultCompany: string | undefined, countsAsOf?: string): number {
+  const type = h.via === "iso_exercise" ? "iso" : "nso";
+  const companyId = h.company ?? defaultCompany;
+  const fits = (g: EquityGrant) => g.type === type && (g.company ?? defaultCompany) === companyId && (g.exercisedToDate ?? 0) >= h.quantity && (countsAsOf ?? g.countsAsOf ?? "9999") >= h.acquired;
+  const byDate = h.grantDate ? grants.findIndex((g) => fits(g) && g.grantDate === h.grantDate) : -1;
+  return byDate >= 0 ? byDate : grants.findIndex(fits);
 }
 
 /** Facts the profile is probably missing, judged against the last filed return. Nothing is changed; these are suggestions. */
@@ -57,9 +71,8 @@ export function profileGaps(profile: Profile): Gap[] {
   if ((profile.filer.dependents ?? []).length === 0 && (profile.filer.filingStatus === "mfj" || profile.filer.filingStatus === "hoh")) gaps.push({ id: "filer.dependents", section: "You", text: "No dependents recorded. Birth years matter for credits that are coming." });
 
   // Equity the plan cannot model as entered.
-  for (const g of profile.equity.grants) {
-    const unvested = g.granted - (g.vestedToDate ?? 0);
-    if (unvested > 0 && !g.schedule && !g.vesting) gaps.push({ id: `grants.${g.id}.schedule`, section: "Equity", text: `${g.name}: ${int(unvested)} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Open the grant and set Vesting.` });
+  for (const g of grantsMissingVesting(profile)) {
+    gaps.push({ id: `grants.${g.id}.schedule`, section: "Equity", text: `${g.name}: ${int(g.granted - (g.vestedToDate ?? 0))} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Open the grant and set Vesting.` });
   }
   const holdings = profile.equity.holdings ?? [];
   const name = profile.activeScenario ?? DEFAULT_SCENARIO;

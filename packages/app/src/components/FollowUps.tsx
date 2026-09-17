@@ -1,7 +1,7 @@
 import { Info } from "./Info.tsx";
 import { useState } from "react";
 import { usePersisted } from "../persist.ts";
-import { fieldByPath, getPath, profileGaps, type FilingStatus, type FollowUp, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { fieldByPath, getPath, parseBirthYears, profileGaps, type FilingStatus, type FollowUp, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, usd } from "../format.ts";
 import { FILING_OPTIONS, MoneyInput, PercentInput, Segmented, Select, STATE_OPTIONS } from "./fields.tsx";
 
@@ -56,6 +56,7 @@ export function FollowUps({ profile, edit, onSecondLook }: { profile: Profile; e
 function MissingRow({ f, profile, onAnswer }: { f: FollowUp; profile: Profile; onAnswer: (edits: ProfileEdit[]) => void }) {
   const [value, setValue] = useState<string | number>(f.about === "filer.filingStatus" ? profile.filer.filingStatus : f.about === "filer.state" ? profile.filer.state : f.about === "filer.dependents" ? (profile.filer.dependents ?? []).map((d) => d.birthYear ?? "").join(", ") : 0);
   const path = (f.about ?? "").split(".");
+  const def = fieldByPath(f.about ?? "");
   const control =
     f.about === "filer.filingStatus" ? <Segmented options={[...FILING_OPTIONS]} value={value as FilingStatus} onChange={setValue} />
     : f.about === "filer.state" ? <Select options={STATE_OPTIONS} value={String(value)} onChange={setValue} />
@@ -64,8 +65,8 @@ function MissingRow({ f, profile, onAnswer }: { f: FollowUp; profile: Profile; o
     : fieldByPath(f.about ?? "")?.type === "date" ? <span className="input-wrap"><input type="date" value={String(value || "")} onChange={(e) => setValue(e.target.value)} /></span>
     : fieldByPath(f.about ?? "")?.type === "pct" ? <PercentInput value={Number(value) || 0} onChange={setValue} />
     : <MoneyInput value={Number(value) || 0} onChange={setValue} placeholder="0" />;
-  const ready = f.about === "people.self.salary" ? Number(value) > 0 : true;
-  const answer = f.about === "filer.dependents" ? String(value).split(/[,\s]+/).filter(Boolean).map((t) => (/^\d{4}$/.test(t) ? { birthYear: Number(t) } : {})) : value;
+  const ready = def?.essential ? Number(value) > 0 : true;
+  const answer = f.about === "filer.dependents" ? parseBirthYears(String(value)) : value;
   return (
     <li className="missing-row">
       <div className="missing-text">{f.text}</div>

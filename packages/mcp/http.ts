@@ -4,23 +4,12 @@
  * Each request gets a fresh server, so nothing is kept between calls.
  */
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { randomBytes } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "./taxonomy.ts";
+import { remoteConfig } from "./store.ts";
 
-const root = resolve(import.meta.dir, "../..");
-const dataDir = process.env.TAXONOMY_DATA ? resolve(process.env.TAXONOMY_DATA) : join(root, "data");
-const file = join(dataDir, ".remote.json");
-
-/** The secret and port, created once and kept so the connector URL stays the same. */
-export function remoteConfig(): { token: string; port: number } {
-  try { if (existsSync(file)) return JSON.parse(readFileSync(file, "utf8")) as { token: string; port: number }; } catch {}
-  const cfg = { token: randomBytes(24).toString("base64url"), port: 5182 };
-  mkdirSync(dataDir, { recursive: true });
-  writeFileSync(file, JSON.stringify(cfg), { mode: 0o600 });
-  return cfg;
-}
+/** Same length and same bytes, without an early exit that would time the comparison. */
+const samePath = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 if (import.meta.main) {
   const { token, port } = remoteConfig();
@@ -29,7 +18,7 @@ if (import.meta.main) {
     hostname: "127.0.0.1",
     port,
     async fetch(req) {
-      if (new URL(req.url).pathname !== path) return new Response("not found", { status: 404 });
+      if (!samePath(new URL(req.url).pathname, path)) return new Response("not found", { status: 404 });
       const server = createServer({ clientLabel: "claude.ai" });
       const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       await server.connect(transport);

@@ -11,7 +11,9 @@ agent-driven intake, `PROPOSAL.md` the original brief.
 packages/engine      pure TypeScript, no React, no I/O; unit-tested with bun test
 packages/app         React UI (Bun serves it; no bundler beyond Bun's) + a small file server
 packages/mcp         the engine's tool layer for an outside agent: taxonomy.ts (tools),
-                     server.ts (stdio: Claude Desktop, Claude Code), http.ts (claude.ai via a tunnel)
+                     server.ts (stdio: Claude Desktop, Claude Code), http.ts (claude.ai via a tunnel),
+                     store.ts (the data directory as both servers see it: paths, ids, history,
+                     attachments, the remote secret; the app server imports it too)
 data/profiles/*.yaml one file per person or what-if (gitignored); data/profile.example.yaml
 data/attachments/<id>/ the pages and statements behind a profile's numbers (gitignored)
 docs/                this file, the data model, the intake contract, the proposal

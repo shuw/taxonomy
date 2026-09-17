@@ -90,3 +90,12 @@ describe("gift facts on top of recurring giving", () => {
     expect(() => tools.updateFacts(p, [{ field: "deductions.charitable.cash", value: 50_000, from: 2028, until: 2028 }])).toThrow("give event");
   });
 });
+
+describe("edge cases the reviewers asked for", () => {
+  test("an end year before the start year is a parse problem", () => {
+    expect(() => parseProfile(editProfileText(example, [{ path: ["timeline"], value: [{ id: "t1", year: 2028, until: 2027, path: "income.interest", value: 1 }] }]))).toThrow("before it starts");
+  });
+  test("a gift outside the plan years is refused", () => {
+    expect(() => tools.whatIf(parseProfile(example), [{ kind: "give", year: 2040, how: "cash", amount: 1_000 }])).toThrow("not in the plan");
+  });
+});

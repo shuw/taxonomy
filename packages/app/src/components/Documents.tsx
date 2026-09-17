@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type Attachment } from "../api.ts";
 import { ProfileIdContext } from "../persist.ts";
 
@@ -11,7 +11,8 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
   const [list, setList] = useState<Attachment[]>([]);
   const refresh = useCallback(() => { api.attachments(id).then(setList).catch(() => setList([])); }, [id]);
   useEffect(() => { refresh(); }, [refresh]);
-  return <DocumentsContext.Provider value={{ id, list, refresh }}>{children}</DocumentsContext.Provider>;
+  const value = useMemo(() => ({ id, list, refresh }), [id, list, refresh]);
+  return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;
 }
 
 /** When a source names a stored document ("2025-return-p1.png p3"), the link to it. */
@@ -41,9 +42,8 @@ export function Documents() {
         for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
         await api.attach(docs.id, f.name, btoa(bin));
       }
-      docs.refresh();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    setBusy(false);
+    finally { docs.refresh(); setBusy(false); }
   };
   return (
     <div className="docs">

@@ -22,6 +22,7 @@ export function LogRange({ max, value, step, disabled, onChange }: { max: number
   };
   return (
     <input type="range" className="range" min={0} max={RES} step={1} value={Math.round(pos * RES)} disabled={disabled || max === 0}
+      aria-label="Shares" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-valuetext={`${value.toLocaleString("en-US")} shares`}
       style={{ "--pct": `${pos * 100}%` } as React.CSSProperties}
       onChange={(e) => onChange(fromPosition(Number(e.target.value)))} />
   );

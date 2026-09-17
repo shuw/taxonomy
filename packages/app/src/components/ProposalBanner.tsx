@@ -13,7 +13,6 @@ import { parseIntake, reviewIntake } from "@taxonomy/engine";
 interface Props { profile: Profile; edit: (edits: ProfileEdit[]) => void; onCompare: () => void; onReviewIntake: (doc: PendingIntake) => void; onCopyRequest: () => void; onEditFacts: () => void; onClaude: () => void; }
 
 /** Set when a profile was created to be filled by a connected agent; cleared when something arrives or the user waves it off. */
-export const AWAITING_KEY = (id: string) => `taxonomy.${id}.awaitingAgent`;
 
 /** Scenarios an agent wrote to the file, offered against the active plan: accept, compare, discard, or keep for later. */
 export function ProposalBanner({ profile, edit, onCompare, onReviewIntake, onCopyRequest, onEditFacts, onClaude }: Props) {

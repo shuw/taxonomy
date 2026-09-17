@@ -18,16 +18,24 @@ export interface AgentStatus {
   busy: boolean;
 }
 
+// One poll for the whole page: every mounted caller shares the same interval and the same answer.
+type Snapshot = { conn: AgentConnection | null; error: string | null };
+const listeners = new Set<(s: Snapshot) => void>();
+let snapshot: Snapshot = { conn: null, error: null };
+let interval: ReturnType<typeof setInterval> | null = null;
+const publish = (s: Snapshot) => { snapshot = s; for (const l of listeners) l(s); };
+const tick = () => api.agent().then((c) => publish({ conn: c, error: null })).catch((e) => publish({ ...snapshot, error: String((e as Error).message ?? e) }));
+function subscribe(l: (s: Snapshot) => void, pollMs: number): () => void {
+  listeners.add(l);
+  if (!interval) { void tick(); interval = setInterval(tick, pollMs); }
+  return () => { listeners.delete(l); if (listeners.size === 0 && interval) { clearInterval(interval); interval = null; } };
+}
+
 export function useAgentStatus(pollMs = 5000): AgentStatus {
-  const [conn, setConn] = useState<AgentConnection | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const tick = () => api.agent().then((c) => { if (!cancelled) { setConn(c); setError(null); } }).catch((e) => { if (!cancelled) setError(String((e as Error).message ?? e)); });
-    tick();
-    const h = setInterval(tick, pollMs);
-    return () => { cancelled = true; clearInterval(h); };
-  }, [pollMs]);
+  const [{ conn, error }, setSnap] = useState<Snapshot>(snapshot);
+  useEffect(() => subscribe(setSnap, pollMs), [pollMs]);
+  const setConn = (c: AgentConnection | null) => publish({ conn: c, error: null });
+  const setError = (e: string | null) => publish({ ...snapshot, error: e });
   const lastSeen = conn?.lastSeen ? new Date(conn.lastSeen) : null;
   const addToDesktop = async () => { try { setConn(await api.addToDesktop()); setError(null); } catch (e) { setError(String((e as Error).message ?? e)); } };
   const openDesktop = async () => { try { return (await api.openDesktop()).ok; } catch { return false; } };

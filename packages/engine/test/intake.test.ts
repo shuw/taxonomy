@@ -185,3 +185,18 @@ describe("dependents", () => {
     expect(reviewIntake(count.doc!, profile).changes.find((c) => c.id === "filer.dependents")?.proposed).toBe("2");
   });
 });
+
+describe("a $100k split reported tranche by tranche", () => {
+  test("the NSO's own dated vests fold into the ISO's map and the NSO carries none", () => {
+    const profile = parseProfile(example);
+    const r = parseIntake(`taxonomy_intake: 1\nequity:\n  grants:\n    - { name: "2026 ISO", type: iso, granted: 3000, strike: 40, vested: 0, exercised: 0, vesting: [{ date: 2027-06-01, shares: 2500 }, { date: 2028-06-01, shares: 500 }] }\n    - { name: "2026 NSO (split)", type: nso, granted: 5000, strike: 40, vested: 0, exercised: 0, splitOf: "2026 ISO", vesting: [{ date: 2027-06-01, shares: 1500 }, { date: 2028-06-01, shares: 3500 }] }\n`);
+    expect(r.problems).toEqual([]);
+    const review = reviewIntake(r.doc!, profile);
+    const grants = review.changes.filter((c) => c.format === "grant").map((c) => c.proposed as { type: string; vesting?: Record<string, number>; splitOf?: string; schedule?: unknown });
+    const iso = grants.find((g) => g.type === "iso")!, nso = grants.find((g) => g.type === "nso")!;
+    expect(iso.vesting).toEqual({ "2027-06-01": 4_000, "2028-06-01": 4_000 });
+    expect(nso.vesting).toBeUndefined();
+    expect(nso.schedule).toBeUndefined();
+    expect(nso.splitOf).toBeDefined();
+  });
+});

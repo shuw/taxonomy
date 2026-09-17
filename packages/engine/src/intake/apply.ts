@@ -3,7 +3,7 @@ import { fieldByIntake, FIELDS } from "../fields.ts";
 import type { ProfileEdit, ProfilePath } from "../profile.ts";
 import { DEFAULT_SCENARIO, getPath } from "../timeline.ts";
 import { activeScenario } from "../events.ts";
-import { isPlanExerciseLot, lotAsExercise } from "../gaps.ts";
+import { grantForLot, isPlanExerciseLot, lotAsExercise } from "../gaps.ts";
 import type { Company, Dependent, EquityGrant, FollowUp, Holding, PriorReturn, Profile, ScenarioEvent } from "../types.ts";
 import type { IntakeDocument, IntakeGrant, IntakeQuestion } from "./schema.ts";
 
@@ -122,7 +122,18 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
         add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}`, intakeKey: `equity.grants[${i}]` });
       });
       // An NSO tranche names the ISO tranche it was split from; link it by id once every grant has one.
-      for (const { g, proposed } of built) if (g.splitOf) { const isoId = idOf.get(g.splitOf) ?? profile.equity.grants.find((x) => x.name === g.splitOf)?.id; if (isoId) proposed.splitOf = isoId; }
+      // The pair vests as one grant on the ISO's schedule, so vests the portal lists on the NSO side are folded into the ISO's map.
+      for (const { g, proposed } of built) {
+        if (!g.splitOf) continue;
+        const isoId = idOf.get(g.splitOf) ?? profile.equity.grants.find((x) => x.name === g.splitOf)?.id;
+        if (isoId) proposed.splitOf = isoId;
+        const iso = built.find((b) => b.proposed.id === isoId)?.proposed;
+        if (iso && proposed.vesting && !iso.schedule) {
+          iso.vesting ??= {};
+          for (const [k, n] of Object.entries(proposed.vesting)) iso.vesting[k] = (iso.vesting[k] ?? 0) + n;
+        }
+        delete proposed.vesting; delete proposed.schedule;
+      }
     }
     if (eq.holdings) {
       const taken: string[] = [];
@@ -148,7 +159,8 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
           const type = r.event.kind === "exercise" ? r.event.type : "iso";
           if (r.price) add({ section: "equity", label: `${profile.equity.companies[r.price.companyIndex]?.name ?? "Company"} price in ${r.price.year}`, path: ["equity", "companies", r.price.companyIndex, "pricePath", String(r.price.year)], current: undefined, proposed: r.price.value, format: "usd", source: `lot "${h.lot}": value at exercise`, sourceKey: `companies.${profile.equity.companies[r.price.companyIndex]?.id}.pricePath.${r.price.year}` });
           // Counts read after the exercise already include it; the event supplies those shares instead.
-          const inDoc = built.find(({ proposed: g }) => g.type === type && (g.exercisedToDate ?? 0) >= h.quantity && (doc.as_of ?? "9999") >= h.acquired);
+          const gi = grantForLot(built.map((b) => b.proposed), h, profile.equity.companies[0]?.id, doc.as_of);
+          const inDoc = gi >= 0 ? built[gi] : undefined;
           if (inDoc) inDoc.proposed.exercisedToDate = inDoc.proposed.exercisedToDate! - h.quantity;
           else if (r.exercised) add({ section: "equity", label: `${profile.equity.grants[r.exercised.grantIndex]!.name}: exercised before the plan`, path: ["equity", "grants", r.exercised.grantIndex, "exercisedToDate"], current: profile.equity.grants[r.exercised.grantIndex]!.exercisedToDate, proposed: r.exercised.value, format: "shares", source: `lot "${h.lot}" moved into the plan`, sourceKey: `grants.${profile.equity.grants[r.exercised.grantIndex]!.id}` });
           notes.push(`${h.lot} (${h.quantity} ${type.toUpperCase()}, ${h.acquired})`);

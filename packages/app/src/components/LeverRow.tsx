@@ -28,7 +28,7 @@ export function LeverRow({ label, hint, available, value, mark, over, sharesBefo
       </div>
       <div className="track">
         <LogRange max={available} value={value} step={available > 5000 ? 50 : 10} onChange={onChange} />
-        {mark !== null && <button type="button" className="mark" style={{ left: `calc(9px + (100% - 18px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares; click to set exactly that`} aria-label={`Set to ${shares(mark)} shares, the AMT line`} onClick={() => onChange(mark)} />}
+        {mark !== null && <button type="button" className="mark" style={{ left: `calc(10px + (100% - 20px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares; click to set exactly that`} aria-label={`Set to ${shares(mark)} shares, the AMT line`} onClick={() => onChange(mark)} />}
       </div>
       <div className="foot">
         <span className={over ? "over" : ""}>

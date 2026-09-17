@@ -3,6 +3,11 @@ import { createContext, useContext, useState } from "react";
 /** Profile id used to namespace remembered UI state; set once per workspace. */
 export const ProfileIdContext = createContext<string>("default");
 
+/** Write a remembered value for a profile from outside a component, in the same place usePersisted reads it. */
+export function setPersisted(id: string, key: string, value: unknown): void {
+  try { localStorage.setItem(`taxonomy.${id}.${key}`, JSON.stringify(value)); } catch {}
+}
+
 /** Like useState, but remembered in this browser per profile so a refresh lands where you were. */
 export function usePersisted<T>(key: string, initial: T | (() => T), validate?: (v: unknown) => v is T): [T, (v: T | ((prev: T) => T)) => void] {
   const id = useContext(ProfileIdContext);

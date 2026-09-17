@@ -9,16 +9,12 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { describeChanges, editProfileText, migrateProfileText, parseProfile, tools, type EventInput, type HistoryEntry, type ProfileEdit } from "@taxonomy/engine";
-import { appendFileSync } from "node:fs";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { editProfileText, migrateProfileText, parseProfile, tools, type EventInput, type ProfileEdit } from "@taxonomy/engine";
+import { dataDir, examplePath, profilesDir, recordChange, saveAttachment, uniqueId } from "./store.ts";
 
-const root = resolve(import.meta.dir, "../..");
-const dataDir = process.env.TAXONOMY_DATA ? resolve(process.env.TAXONOMY_DATA) : join(root, "data");
-const dir = join(dataDir, "profiles");
-const ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+const dir = profilesDir;
 
 function listProfiles(): { id: string; name: string }[] {
   if (!existsSync(dir)) return [];
@@ -74,17 +70,8 @@ function about(f: ReturnType<typeof load>, result: unknown): unknown {
   return Array.isArray(result) ? { profile: note, result } : { ...(result as Record<string, unknown>), profile: note };
 }
 
-/** The app keeps one line per save in data/history/<id>.jsonl; writes from here are logged the same way, under the client's name. */
-function recordChange(id: string, beforeText: string | null, afterText: string, actor: string): void {
-  let lines: string[];
-  try { lines = describeChanges(beforeText === null ? null : parseProfile(migrateProfileText(beforeText)), parseProfile(afterText)); } catch { lines = ["edited the file"]; }
-  if (lines.length === 0) return;
-  const entry: HistoryEntry = { at: new Date().toISOString(), actor, lines, before: beforeText ?? undefined };
-  try { mkdirSync(join(dataDir, "history"), { recursive: true, mode: 0o700 }); appendFileSync(join(dataDir, "history", `${id}.jsonl`), JSON.stringify(entry) + "\n", { mode: 0o600 }); } catch {}
-}
-
 /** Read, edit and write in one go; the app's poll picks the change up within two seconds. */
-function write(id: string, edits: ProfileEdit[], actor = currentClient): void {
+function write(id: string, actor: string, edits: ProfileEdit[]): void {
   const path = join(dir, `${id}.yaml`);
   const before = statSync(path).mtimeMs;
   const beforeText = readFileSync(path, "utf8");
@@ -102,23 +89,17 @@ const json = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.st
 const fail = (e: unknown) => ({ content: [{ type: "text" as const, text: `Error: ${(e as Error).message ?? String(e)}` }], isError: true });
 
 
-function slug(name: string): string {
-  const s = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
-  return s || "profile";
-}
-function createProfile(name: string): { id: string; name: string } {
+function createProfile(name: string, actor: string): { id: string; name: string } {
   const clean = name.trim();
   if (!clean) throw new Error("name is required");
   const taken = listProfiles().find((p) => p.name.trim().toLowerCase() === clean.toLowerCase());
   if (taken) throw new Error(`a profile named "${clean}" already exists (id "${taken.id}"); use it, or pick another name`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const base = slug(clean);
-  let id = base;
-  for (let n = 2; existsSync(join(dir, `${id}.yaml`)); n++) id = `${base}-${n}`;
-  const text = editProfileText(readFileSync(join(root, "data", "profile.example.yaml"), "utf8"), [{ path: ["name"], value: clean }]);
+  const id = uniqueId(clean);
+  const text = editProfileText(readFileSync(examplePath, "utf8"), [{ path: ["name"], value: clean }]);
   parseProfile(text);
   writeFileSync(join(dir, `${id}.yaml`), text, { mode: 0o600 });
-  recordChange(id, null, text, currentClient);
+  recordChange(id, null, text, actor);
   return { id, name: clean };
 }
 
@@ -131,9 +112,10 @@ const eventInput = z.discriminatedUnion("kind", [
 ]);
 const toEvents = (list: z.infer<typeof eventInput>[]): EventInput[] => list.map((e) => (e.kind === "sell" && typeof e.price === "string" ? { ...e, price: Number(e.price) } : e)) as EventInput[];
 
-let currentClient = "your agent";
 
 export function createServer(opts: { clientLabel?: string } = {}): McpServer {
+  // Who this server is talking to, for the history log; learned from the client's first call.
+  let actor = opts.clientLabel ?? "your agent";
   const server = new McpServer(
   { name: "taxonomy", version: "0.1.0" },
   { instructions: [
@@ -154,7 +136,7 @@ export function createServer(opts: { clientLabel?: string } = {}): McpServer {
   /** The app reads this to say whether an agent is connected and when it was last used. */
   function heartbeat(profile?: string): void {
     const client = server.server.getClientVersion()?.name ?? opts.clientLabel ?? "unknown client";
-    currentClient = client;
+    actor = client;
     try { mkdirSync(dataDir, { recursive: true }); writeFileSync(join(dataDir, ".agent"), JSON.stringify({ lastSeen: new Date().toISOString(), client, profile }), { mode: 0o600 }); } catch {}
   }
   const run = async <T>(f: () => T) => { heartbeat(); try { return json(await f()); } catch (e) { return fail(e); } };
@@ -176,7 +158,7 @@ server.registerTool("create_profile", {
   description: "Start a new profile from the example, named for the person or household. Follow with intake (request, then submit) to fill it from documents; pass the returned id as `profile` from then on.",
   annotations: { title: "Create a profile", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   inputSchema: { name: z.string() },
-}, async ({ name }) => run(() => ({ ...createProfile(name), next: "call intake with action 'request' for this profile, gather the documents, then intake with action 'submit'" })));
+}, async ({ name }) => run(() => ({ ...createProfile(name, actor), next: "call intake with action 'request' for this profile, gather the documents, then intake with action 'submit'" })));
 
 server.registerTool("get_context", {
   description: "Who this is, what they hold, the plan years, the scenarios, what is still missing (`outstanding`), the editable fields with current values, and the vocabulary the other tools use. Call first.",
@@ -249,12 +231,12 @@ server.registerTool("scenario", {
 }, async ({ profile, action, name, add, remove, basedOn, note }) => run(() => {
   const f = use(profile);
   if (action === "add") {
-    const p = tools.proposeScenario(f.profile, name, toEvents(add ?? []), { basedOn, remove, note: note ?? `added by ${currentClient} on ${new Date().toISOString().slice(0, 10)}` });
-    write(f.id, [...p.edits, { path: ["activeScenario"], value: p.name }]);
+    const p = tools.proposeScenario(f.profile, name, toEvents(add ?? []), { basedOn, remove, note: note ?? `added by ${actor} on ${new Date().toISOString().slice(0, 10)}` });
+    write(f.id, actor, [...p.edits, { path: ["activeScenario"], value: p.name }]);
     return about(f, { name: p.name, active: true, years: p.years, totals: p.totals, delta: p.delta });
   }
-  if (action === "activate") { write(f.id, tools.setActiveScenario(f.profile, name)); return about(f, { active: name }); }
-  write(f.id, tools.deleteScenario(f.profile, name));
+  if (action === "activate") { write(f.id, actor, tools.setActiveScenario(f.profile, name)); return about(f, { active: name }); }
+  write(f.id, actor, tools.deleteScenario(f.profile, name));
   return about(f, { deleted: name });
 }));
 
@@ -267,7 +249,7 @@ server.registerTool("facts", {
   const proposed = tools.updateFacts(f.profile, changes);
   // Written as pending, then accepted in the same save: one logged change, the same sources as an accepted proposal.
   const staged = parseProfile(editProfileText(f.text, proposed.edits));
-  write(f.id, [...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
+  write(f.id, actor, [...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
   return about(f, { applied: proposed.rows, effect: proposed.delta });
 }));
 
@@ -291,19 +273,14 @@ server.registerTool("intake", {
   if (action === "request") return about(f, { request: tools.intakeRequest(f.profile, sections?.length ? sections : ["basics", "pay", "prior_return", "income", "equity", "home", "giving"]) });
   if (action === "attach") {
     if (!name || !base64) throw new Error("attach needs name and base64");
-    const clean = name.replace(/[\\/]/g, "_").replace(/[^\x20-\x7E]/g, "").replace(/^\.+/, "").trim().slice(0, 120);
-    if (!/\.(png|jpe?g|webp|gif|pdf|txt|csv|md|ya?ml|json)$/i.test(clean)) throw new Error("only images, PDFs and text files");
     const bytes = Buffer.from(base64, "base64");
-    if (bytes.length === 0 || bytes.length > 25 * 1_048_576) throw new Error("the file is empty or over 25 MB");
-    const dirAtt = join(dataDir, "attachments", f.id);
-    mkdirSync(dirAtt, { recursive: true, mode: 0o700 });
-    writeFileSync(join(dirAtt, clean), bytes, { mode: 0o600 });
+    const clean = saveAttachment(f.id, name, bytes);
     return about(f, { attached: clean, bytes: bytes.length, note: `cite it in sources as "${clean}" (add a page like "${clean} p3" when it has pages)` });
   }
   if (!document) throw new Error("submit needs the document");
   const r = tools.applyIntake(f.profile, document);
   if (r.problems.length) return about(f, { problems: r.problems, warnings: r.warnings, note: "fix the document and submit again" });
-  if (r.edits.length) write(f.id, r.edits);
+  if (r.edits.length) write(f.id, actor, r.edits);
   const after = r.edits.length ? parseProfile(migrateProfileText(readFileSync(join(dir, `${f.id}.yaml`), "utf8"))) : f.profile;
   return about(f, { applied: r.applied, questions: r.questions, warnings: r.warnings, effect: r.edits.length ? tools.effect(f.profile, after) : null });
 }));

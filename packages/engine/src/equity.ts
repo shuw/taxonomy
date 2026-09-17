@@ -33,6 +33,27 @@ export function sharesOutstanding(g: EquityGrant): number {
 /** The $100k rule: the most option shares that can first become exercisable as ISOs in one year. */
 const ISO_ANNUAL_LIMIT = 100_000;
 
+/** The dates and counts a schedule delivers, rounded so the counts sum to what was granted; zero-share periods are skipped. */
+export function scheduleVests(s: NonNullable<EquityGrant["schedule"]>, granted: number): { date: Date; shares: number }[] {
+  const step = s.cadence === "annual" ? 12 : s.cadence === "quarterly" ? 3 : 1;
+  const totalMonths = Math.max(step, Math.round(s.years * 12));
+  const periods = Math.floor(totalMonths / step);
+  const perPeriod = granted / periods;
+  const cliff = s.cliffMonths ?? 0;
+  const startDate = new Date(s.start + "T00:00:00Z");
+  const out: { date: Date; shares: number }[] = [];
+  let vestedSoFar = 0;
+  for (let i = 1; i <= periods; i++) {
+    const month = i * step;
+    if (month < cliff) continue;
+    const target = Math.round(perPeriod * i);
+    const shares = target - vestedSoFar;
+    vestedSoFar = target;
+    if (shares > 0) out.push({ date: new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + month, startDate.getUTCDate())), shares });
+  }
+  return out;
+}
+
 /** The vests of one grant inside the plan, dated: explicit dates, year keys (January 1), or the schedule's dates. */
 export function vestEvents(profile: Profile, grant: EquityGrant): { date: string; shares: number }[] {
   const start = profile.plan.startYear;
@@ -46,22 +67,7 @@ export function vestEvents(profile: Profile, grant: EquityGrant): { date: string
       else push(new Date(k + "T00:00:00Z"), n);
     }
   } else if (grant.schedule) {
-    const s = grant.schedule;
-    const step = s.cadence === "annual" ? 12 : s.cadence === "quarterly" ? 3 : 1;
-    const totalMonths = Math.max(step, Math.round(s.years * 12));
-    const periods = Math.floor(totalMonths / step);
-    const perPeriod = grant.granted / periods;
-    const cliff = s.cliffMonths ?? 0;
-    const startDate = new Date(s.start + "T00:00:00Z");
-    let vestedSoFar = 0;
-    for (let i = 1; i <= periods; i++) {
-      const month = i * step;
-      if (month < cliff) continue;
-      const target = Math.round(perPeriod * i);
-      const amount = target - vestedSoFar;
-      vestedSoFar = target;
-      push(new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + month, startDate.getUTCDate())), amount);
-    }
+    for (const v of scheduleVests(grant.schedule, grant.granted)) push(v.date, v.shares);
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -106,22 +112,7 @@ function vestingOfPlain(profile: Profile, grant: EquityGrant): { vestedAtStart: 
       else if (year <= end) byYear[year] = (byYear[year] ?? 0) + n;
     }
   } else if (grant.schedule) {
-    const s = grant.schedule;
-    const step = s.cadence === "annual" ? 12 : s.cadence === "quarterly" ? 3 : 1;
-    const totalMonths = Math.max(step, Math.round(s.years * 12));
-    const periods = Math.floor(totalMonths / step);
-    const perPeriod = grant.granted / periods;
-    const cliff = s.cliffMonths ?? 0;
-    const startDate = new Date(s.start + "T00:00:00Z");
-    let vestedSoFar = 0;
-    for (let i = 1; i <= periods; i++) {
-      const month = i * step;
-      if (month < cliff) continue;
-      const target = Math.round(perPeriod * i);
-      const amount = target - vestedSoFar;
-      vestedSoFar = target;
-      if (amount <= 0) continue;
-      const d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + month, startDate.getUTCDate()));
+    for (const { date: d, shares: amount } of scheduleVests(grant.schedule, grant.granted)) {
       if (d <= asOf || d.getUTCFullYear() < start) before += amount;
       else if (d.getUTCFullYear() <= end) byYear[d.getUTCFullYear()] = (byYear[d.getUTCFullYear()] ?? 0) + amount;
     }

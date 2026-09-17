@@ -73,3 +73,23 @@ describe("gaps and the plan for an agent", () => {
     expect(() => tools.whatIf(p, [{ kind: "exercise", type: "nso", year: 2027, shares: 0 }])).toThrow("more than 0");
   });
 });
+
+describe("which grant an in-plan lot came from", () => {
+  const lot: Holding = { id: "h1", lot: "l", quantity: 1_000, acquired: "2026-04-01", via: "iso_exercise", costBasis: 2, amtBasis: 20, grantDate: "2024-01-15" };
+  test("the grant date breaks a tie between two grants of the same type", () => {
+    const p = parseProfile(editProfileText(example, [{ path: ["equity", "grants"], value: [
+      { id: "g1", name: "2023 ISO", type: "iso", company: "c1", granted: 10_000, vestedToDate: 10_000, exercisedToDate: 5_000, strike: 2, grantDate: "2023-01-15", countsAsOf: "2026-06-01" },
+      { id: "g3", name: "2024 ISO", type: "iso", company: "c1", granted: 10_000, vestedToDate: 10_000, exercisedToDate: 1_000, strike: 4, grantDate: "2024-01-15", countsAsOf: "2026-06-01" },
+    ] }, { path: ["equity", "holdings"], value: [lot] }]));
+    const gap = profileGaps(p).find((g) => g.id === "holdings.h1.exercise")!;
+    expect(gap.fill!.edits).toContainEqual({ path: ["equity", "grants", 1, "exercisedToDate"], value: 0 });
+  });
+  test("without a grant date the first grant that fits is used, and counts read before the exercise are left alone", () => {
+    const p = parseProfile(editProfileText(example, [{ path: ["equity", "grants"], value: [
+      { id: "g1", name: "A", type: "iso", company: "c1", granted: 10_000, vestedToDate: 10_000, exercisedToDate: 5_000, strike: 2, countsAsOf: "2026-01-01" },
+      { id: "g3", name: "B", type: "iso", company: "c1", granted: 10_000, vestedToDate: 10_000, exercisedToDate: 5_000, strike: 4, countsAsOf: "2026-06-01" },
+    ] }, { path: ["equity", "holdings"], value: [{ ...lot, grantDate: undefined }] }]));
+    const gap = profileGaps(p).find((g) => g.id === "holdings.h1.exercise")!;
+    expect(gap.fill!.edits).toContainEqual({ path: ["equity", "grants", 1, "exercisedToDate"], value: 4_000 });
+  });
+});

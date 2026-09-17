@@ -10,7 +10,7 @@ export function factMarkers(profile: Profile, years: number[], onEditEquity: () 
     const f = fields.find((x) => x.path === t.path);
     const v = t.value;
     const detail = getPath(profile, t.path) === v ? "same as now" : typeof v === "number" ? (f?.type === "pct" ? `${(v * 100).toFixed(1)}%` : usdCompact(v)) : String(v);
-    out.push({ id: t.id ?? `t${i}`, year: t.year, label: f?.label ?? t.path, detail: t.until === undefined ? `${detail} · from ${t.year}` : detail, entryIndex: i });
+    out.push({ id: t.id ?? `t-${t.year}-${t.path}`, year: t.year, label: f?.label ?? t.path, detail: t.until === undefined ? `${detail} · from ${t.year}` : detail, entryIndex: i });
   }
   if (profile.equity.grants.some((g) => g.type === "rsu")) {
     for (const y of years) {
