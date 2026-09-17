@@ -51,9 +51,7 @@ export function EventTimeline({ profile, levers, plan, years, events, facts, cro
   const selected = events.find((e) => e.id === selectedId) ?? null;
   const selectedFact = facts.find((f) => f.id === selectedId) ?? null;
   const saleResult = (e: Extract<ScenarioEvent, { kind: "sell" }>): SaleResult | undefined => {
-    const yr = plan.years.find((y) => y.year === e.year);
-    const order = (levers.sales?.[e.year] ?? []).map((s) => s.id);
-    return yr?.sales?.[order.indexOf(e.id)];
+    return plan.years.find((y) => y.year === e.year)?.sales?.find((s) => s.id === e.id);
   };
   const chipKind = (e: ScenarioEvent) => e.kind === "exercise" ? `Exercise ${e.type.toUpperCase()} · ${companyName(profile, e.company)}` : e.kind === "sell" ? `Sell · ${usdCompact(saleResult(e)?.proceeds ?? 0)}` : e.kind === "give" ? `Give · ${giveHow(e.how)}` : "Liquidity";
   const chipValue = (e: ScenarioEvent) => {

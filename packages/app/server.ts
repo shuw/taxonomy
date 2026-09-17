@@ -138,8 +138,13 @@ function sameOrigin(req: Request): Response | null {
 
 /** Nothing but a name: no pay, no equity, nothing pending, nothing dated. */
 function isEmptyProfile(p: ReturnType<typeof parseProfile>): boolean {
-  return p.people.self.salary === 0 && !p.people.spouse && p.equity.grants.length === 0 && p.equity.companies.length === 0
-    && !p.pendingIntake && !(p.pending?.length) && !(p.timeline?.length) && !(p.returns?.length) && (p.scenarios?.default?.events.length ?? 0) === 0;
+  const none = (o: object | undefined): boolean => !o || Object.values(o).every((v) => v === undefined || v === 0 || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && none(v as object)));
+  const self = p.people.self;
+  return self.salary === 0 && !self.bonus && !self.pretaxContributions && !p.people.spouse && !(p.filer.dependents?.length)
+    && p.equity.grants.length === 0 && p.equity.companies.length === 0 && !(p.equity.holdings?.length)
+    && none(p.income) && none(p.home) && none(p.deductions) && none(p.carryforwards)
+    && !p.pendingIntake && !(p.pending?.length) && !(p.timeline?.length) && !(p.returns?.length) && !(p.followUps?.length) && !p.sources
+    && Object.values(p.scenarios ?? {}).every((s) => s.events.length === 0);
 }
 
 function validate(text: unknown): string | null {
@@ -214,8 +219,9 @@ const remoteFile = resolve(dataDir, ".remote.json");
 const tailscaleBin = Bun.which("tailscale") ?? (existsSync("/Applications/Tailscale.app/Contents/MacOS/Tailscale") ? "/Applications/Tailscale.app/Contents/MacOS/Tailscale" : null);
 let httpChild: ReturnType<typeof Bun.spawn> | null = null;
 
-function remoteConfig(): { token: string; port: number; tunnelHost?: string; pid?: number } {
-  try { if (existsSync(remoteFile)) return JSON.parse(readFileSync(remoteFile, "utf8")) as { token: string; port: number; tunnelHost?: string; pid?: number }; } catch {}
+interface RemoteConfig { token: string; port: number; tunnelHost?: string; pid?: number; /** false once the user turns it off; it then stays off across restarts */ enabled?: boolean }
+function remoteConfig(): RemoteConfig {
+  try { if (existsSync(remoteFile)) return JSON.parse(readFileSync(remoteFile, "utf8")) as RemoteConfig; } catch {}
   const cfg = { token: randomBytes(24).toString("base64url"), port: 5182 };
   writeFileSync(remoteFile, JSON.stringify(cfg), { mode: 0o600 });
   return cfg;
@@ -248,10 +254,14 @@ async function remoteState() {
 function rememberChild(pid: number | undefined): void {
   try { writeFileSync(remoteFile, JSON.stringify({ ...remoteConfig(), pid }), { mode: 0o600 }); } catch {}
 }
+/** True when the process is still the MCP server we started, so a reused pid is never signalled. */
+function isOurHttpServer(pid: number): boolean {
+  try { return Bun.spawnSync(["ps", "-p", String(pid), "-o", "command="]).stdout.toString().includes("packages/mcp/http.ts"); } catch { return false; }
+}
 function stopChild(): void {
   const { pid } = remoteConfig();
   httpChild?.kill();
-  if (pid && pid !== httpChild?.pid) { try { process.kill(pid); } catch { /* already gone */ } }
+  if (pid && pid !== httpChild?.pid && isOurHttpServer(pid)) { try { process.kill(pid); } catch { /* already gone */ } }
   httpChild = null;
   rememberChild(undefined);
 }
@@ -267,7 +277,7 @@ async function serveLocal(on: boolean, fresh = false): Promise<void> {
 process.on("exit", () => httpChild?.kill());
 // Once claude.ai has been set up (a tunnel address is saved), the HTTP server comes up with the app,
 // replacing any child from a previous run so it always runs the current code.
-if (remoteConfig().tunnelHost) void serveLocal(true, true);
+if (remoteConfig().tunnelHost && remoteConfig().enabled !== false) void serveLocal(true, true);
 
 const port = Number(process.env.PORT ?? 5180);
 Bun.serve({
@@ -333,9 +343,13 @@ Bun.serve({
         if (refused) return refused;
         const { id } = req.params;
         if (!ID.test(id) || !existsSync(fileFor(id))) return bad("no such profile", 404);
-        const { at } = (await req.json()) as { at?: string };
-        const entry = readHistory(id).find((e) => e.at === at);
+        const { at, seen } = (await req.json()) as { at?: string; seen?: string };
+        const log = readHistory(id);
+        const entry = log.find((e) => e.at === at);
         if (!entry?.before) return bad("nothing to restore for that entry", 404);
+        // `seen` is the newest entry the History list showed; a newer one means something wrote since.
+        const latest = log[log.length - 1]?.at;
+        if (seen && latest && latest > seen) return Response.json({ error: "the profile changed since the list was loaded; it has been refreshed", ...readProfile(id) }, { status: 409 });
         const problem = validate(entry.before);
         if (problem) return bad(`that version no longer parses: ${problem}`);
         const beforeText = readFileSync(fileFor(id), "utf8");
@@ -349,7 +363,10 @@ Bun.serve({
       const refused = sameOrigin(req);
       if (refused) return refused;
       const body = (await req.json()) as { on?: boolean; tunnelHost?: string };
-      if (typeof body.on === "boolean") await serveLocal(body.on);
+      if (typeof body.on === "boolean") {
+        writeFileSync(remoteFile, JSON.stringify({ ...remoteConfig(), enabled: body.on }), { mode: 0o600 });
+        await serveLocal(body.on);
+      }
       // The tunnel's address is kept with the secret so every browser sees the same setup.
       if (typeof body.tunnelHost === "string") {
         const host = body.tunnelHost.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
@@ -400,6 +417,7 @@ Bun.serve({
         let text = body.text as string;
         const settled = answeredFollowUps(parseProfile(text));
         if (settled.length) text = editProfileText(text, settled);
+        if (typeof body.mtime === "number" && statSync(fileFor(id)).mtimeMs !== body.mtime) return Response.json({ error: "the file changed on disk", ...readProfile(id) }, { status: 409 });
         writeFileSync(fileFor(id), text, { mode: 0o600 });
         recordChange(id, beforeText, text, "you");
         const { path, mtime } = readProfile(id);

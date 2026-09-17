@@ -46,6 +46,7 @@ export function ScenarioBar({ profile, scenario, edit }: Props) {
         label="Scenario" value={active} accent
         options={names.map((n) => ({ value: n, label: n, hint: scenarios[n]?.note }))}
         onChange={(n) => edit([{ path: ["activeScenario"], value: n }])}
+        onClose={() => setMode("menu")}
         panel={panel(() => setMode("menu"))}
         actions={(close) => (
           <>

@@ -17,7 +17,7 @@ export function HistoryTab() {
     const h = setInterval(tick, 5000);
     return () => { cancelled = true; clearInterval(h); };
   }, [id]);
-  const restore = async (at: string) => { try { await api.restore(id, at); setConfirm(null); } catch (e) { setError(String((e as Error).message ?? e)); } };
+  const restore = async (at: string) => { try { await api.restore(id, at, rows?.[0]?.at); setConfirm(null); } catch (e) { setError(String((e as Error).message ?? e)); } };
   if (error) return <div className="error">{error}</div>;
   if (!rows) return <div className="muted">Loading…</div>;
   if (rows.length === 0) return <p className="muted">No changes recorded yet. Every save from here on is listed: yours, and anything Claude sends.</p>;

@@ -120,7 +120,7 @@ chip into a link to the page, so a value can be checked against what it came fro
 Pure functions an agent calls through `packages/mcp/server.ts`: orient (`context`, `plan`),
 explain (`explain`, `compareYears`, `amtHeadroom`, `recovery`, `holdVersusSell`, `lots`,
 `sellToCover`), try (`whatIf`, `proposeScenario`, `setActiveScenario`, `deleteScenario`) and
-intake (`intakeRequest`, `submitIntake` parks a document as `pendingIntake` for the app's review) and facts (`updateFacts` writes `pending`; `pendingReview`
+intake (`intakeRequest`; `applyIntake` writes a submitted document at once, while `submitIntake` parks one as `pendingIntake` for the app's own paste-a-reply review) and facts (`updateFacts` builds the changes; the MCP server accepts them in the same write; `pendingReview`
 and `resolvePending` back the review card). Mutations return `ProfileEdit[]`; the MCP server applies
 them to the file with `editProfileText` and validates before writing, the same path the app uses.
 The app reads `pendingReview` for the review card and the history log for what Claude changed.
@@ -133,8 +133,9 @@ App.tsx           profile list and selection, hash-driven dialogs, Workspace
   Workspace       runs the engine (memoized on profile + levers), owns focus year, selection,
                   pinned scenario, plan view; wires Sidebar, the plan card, analyses, ledger
 components/
-  EventTimeline   the strip under the chart: chips per year, + menu (decisions, then dated
-                  changes by category), drag between years, one inspector for the selection
+  EventTimeline   the strip under the chart: + at the top of each year, chips (exercise, sell,
+                  liquidity, give), fact markers, drag between years, one floating inspector under
+                  the selection (timeline/*: AddMenu with hover flyouts, one inspector per kind)
   Strips          ColumnStrip (stacked columns with pinned ghosts; Tax, Combined, credit) and
                   CashStrip (in vs out)
   SweepChart      AMT versus ISO shares for one year and company
@@ -142,10 +143,18 @@ components/
   Sidebar         quick basics, EquityKnobs (price and growth per company), assumptions
   FactsModal      "Edit my information": every recorded fact, one tab per section, plus
                   ConnectAgent (MCP config for Claude Desktop and Claude Code)
-  ProposalBanner  scenarios an agent wrote (Accept / Compare / Discard) and pending fact
-                  changes with before/after rows
-  IntakeModal     intake: connected agent (recommended) or copy the request (fallback), then
-                  the review table; a document the agent submits pre-fills it (see INTAKE.md)
+  ProposalBanner  the first-run nudge and the review table for a pasted intake reply
+  IntakeModal     the new-profile wizard (name, then connect Claude or copy the request; ends
+                  when Claude connects) and the paste-a-reply review (see INTAKE.md)
+  ClaudePanel     top-bar Claude button and panel: connection state, what arrived, prompts to try
+  HistoryModal    every save with who made it and what changed; Restore (HistoryTab)
+  Documents       pages behind the numbers (data/attachments); SourceChip links a value to one
+  Picker          the app's own menu for the profile and scenario pills (rename, save as, delete)
+  Info            the ⓘ popover that carries a card's explanation
+  LogRange        the logarithmic shares slider; LeverRow adds the clickable AMT notch
+  ShortcutsHelp   the ? sheet; hooks/useShortcuts owns the keys
+  Mark            the rolling-coin logo
+series.ts         one table of which color each series, chip and badge uses
 persist.ts        usePersisted: UI state remembered per profile in localStorage
 useProfile.ts     load, poll the file for outside edits, debounce PUTs
 server.ts         GET/PUT/DELETE profiles as YAML text; same-origin guard; migrate on read;

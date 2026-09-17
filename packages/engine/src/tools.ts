@@ -478,6 +478,7 @@ export function updateFacts(profile: Profile, changes: FactChangeInput[]): { edi
       if (!def.timeline) throw new Error(`${def.label} cannot change from a year; leave "from" out`);
       if (!years.includes(c.from)) throw new Error(`year ${c.from} is not in the plan (${years[0]}–${years[years.length - 1]})`);
       if (c.until !== undefined && (!years.includes(c.until) || c.until < c.from)) throw new Error(`until must be a plan year on or after ${c.from}`);
+      if (c.until !== undefined && path.startsWith("deductions.charitable.")) throw new Error("a gift in one year is a decision: use scenario(add) with a give event; the charitable fields are the amount given every year");
     }
     const id = newId("p", taken);
     taken.push(id);

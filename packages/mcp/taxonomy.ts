@@ -166,7 +166,7 @@ const factChange = z.object({
   value: z.union([z.string(), z.number(), z.boolean()]).describe("in the field's type; percentages as 0.2, 20 or '20%'; money as 400000 or '400k'"),
   company: z.string().optional().describe("company id or name, for per-company fields such as share price or growth"),
   from: z.number().int().optional().describe("a plan year: the change starts then (a raise, a law change) instead of replacing the fact now"),
-  until: z.number().int().optional().describe("with from: the last year it applies; the same year as from for a one-year item (a gift, a one-time gain)"),
+  until: z.number().int().optional().describe("with from: the last year it applies (a one-time gain, a year of no bonus). Not for gifts: a gift in one year is a give event in a scenario"),
   source: z.string().optional().describe("where it came from: 'told in chat', or the document"),
 });
 

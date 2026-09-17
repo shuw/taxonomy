@@ -76,3 +76,17 @@ describe("the gift-fact rewrite", () => {
     expect(gives(savedBack)).toBe(1);
   });
 });
+
+describe("gift facts on top of recurring giving", () => {
+  test("the converted decision is the amount beyond the recurring figure, and the facts tool refuses the shape", () => {
+    const p = parseProfile(editProfileText(example, [
+      { path: ["deductions", "charitable", "cash"], value: 10_000 },
+      { path: ["scenarios", "default", "events"], value: [] },
+      { path: ["timeline"], value: [{ id: "t1", year: 2027, until: 2027, path: "deductions.charitable.cash", value: 40_000 }] },
+    ]));
+    const give = p.scenarios!.default!.events.find((e) => e.kind === "give");
+    expect(give && give.kind === "give" ? give.amount : null).toBe(30_000);
+    expect(runPlan(p).years[1]!.lines.giving?.value).toBe(40_000);
+    expect(() => tools.updateFacts(p, [{ field: "deductions.charitable.cash", value: 50_000, from: 2028, until: 2028 }])).toThrow("give event");
+  });
+});

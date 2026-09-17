@@ -12,25 +12,28 @@ interface Props {
   /** When set, the menu shows this instead of the options (a rename form, a delete confirmation). */
   panel?: ReactNode;
   accent?: boolean;
+  /** Called when the menu is dismissed, so an owner showing a form in `panel` can put the options back. */
+  onClose?: () => void;
 }
 
 /** A pill that opens the app's own menu instead of the browser's select popup. */
-export function Picker({ label, value, options, onChange, actions, panel, accent }: Props) {
+export function Picker({ label, value, options, onChange, actions, panel, accent, onClose }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const dismiss = () => { setOpen(false); onClose?.(); };
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) dismiss(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
     document.addEventListener("mousedown", onDown);
     window.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); window.removeEventListener("keydown", onKey); };
   }, [open]);
   const current = options.find((o) => o.value === value);
-  const close = () => setOpen(false);
+  const close = () => dismiss();
   return (
     <div className="picker" ref={ref}>
-      <button type="button" className={"pill-btn" + (accent ? " accent" : "")} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={"pill-btn" + (accent ? " accent" : "")} aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => (open ? dismiss() : setOpen(true))}>
         <span className="pill-text">{current?.label ?? value}</span>
         <svg className="chev" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>

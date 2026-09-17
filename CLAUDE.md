@@ -28,8 +28,9 @@ No Vite, no bundler config: Bun serves `packages/app/index.html` directly.
 - Commits are ssh-signed. If the signing agent refuses, retry later; never bypass signing.
 - The engine does all tax math. The app and the MCP server never compute tax; they call the
   engine and show or relay its lines, each of which carries its own `why`.
-- Anything an agent proposes (scenarios, fact changes, intake documents) waits in the profile
-  file for the user to accept in the app. Do not add a path that writes facts without review.
+- What an agent writes (scenarios, facts, intake documents) applies at once, and every save by
+  either server is logged to `data/history/<id>.jsonl` with the text before it; History in the
+  app restores any entry. Do not add a write path that skips the history log.
 
 ## Where things go
 

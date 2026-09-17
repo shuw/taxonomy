@@ -39,6 +39,7 @@ export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, on
       label="Profile" value={currentId} accent
       options={profiles.map((p) => ({ value: p.id, label: p.id === currentId ? currentName : p.name }))}
       onChange={onSwitch}
+      onClose={() => setMode("menu")}
       panel={panel}
       actions={(close) => (
         <>

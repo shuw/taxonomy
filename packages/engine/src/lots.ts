@@ -39,6 +39,8 @@ export interface LotSale {
 }
 
 export interface SaleResult {
+  /** The sale event this came from. */
+  id: string;
   date: string;
   shares: number;
   proceeds: number;
@@ -168,7 +170,7 @@ export function applySale(profile: Profile, lots: Lot[], sale: SaleLever, year: 
       left -= n;
     }
   }
-  const result: SaleResult = { date, shares: 0, proceeds: 0, longTermGain: 0, shortTermGain: 0, ordinaryIncome: 0, amtAdjustment: 0, lots: [], picked: explicit ? "as specified" : "lowest tax first" };
+  const result: SaleResult = { id: sale.id, date, shares: 0, proceeds: 0, longTermGain: 0, shortTermGain: 0, ordinaryIncome: 0, amtAdjustment: 0, lots: [], picked: explicit ? "as specified" : "lowest tax first" };
   for (const { lot, shares } of picks) {
     const price = lotPrice(profile, lot, year, sale.price);
     const longTerm = isLongTerm(lot, date);

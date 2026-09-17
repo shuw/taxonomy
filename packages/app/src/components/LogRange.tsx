@@ -13,10 +13,12 @@ export const positionOf = (shares: number, max: number) => (max > 0 ? uncurve(Ma
 
 export function LogRange({ max, value, step, disabled, onChange }: { max: number; value: number; step: number; disabled?: boolean; onChange: (shares: number) => void }) {
   const pos = positionOf(value, max);
+  // A small lot cannot step by 10 or 50; never fewer than about twenty positions on the track.
+  const inc = Math.max(1, Math.min(step, Math.floor(max / 20)));
   const fromPosition = (p: number) => {
     if (p >= RES) return max;
     const raw = curve(p / RES) * max;
-    return Math.min(max, Math.round(raw / step) * step);
+    return Math.min(max, Math.round(raw / inc) * inc);
   };
   return (
     <input type="range" className="range" min={0} max={RES} step={1} value={Math.round(pos * RES)} disabled={disabled || max === 0}

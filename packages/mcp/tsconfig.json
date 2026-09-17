@@ -1,5 +1,5 @@
 {
   "extends": "../engine/tsconfig.json",
   "compilerOptions": { "noEmit": true, "rootDir": "..", "types": ["bun-types"] },
-  "include": ["server.ts", "../engine/src/**/*.ts"]
+  "include": ["server.ts", "http.ts", "taxonomy.ts", "../engine/src/**/*.ts"]
 }

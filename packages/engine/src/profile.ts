@@ -88,10 +88,12 @@ export function parseProfile(text: string): Profile {
   if (oneYearGifts.length) {
     timeline = timeline!.filter((t) => !oneYearGifts.includes(t));
     scenarios ??= { default: { events: [] } };
+    // The fact was an override of the year's total; the decision is added on top of recurring giving, so take the baseline out.
+    const baseline = (how: "cash" | "stock" | "daf") => typeof d.charitable === "number" ? (how === "cash" ? d.charitable : 0) : (d.charitable?.[how === "cash" ? "cash" : how === "stock" ? "appreciatedStock" : "daf"] ?? 0);
     for (const s of Object.values(scenarios)) {
       for (const t of oneYearGifts) {
-        const how = GIFT_PATHS[t.path]!, amount = t.value as number;
-        if (s.events.some((e) => e.kind === "give" && e.year === t.year && e.how === how && e.amount === amount)) continue;
+        const how = GIFT_PATHS[t.path]!, amount = Math.max(0, (t.value as number) - baseline(how));
+        if (amount === 0 || s.events.some((e) => e.kind === "give" && e.year === t.year && e.how === how && e.amount === amount)) continue;
         s.events.push({ id: newEventId(s.events), kind: "give", year: t.year, how, amount });
       }
     }
