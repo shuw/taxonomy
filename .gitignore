@@ -9,3 +9,6 @@ data/attachments/
 data/.agent
 data/.current
 data/.remote.json
+# Accounts (hosted mode): the users database and every user's own files.
+data/auth.sqlite*
+data/users/

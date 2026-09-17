@@ -37,6 +37,8 @@ import { useAgentStatus } from "./hooks/useAgentStatus.ts";
 import { useClaudeNews } from "./hooks/useClaudeNews.ts";
 import { MobileNotice } from "./components/MobileNotice.tsx";
 import { useShortcuts, type Shortcut } from "./hooks/useShortcuts.ts";
+import { useSession } from "./hooks/useSession.ts";
+import { Login } from "./components/Login.tsx";
 
 export interface Pinned { levers: Levers; plan: PlanResult; }
 export interface Selection { year: number; id: string; }
@@ -56,7 +58,15 @@ function remember(id: string) {
   history.replaceState(null, "", url);
 }
 
+/** With accounts on, nothing loads until someone is signed in; without them, straight to the profiles. */
 export function App() {
+  const { session, refresh, signOut } = useSession();
+  if (session === null) return <div className="empty">Loading…</div>;
+  if (session.enabled && !session.user) return <Login signup={session.signup} onDone={() => void refresh()} />;
+  return <Signed account={session.user} signOut={signOut} />;
+}
+
+function Signed({ account, signOut }: { account: { email: string } | null; signOut: () => Promise<void> }) {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
   const [creating, setCreating] = useHashState((h) => h === "#new", (v) => (v ? "new" : null));
@@ -107,17 +117,17 @@ export function App() {
   return (
     <ProfileIdContext.Provider value={file.id}>
       <Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
-        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} />
+        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} account={account} signOut={signOut} />
     </ProfileIdContext.Provider>
   );
 }
 
-interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
+interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; account: { email: string } | null; signOut: () => Promise<void>; }
 
 type PlanView = "combined" | "tax" | "cash";
 const isPlanView = (v: unknown): v is PlanView => v === "combined" || v === "tax" || v === "cash";
 
-function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
+function Workspace({ profile, profileText, path, error, edit, saving, switcher, account, signOut }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = usePersisted<number>("focusYear", years[0]!, (v): v is number => typeof v === "number");
@@ -216,6 +226,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         <button type="button" className="btn" title="History of changes (H)" onClick={() => setHistoryOpen(true)}>History</button>
         <button type="button" className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>?</button>
         <button type="button" className="btn edit-info" onClick={() => openFacts()}>Edit my information <kbd>E</kbd></button>
+        {account && <button type="button" className="btn" title={`Signed in as ${account.email}`} onClick={() => void signOut()}>Sign out</button>}
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
           : <button type="button" className="btn primary" title="Pin this scenario to compare against" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}

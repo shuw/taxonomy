@@ -775,3 +775,12 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 
 /* Numbers that change under a slider keep their width: every digit takes the same space. Last, because `font` shorthands above reset it. */
 .hero .big, .tile .value, .chart text, .tooltip, .lever-row, .event-inspector { font-variant-numeric: tabular-nums; }
+
+/* Sign in (hosted servers only) ------------------------------------------- */
+.login-page { min-height: 100vh; display: grid; place-items: center; align-content: center; gap: 16px; padding: 24px; }
+.login { width: min(420px, 100%); display: grid; gap: 14px; }
+.login-head { display: flex; align-items: center; gap: 12px; }
+.login-head h1 { margin: 0; font: 700 var(--text-lg)/1.2 var(--display); letter-spacing: -0.02em; }
+.login .field { display: grid; gap: 6px; }
+.login .modal-actions { margin-top: 4px; }
+.login-fine { max-width: 420px; text-align: center; margin: 0; }

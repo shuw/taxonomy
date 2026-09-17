@@ -24,19 +24,30 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
+/** Fired when the server no longer knows the session; the app goes back to the sign-in screen. */
+export const SIGNED_OUT = "taxonomy:signed-out";
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const body = (await res.json()) as T & { error?: string };
   if (res.status === 409) throw new ConflictError(body as unknown as ProfileFileBody);
+  if (res.status === 401 && !url.startsWith("/api/auth/")) window.dispatchEvent(new Event(SIGNED_OUT));
   if (!res.ok) throw new ApiError(body.error ?? res.statusText, res.status);
   return body;
 }
+
+export interface Session { enabled: boolean; user: { id: string; email: string } | null; signup: boolean; }
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export interface HistoryRow { at: string; actor: string; lines: string[]; restorable: boolean; }
 export interface Attachment { name: string; size: number; mtime: number; }
 
 export const api = {
+  me: () => call<Session>("/api/auth/me"),
+  login: (email: string, password: string) => call<{ user: Session["user"] }>("/api/auth/login", json("POST", { email, password })),
+  register: (email: string, password: string) => call<{ user: Session["user"] }>("/api/auth/register", json("POST", { email, password })),
+  logout: () => call<{ ok: true }>("/api/auth/logout", json("POST", {})),
+  changePassword: (current: string, next: string) => call<{ ok: true }>("/api/auth/password", json("POST", { current, next })),
   history: (id: string) => call<HistoryRow[]>(`/api/profiles/${id}/history`),
   attachments: (id: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`),
   attach: (id: string, name: string, base64: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`, json("POST", { name, base64 })),

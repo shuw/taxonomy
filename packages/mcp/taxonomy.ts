@@ -9,28 +9,18 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { editProfileText, migrateProfileText, parseProfile, tools, type EventInput, type ProfileEdit } from "@taxonomy/engine";
-import { dataDir, examplePath, profilesDir, recordChange, saveAttachment, uniqueId } from "./store.ts";
+import { examplePath, rootStore, type Store } from "./store.ts";
 
-const dir = profilesDir;
+/** Everything that reads or writes profile files, bound to one store: one data directory, or one user's. */
+function ops(store: Store) {
+  const listProfiles = () => store.listProfiles();
 
-function listProfiles(): { id: string; name: string }[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => f.endsWith(".yaml")).map((f) => {
-    const id = f.slice(0, -5);
-    const text = readFileSync(join(dir, f), "utf8");
-    let name = id;
-    try { name = parseProfile(migrateProfileText(text)).name?.trim() || id; } catch {}
-    return { id, name };
-  });
-}
-
-/** The profile the app is showing, if it has said. */
-function currentProfileId(): string | undefined {
-  try { const id = readFileSync(join(dataDir, ".current"), "utf8").trim(); return id && existsSync(join(dir, `${id}.yaml`)) ? id : undefined; } catch { return undefined; }
-}
+  /** The profile the app is showing, if it has said. */
+  function currentProfileId(): string | undefined {
+    try { const id = readFileSync(store.currentFile, "utf8").trim(); return id && existsSync(store.fileFor(id)) ? id : undefined; } catch { return undefined; }
+  }
 
 /**
  * Which profile a call means: the one named (by id or by name), else the only one, else the one
@@ -60,48 +50,51 @@ function load(ref?: string): { id: string; text: string; profile: ReturnType<typ
     chosen = all.find((p) => p.id === current); chosenBy = "app";
   }
   if (!chosen) throw new Error(`several profiles exist and none is open in the app; pass profile: one of ${all.map((p) => `"${p.id}" (${p.name})`).join(", ")}`);
-  const text = migrateProfileText(readFileSync(join(dir, `${chosen.id}.yaml`), "utf8"));
+  const text = migrateProfileText(readFileSync(store.fileFor(chosen.id), "utf8"));
   return { id: chosen.id, text, profile: parseProfile(text), chosenBy };
 }
 
+  /** Read, edit and write in one go; the app's poll picks the change up within two seconds. */
+  function write(id: string, actor: string, edits: ProfileEdit[]): void {
+    const path = store.fileFor(id);
+    const before = statSync(path).mtimeMs;
+    const beforeText = readFileSync(path, "utf8");
+    let text = editProfileText(migrateProfileText(beforeText), edits);
+    // A "missing" question whose value just arrived is closed in the same save.
+    const settled = tools.answeredFollowUps(parseProfile(text));
+    if (settled.length) text = editProfileText(text, settled);
+    parseProfile(text);
+    if (statSync(path).mtimeMs !== before) throw new Error("the file changed while this was being prepared; try again");
+    writeFileSync(path, text, { mode: 0o600 });
+    store.recordChange(id, beforeText, text, actor);
+  }
+
+  function createProfile(name: string, actor: string): { id: string; name: string } {
+    const clean = name.trim();
+    if (!clean) throw new Error("name is required");
+    const taken = listProfiles().find((p) => p.name.trim().toLowerCase() === clean.toLowerCase());
+    if (taken) throw new Error(`a profile named "${clean}" already exists (id "${taken.id}"); use it, or pick another name`);
+    mkdirSync(store.profilesDir, { recursive: true, mode: 0o700 });
+    const id = store.uniqueId(clean);
+    const text = editProfileText(readFileSync(examplePath, "utf8"), [{ path: ["name"], value: clean }]);
+    parseProfile(text);
+    writeFileSync(store.fileFor(id), text, { mode: 0o600 });
+    store.recordChange(id, null, text, actor);
+    return { id, name: clean };
+  }
+
+  return { listProfiles, currentProfileId, load, write, createProfile };
+}
+type Loaded = ReturnType<ReturnType<typeof ops>["load"]>;
+
 /** Every result says which profile it is about, so the agent can tell the user when there are several. */
-function about(f: ReturnType<typeof load>, result: unknown): unknown {
+function about(f: Loaded, result: unknown): unknown {
   const note = f.chosenBy === "app" ? `${f.id} (the one open in the app)` : f.id;
   return Array.isArray(result) ? { profile: note, result } : { ...(result as Record<string, unknown>), profile: note };
 }
 
-/** Read, edit and write in one go; the app's poll picks the change up within two seconds. */
-function write(id: string, actor: string, edits: ProfileEdit[]): void {
-  const path = join(dir, `${id}.yaml`);
-  const before = statSync(path).mtimeMs;
-  const beforeText = readFileSync(path, "utf8");
-  let text = editProfileText(migrateProfileText(beforeText), edits);
-  // A "missing" question whose value just arrived is closed in the same save.
-  const settled = tools.answeredFollowUps(parseProfile(text));
-  if (settled.length) text = editProfileText(text, settled);
-  parseProfile(text);
-  if (statSync(path).mtimeMs !== before) throw new Error("the file changed while this was being prepared; try again");
-  writeFileSync(path, text, { mode: 0o600 });
-  recordChange(id, beforeText, text, actor);
-}
-
 const json = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 1) }] });
 const fail = (e: unknown) => ({ content: [{ type: "text" as const, text: `Error: ${(e as Error).message ?? String(e)}` }], isError: true });
-
-
-function createProfile(name: string, actor: string): { id: string; name: string } {
-  const clean = name.trim();
-  if (!clean) throw new Error("name is required");
-  const taken = listProfiles().find((p) => p.name.trim().toLowerCase() === clean.toLowerCase());
-  if (taken) throw new Error(`a profile named "${clean}" already exists (id "${taken.id}"); use it, or pick another name`);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const id = uniqueId(clean);
-  const text = editProfileText(readFileSync(examplePath, "utf8"), [{ path: ["name"], value: clean }]);
-  parseProfile(text);
-  writeFileSync(join(dir, `${id}.yaml`), text, { mode: 0o600 });
-  recordChange(id, null, text, actor);
-  return { id, name: clean };
-}
 
 const profileArg = z.string().optional().describe("Which profile: an id or a name from list_profiles. Optional: the only profile, or the one open in the app, is used.");
 const eventInput = z.discriminatedUnion("kind", [
@@ -113,7 +106,9 @@ const eventInput = z.discriminatedUnion("kind", [
 const toEvents = (list: z.infer<typeof eventInput>[]): EventInput[] => list.map((e) => (e.kind === "sell" && typeof e.price === "string" ? { ...e, price: Number(e.price) } : e)) as EventInput[];
 
 
-export function createServer(opts: { clientLabel?: string } = {}): McpServer {
+export function createServer(opts: { clientLabel?: string; store?: Store } = {}): McpServer {
+  const store = opts.store ?? rootStore;
+  const { listProfiles, currentProfileId, load, write, createProfile } = ops(store);
   // Who this server is talking to, for the history log; learned from the client's first call.
   let actor = opts.clientLabel ?? "your agent";
   const server = new McpServer(
@@ -137,7 +132,7 @@ export function createServer(opts: { clientLabel?: string } = {}): McpServer {
   function heartbeat(profile?: string): void {
     const client = server.server.getClientVersion()?.name ?? opts.clientLabel ?? "unknown client";
     actor = client;
-    try { mkdirSync(dataDir, { recursive: true }); writeFileSync(join(dataDir, ".agent"), JSON.stringify({ lastSeen: new Date().toISOString(), client, profile }), { mode: 0o600 }); } catch {}
+    try { mkdirSync(store.dir, { recursive: true, mode: 0o700 }); writeFileSync(store.agentFile, JSON.stringify({ lastSeen: new Date().toISOString(), client, profile }), { mode: 0o600 }); } catch {}
   }
   const run = async <T>(f: () => T) => { heartbeat(); try { return json(await f()); } catch (e) { return fail(e); } };
   /** Load, and record which profile this call was about (the app's setup screen watches for that). */
@@ -274,14 +269,14 @@ server.registerTool("intake", {
   if (action === "attach") {
     if (!name || !base64) throw new Error("attach needs name and base64");
     const bytes = Buffer.from(base64, "base64");
-    const clean = saveAttachment(f.id, name, bytes);
+    const clean = store.saveAttachment(f.id, name, bytes);
     return about(f, { attached: clean, bytes: bytes.length, note: `cite it in sources as "${clean}" (add a page like "${clean} p3" when it has pages)` });
   }
   if (!document) throw new Error("submit needs the document");
   const r = tools.applyIntake(f.profile, document);
   if (r.problems.length) return about(f, { problems: r.problems, warnings: r.warnings, note: "fix the document and submit again" });
   if (r.edits.length) write(f.id, actor, r.edits);
-  const after = r.edits.length ? parseProfile(migrateProfileText(readFileSync(join(dir, `${f.id}.yaml`), "utf8"))) : f.profile;
+  const after = r.edits.length ? parseProfile(migrateProfileText(readFileSync(store.fileFor(f.id), "utf8"))) : f.profile;
   return about(f, { applied: r.applied, questions: r.questions, warnings: r.warnings, effect: r.edits.length ? tools.effect(f.profile, after) : null });
 }));
 
