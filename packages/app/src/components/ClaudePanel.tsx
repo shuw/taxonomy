@@ -10,12 +10,12 @@ import { AgentSetup, clientName, ManualSetup } from "./ConnectAgent.tsx";
 export function suggestedPrompts(profile: Profile): { text: string; why: string }[] {
   const out: { text: string; why: string }[] = [];
   const name = profile.name?.trim() || "Me";
-  if (!(profile.returns?.length)) out.push({ text: "Read my last tax return and fill in what you find.", why: "Calibrates the model against a filed year." });
+  if (!(profile.returns?.length)) out.push({ text: "Read my last tax return and fill in what you find.", why: "Checks the app's math against a filed year." });
   if (!profile.people.self.salary) out.push({ text: "My base salary is 250,000 and my bonus target is 30,000.", why: "Filled in at once, with the source recorded." });
   out.push({ text: `${profile.equity.grants.length ? "Update" : "Set up"} my equity from these documents: grant notices, the holdings page from my portal, and any exercise confirmations.`, why: "Grants, vesting and the shares you own, with sources." });
   if (profile.equity.grants.some((g) => g.type === "iso")) out.push({ text: "What's the most I can exercise this year without paying AMT?", why: "Answered from the plan, with the reason." });
   if (profile.equity.grants.length > 0) out.push({ text: "Exercise 2,000 shares next year and sell half the year after. What does that do?", why: "Saved as a scenario; the app switches to it." });
-  out.push({ text: `Why is ${profile.plan.startYear + 1} different from ${profile.plan.startYear}?`, why: "Line by line, from the ledger." });
+  out.push({ text: `Why is ${profile.plan.startYear + 1} different from ${profile.plan.startYear}?`, why: "Line by line, with reasons." });
   out.push({ text: "Assume 20% share growth from now on.", why: "Applied at once; undo from History." });
   if (out.length < 4) out.push({ text: `Connect to my Taxonomy profile "${name}" and tell me what's still missing.`, why: "A quick status from Claude's side." });
   return out.slice(0, 6);

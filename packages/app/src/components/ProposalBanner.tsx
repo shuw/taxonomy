@@ -106,7 +106,7 @@ export function ProposalBanner({ profile, edit, onCompare, onReviewIntake, onCop
             {pending.delta && (
               <div className="proposal-deltas">
                 <Pill label="total tax" value={pending.delta.totalTax} lowerIsGood />
-                <Pill label="net cash" value={pending.delta.netCash} lowerIsGood={false} />
+                <Pill label="kept" value={pending.delta.netCash} lowerIsGood={false} />
               </div>
             )}
           </div>

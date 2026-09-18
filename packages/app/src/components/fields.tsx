@@ -35,7 +35,7 @@ export function SourceChip({ source }: { source?: string }) {
 export function Field({ label, hint, children, wide, source, note, error }: { label: string; hint?: string; children: ReactNode; wide?: boolean; source?: string; note?: string; error?: string }) {
   return (
     <label className={"field" + (wide ? " wide" : "") + (error ? " invalid" : "")}>
-      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}<SourceChip source={source} />{note && <Info label="Note from Claude">{note}</Info>}</span>
+      <span className="field-label">{label}{hint && <span className="field-hint"> {hint}</span>}<SourceChip source={source} />{note && <Info label="About this field">{note}</Info>}</span>
       {children}
       {error && <span className="field-error">{error}</span>}
     </label>
@@ -115,7 +115,7 @@ export function parseAmount(raw: string): number | null {
 }
 
 export const MoneyInput = (p: Omit<NumProps, "prefix">) => demo.on
-  ? <span className="input-wrap demo"><span className="affix">{demo.symbol}</span><input value={Math.round(p.value * demo.scale).toLocaleString("en-US")} readOnly title="Demo mode: amounts are shown in a made-up currency and cannot be edited" /></span>
+  ? <span className="input-wrap demo"><span className="affix">{demo.symbol}</span><input value={Math.round(p.value * demo.scale).toLocaleString("en-US")} readOnly title="Demo mode: amounts cannot be edited" /></span>
   : <NumberInput prefix="$" min={0} {...p} />;
 
 /** Percent input over a fraction value: 0.15 shows as 15. */

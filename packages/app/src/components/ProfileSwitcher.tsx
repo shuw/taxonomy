@@ -32,7 +32,7 @@ export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, on
     </form>
   ) : mode === "delete" ? (
     <div className="menu-form">
-      <p>Delete <strong>{currentName}</strong>? The file is removed from <code>data/profiles</code>.{profiles.length < 2 ? " It is your only profile; you will start over." : ""}</p>
+      <p>Delete <strong>{currentName}</strong>? Its file is removed.{profiles.length < 2 ? " It is your only profile; you will start over." : ""}</p>
       <div className="menu-actions">
         <button type="button" className="btn" onClick={() => setMode("menu")}>Keep</button>
         <button type="button" className="btn danger" onClick={() => { setMode("menu"); onDelete(); }}>Delete</button>

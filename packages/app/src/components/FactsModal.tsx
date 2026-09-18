@@ -7,6 +7,7 @@ import { NotesFromClaude, ProbablyMissing, secondLookCount } from "./FollowUps.t
 import { usePersisted } from "../persist.ts";
 import { DependentsInput, FILING_OPTIONS, Field, MoneyInput, NumberInput, PercentInput, Segmented, Select, SourceChip, STATE_OPTIONS } from "./fields.tsx";
 import { Documents, DocumentsProvider } from "./Documents.tsx";
+import { Info } from "./Info.tsx";
 
 export const FACT_TABS = ["confirm", "you", "equity", "income", "home", "giving", "deductions", "history"] as const;
 export type FactTab = (typeof FACT_TABS)[number];
@@ -60,7 +61,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
     { id: "income", title: "Other income", color: "var(--series-surtax)", summary: investment > 0 ? `${usdCompact(investment)} beyond salary` : "nothing beyond salary" },
     { id: "home", title: "Home", color: "var(--series-state)", summary: home.mortgage ? `${usdCompact(home.mortgage.balance)} at ${pct(home.mortgage.rate)}` : home.propertyTax ? `${usdCompact(home.propertyTax)} property tax` : "no mortgage" },
     { id: "giving", title: "Giving", color: "var(--series-violet)", summary: giving > 0 ? `${usdCompact(giving)} this year` : "none recorded" },
-    { id: "deductions", title: "Other deductions", color: "var(--series-state)", summary: [ded.stateIncomeTax ? "state income tax" : "", ded.medical ? "medical" : ""].filter(Boolean).join(", ") || "none beyond the standard ones" },
+    { id: "deductions", title: "Other deductions", color: "var(--series-state)", summary: [ded.stateIncomeTax ? "state income tax" : "", ded.medical ? "medical" : ""].filter(Boolean).join(", ") || "none" },
     { id: "history", title: "Last return", color: "var(--series-amt)", summary: [ret ? `${ret.year}${calTotal ? ` · within ${pct(Math.abs(calTotal.delta) / Math.max(1, calTotal.reported))}` : ""}` : cf.amtCredit ? `${usdCompact(cf.amtCredit)} AMT credit` : "none on file", secondLook.gaps ? `${secondLook.gaps} probably missing` : ""].filter(Boolean).join(" · ") },
   ];
 
@@ -70,7 +71,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
         <div className="modal-head">
           <div>
             <h3>Your information</h3>
-            <div className="muted small" style={{ margin: 0 }}>Saved as you type to <code title="The app follows edits made by hand">{path}</code>{saving ? " · saving…" : ""}</div>
+            <div className="muted small" style={{ margin: 0 }}>Saved as you type to <code title="You can also edit this file by hand">{path}</code>{saving ? " · saving…" : ""}</div>
           </div>
           <button type="button" className="btn primary" onClick={onOpenIntake}>Fill from documents</button>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
@@ -103,7 +104,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                       <PersonFields who="spouse" person={spouse} label="Spouse" profile={profile} set={set} />
                       <button type="button" className="link danger" onClick={() => set(["people", "spouse"], undefined)}>Remove spouse</button>
                     </>
-                  : <button type="button" className="link" onClick={() => set(["people", "spouse"], { salary: 0 })}>+ Add a spouse's income</button>}
+                  : <button type="button" className="link" onClick={() => set(["people", "spouse"], { salary: 0 })}>+ Add a spouse</button>}
               </>
             )}
 
@@ -116,7 +117,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                 <Field label="Qualified dividends" hint="1099-DIV 1b" source={src(["income", "qualifiedDividends"])} note={note(["income", "qualifiedDividends"])}><MoneyInput value={inc.qualifiedDividends ?? 0} onChange={(n) => set(["income", "qualifiedDividends"], n)} /></Field>
                 <Field label="Short-term gains" source={src(["income", "shortTermGains"])} note={note(["income", "shortTermGains"])}><MoneyInput value={inc.shortTermGains ?? 0} onChange={(n) => set(["income", "shortTermGains"], n)} /></Field>
                 <Field label="Long-term gains" source={src(["income", "longTermGains"])} note={note(["income", "longTermGains"])}><MoneyInput value={inc.longTermGains ?? 0} onChange={(n) => set(["income", "longTermGains"], n)} /></Field>
-                <Field label="Other ordinary" hint="K-1, rental, side" source={src(["income", "otherOrdinary"])} note={note(["income", "otherOrdinary"])}><MoneyInput value={inc.otherOrdinary ?? 0} onChange={(n) => set(["income", "otherOrdinary"], n)} /></Field>
+                <Field label="Other income" hint="K-1, rental, side work" source={src(["income", "otherOrdinary"])} note={note(["income", "otherOrdinary"])}><MoneyInput value={inc.otherOrdinary ?? 0} onChange={(n) => set(["income", "otherOrdinary"], n)} /></Field>
               </div>
             )}
 
@@ -127,8 +128,8 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                       <div className="row3">
                         <Field label="Balance now" source={src(["home", "mortgage"])} note={note(["home", "mortgage"])}><MoneyInput value={home.mortgage.balance} onChange={(n) => set(["home", "mortgage", "balance"], n)} /></Field>
                         <Field label="Rate"><PercentInput value={home.mortgage.rate} onChange={(n) => set(["home", "mortgage", "rate"], n)} /></Field>
-                        <Field label="Originated"><span className="input-wrap"><input type="date" value={home.mortgage.originated} onChange={(e) => set(["home", "mortgage", "originated"], e.target.value)} /></span></Field>
-                        <Field label="Original amount" hint="sets the $750k cap"><MoneyInput value={home.mortgage.originalAmount ?? home.mortgage.balance} onChange={(n) => set(["home", "mortgage", "originalAmount"], n)} /></Field>
+                        <Field label="Start date"><span className="input-wrap"><input type="date" value={home.mortgage.originated} onChange={(e) => set(["home", "mortgage", "originated"], e.target.value)} /></span></Field>
+                        <Field label="Original amount" note="Interest counts only on the first $750k of the loan."><MoneyInput value={home.mortgage.originalAmount ?? home.mortgage.balance} onChange={(n) => set(["home", "mortgage", "originalAmount"], n)} /></Field>
                         <Field label="Term" hint="years"><NumberInput value={home.mortgage.termYears ?? 30} onChange={(n) => set(["home", "mortgage", "termYears"], Math.max(1, Math.round(n)))} min={1} /></Field>
                         <Field label="Property tax" source={src(["home", "propertyTax"])} note={note(["home", "propertyTax"])}><MoneyInput value={home.propertyTax ?? 0} onChange={(n) => set(["home", "propertyTax"], n)} /></Field>
                       </div>
@@ -136,7 +137,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                     </>
                   : <>
                       <div className="row3">
-                        {home.mortgageInterest ? <Field label="Mortgage interest" hint="direct figure"><MoneyInput value={home.mortgageInterest} onChange={(n) => set(["home", "mortgageInterest"], n)} /></Field> : null}
+                        {home.mortgageInterest ? <Field label="Mortgage interest" hint="paid this year"><MoneyInput value={home.mortgageInterest} onChange={(n) => set(["home", "mortgageInterest"], n)} /></Field> : null}
                         <Field label="Property tax" source={src(["home", "propertyTax"])} note={note(["home", "propertyTax"])}><MoneyInput value={home.propertyTax ?? 0} onChange={(n) => set(["home", "propertyTax"], n)} /></Field>
                       </div>
                       <button type="button" className="link" onClick={() => set(["home", "mortgage"], { balance: 800_000, rate: 0.06, originated: `${profile.plan.startYear - 2}-01-01`, originalAmount: 800_000, termYears: 30 })}>+ Add a mortgage</button>
@@ -148,19 +149,19 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
               <>
                 <div className="row3">
                   <Field label="Cash gifts" hint="expected this year" source={src(["deductions", "charitable", "cash"])} note={note(["deductions", "charitable", "cash"])}><MoneyInput value={ch.cash ?? 0} onChange={(n) => set(["deductions", "charitable", "cash"], n)} /></Field>
-                  <Field label="Appreciated stock" hint="fair market value given" source={src(["deductions", "charitable", "appreciatedStock"])} note={note(["deductions", "charitable", "appreciatedStock"])}><MoneyInput value={ch.appreciatedStock ?? 0} onChange={(n) => set(["deductions", "charitable", "appreciatedStock"], n)} /></Field>
+                  <Field label="Appreciated stock" hint="value when given" source={src(["deductions", "charitable", "appreciatedStock"])} note={note(["deductions", "charitable", "appreciatedStock"])}><MoneyInput value={ch.appreciatedStock ?? 0} onChange={(n) => set(["deductions", "charitable", "appreciatedStock"], n)} /></Field>
                   <Field label="Donor-advised fund" source={src(["deductions", "charitable", "daf"])} note={note(["deductions", "charitable", "daf"])}><MoneyInput value={ch.daf ?? 0} onChange={(n) => set(["deductions", "charitable", "daf"], n)} /></Field>
                 </div>
                 <div className="row3">
-                  <Field label="Gifts carried forward" hint="gifts not yet deducted because of AGI limits" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"])}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
+                  <Field label="Gifts carried forward" hint="from earlier years" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"]) ?? "Gifts the yearly limits did not let you deduct yet."}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
                 </div>
-                <p className="muted small">Giving is deducted only when itemizing beats the standard deduction; appreciated stock avoids the gain as well. Put a large gift on the timeline to see which year it does the most.</p>
+                <p className="muted small">Add a large gift on the timeline to see which year it helps most. <Info label="How gifts count">Gifts count only when itemizing beats the standard deduction. Giving appreciated stock also skips the gain on it.</Info></p>
               </>
             )}
 
             {tab === "deductions" && (
               <div className="row3">
-                <Field label="State income tax" hint="leave 0 for a modeled state" source={src(["deductions", "stateIncomeTax"])} note={note(["deductions", "stateIncomeTax"])}><MoneyInput value={ded.stateIncomeTax ?? 0} onChange={(n) => set(["deductions", "stateIncomeTax"], n)} /></Field>
+                <Field label="State income tax" source={src(["deductions", "stateIncomeTax"])} note={note(["deductions", "stateIncomeTax"]) ?? "Leave 0 if your state is modeled; the app computes it."}><MoneyInput value={ded.stateIncomeTax ?? 0} onChange={(n) => set(["deductions", "stateIncomeTax"], n)} /></Field>
                 <Field label="Medical expenses" source={src(["deductions", "medical"])} note={note(["deductions", "medical"])}><MoneyInput value={ded.medical ?? 0} onChange={(n) => set(["deductions", "medical"], n)} /></Field>
               </div>
             )}
@@ -170,18 +171,18 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
             {tab === "history" && (
               <>
                 <ProbablyMissing profile={profile} edit={edit} />
-                <div className="subhead">Carryforwards into {profile.plan.startYear}</div>
+                <div className="subhead">Carried over into {profile.plan.startYear}</div>
                 <div className="row4">
                   <Field label="AMT credit" hint="Form 8801" source={src(["carryforwards", "amtCredit"])} note={note(["carryforwards", "amtCredit"])}><MoneyInput value={cf.amtCredit ?? 0} onChange={(n) => set(["carryforwards", "amtCredit"], n)} /></Field>
                   <Field label="Short-term loss" source={src(["carryforwards", "capitalLoss", "shortTerm"])} note={note(["carryforwards", "capitalLoss", "shortTerm"])}><MoneyInput value={cf.capitalLoss?.shortTerm ?? 0} onChange={(n) => set(["carryforwards", "capitalLoss", "shortTerm"], n)} /></Field>
                   <Field label="Long-term loss" source={src(["carryforwards", "capitalLoss", "longTerm"])} note={note(["carryforwards", "capitalLoss", "longTerm"])}><MoneyInput value={cf.capitalLoss?.longTerm ?? 0} onChange={(n) => set(["carryforwards", "capitalLoss", "longTerm"], n)} /></Field>
-                  <Field label="Charitable" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"])}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
+                  <Field label="Gifts" source={src(["carryforwards", "charitable"])} note={note(["carryforwards", "charitable"])}><MoneyInput value={cf.charitable ?? 0} onChange={(n) => set(["carryforwards", "charitable"], n)} /></Field>
                 </div>
                 {(profile.returns ?? []).map((r) => (
                   <div className="prior-return" key={r.year}>
                     <div className="subhead">{r.year} return <SourceChip source={src(["returns", r.year])} /></div>
                     <dl>
-                      {r.reported.agi !== undefined && <><dt>AGI</dt><dd>{usd(r.reported.agi)}</dd></>}
+                      {r.reported.agi !== undefined && <><dt>Income (AGI)</dt><dd>{usd(r.reported.agi)}</dd></>}
                       {r.reported.totalTax !== undefined && <><dt>Total tax</dt><dd>{usd(r.reported.totalTax)}</dd></>}
                       {r.reported.amt !== undefined && <><dt>AMT</dt><dd>{usd(r.reported.amt)}</dd></>}
                     </dl>
@@ -189,7 +190,7 @@ export function FactsModal({ profile, years, tab, onTab, edit, onClose, onOpenIn
                     <button type="button" className="link danger" onClick={() => set(["returns"], (profile.returns ?? []).filter((x) => x.year !== r.year))}>Remove return</button>
                   </div>
                 ))}
-                {!ret && <p className="muted small">Fill from documents to add last year's return; the tool will show how closely it reproduces it.</p>}
+                {!ret && <p className="muted small">Fill from documents to add last year's return and check the app's math against it.</p>}
                 <Documents />
               </>
             )}

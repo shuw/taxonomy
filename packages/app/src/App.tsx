@@ -232,7 +232,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
           : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
-        {demo.on && <span className="chip demo" title="Amounts are shown in a made-up currency at a fixed scale; your file is unchanged">Demo · {demo.symbol}</span>}
+        {demo.on && <span className="chip demo" title="Amounts are in a made-up currency; your file is unchanged">Demo · {demo.symbol}</span>}
         <ScenarioBar profile={profile} scenario={scenario} edit={edit} />
         <span className="spacer" />
         <ThemeToggle />
@@ -268,14 +268,14 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
         {hasIso && (
           <div className="two-up">
             <section className="card">
-              <h2>AMT credit bank <Info label="About the credit bank">Credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}. AMT paid on an ISO exercise comes back as a credit in later years, as far as regular tax exceeds the minimum tax.</Info></h2>
+              <h2>AMT credit bank <Info label="About the credit bank">AMT paid on an ISO exercise comes back as a credit in later years, whenever regular tax is above the minimum. The bars show the credit on hand at each year end{profile.carryforwards?.amtCredit ? `, starting from the ${usdCompact(profile.carryforwards.amtCredit)} you brought in` : ""}.</Info></h2>
               <CreditStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />
               {byCompany.filter((c) => c.recovery).map((c) => <CreditRecoveryView key={c.company} r={c.recovery!} companyName={isoCompanies.length > 1 ? c.name : undefined} />)}
               {byCompany.every((c) => !c.recovery) && <p className="muted small" style={{ margin: "8px 0 0" }}>Select or add an ISO exercise in {sweepYear} to see how its credit comes back.</p>}
             </section>
             {byCompany.map((c) => (
               <section className="card" key={c.company}>
-                <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${c.name} ` : ""}ISO shares exercised <Info label="About this chart">AMT for {sweepYear} as the number of ISO shares exercised that year varies, with other years{isoCompanies.length > 1 ? " and other companies" : ""} held as they are. Click the curve to set the exercise.</Info></h2>
+                <h2>AMT in {sweepYear} vs {isoCompanies.length > 1 ? `${c.name} ` : ""}ISO shares exercised <Info label="About this chart">How {sweepYear}'s AMT changes with the ISO shares exercised that year; other years{isoCompanies.length > 1 ? " and other companies" : ""} stay as they are. Click the curve to set the number.</Info></h2>
                 <SweepChart sweep={c.sweep} crossover={c.crossover} current={exercisedIn(engineProfile, engineLevers, "iso", sweepYear, c.company)} onChange={(n) => actions.setIsoShares(sweepYear, n, c.company)} />
               </section>
             ))}
@@ -288,7 +288,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
             <span className="muted small fold-hint">Click a number for its reason</span>
             <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-          {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} />}
+          {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} onFocus={setFocusYear} />}
         </section>
         <CalibrationCard profile={profile} />
         <footer className="foot">Taxonomy is a planning aid, not tax, legal or financial advice, and not a filing tool. Every figure is an estimate; rules, thresholds and your facts change. Your data stays in files on this computer.</footer>

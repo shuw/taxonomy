@@ -57,9 +57,9 @@ export function SaleInspector({ profile, plan, years, event: e, result, onChange
             <label className="ei-price">
               <span className="muted small">Price</span>
               <MoneyInput value={price} onChange={(n) => onChange({ price: Math.abs(n - modeled) < 0.005 ? undefined : n })} decimals={2} />
-              {e.price !== undefined && <button type="button" className="link" onClick={() => onChange({ price: undefined })}>use modeled</button>}
+              {e.price !== undefined && <button type="button" className="link" onClick={() => onChange({ price: undefined })}>use the modeled price</button>}
             </label>
-            <button type="button" className="btn" onClick={onSellToCover} title="Sell just enough that the proceeds pay this year's whole tax bill, including the tax on the sale">Sell enough to cover {e.year}'s tax</button>
+            <button type="button" className="btn" onClick={onSellToCover} title="Just enough that the proceeds pay the year's whole tax bill, including tax on the sale itself">Sell enough to cover {e.year}'s tax</button>
             <button type="button" className="link" onClick={() => (explicit ? onChange({ lots: undefined }) : pickMyself())}>{explicit ? "Let the rule pick lots" : "Pick lots myself"}</button>
           </div>
           {result && result.shares > 0 && (
@@ -68,7 +68,7 @@ export function SaleInspector({ profile, plan, years, event: e, result, onChange
               {result.longTermGain !== 0 && <span><strong>{fmtDelta(result.longTermGain)}</strong> long-term</span>}
               {result.shortTermGain !== 0 && <span><strong>{fmtDelta(result.shortTermGain)}</strong> short-term</span>}
               {result.ordinaryIncome > 0 && <span><strong>{usdCompact(result.ordinaryIncome)}</strong> ordinary (disqualified ISOs)</span>}
-              {result.amtAdjustment < 0 && <span><strong>{usdCompact(-result.amtAdjustment)}</strong> off AMTI</span>}
+              {result.amtAdjustment < 0 && <span><strong>{usdCompact(-result.amtAdjustment)}</strong> off AMT income</span>}
               <span><strong>{usdCompact(tax)}</strong> total tax in {e.year}</span>
             </div>
           )}

@@ -279,7 +279,7 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .ledger th:first-child, .ledger td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
 .ledger thead th { color: var(--ink-2); font-weight: 500; border-bottom: 1px solid var(--border); }
 .ledger thead th.focus { color: var(--ink); font-weight: 700; background: var(--focus); border-radius: 8px 8px 0 0; }
-.ledger td.focus { background: var(--focus); }
+.ledger td.focus, .ledger th.focus { background: var(--focus); }
 .ledger tr.group td { padding-top: 14px; font-size: var(--text-sm); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .ledger td.num { cursor: pointer; border-radius: 8px; transition: background .1s; }
 .ledger td.num:hover { background: var(--surface-2); }
@@ -475,7 +475,9 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .card-fold { width: 100%; display: flex; align-items: flex-start; gap: 8px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; }
 .card-fold h2 { margin-bottom: 4px; }
 .card-fold .count { display: inline-block; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--focus); color: var(--accent); font: 700 var(--text-md)/1.5 var(--display); text-align: center; vertical-align: 2px; margin-left: 4px; }
-.card-fold .chev { margin-left: auto; margin-top: 6px; color: var(--muted); transition: transform .15s ease; flex: none; }
+.card:has(> .card-fold) { position: relative; }
+.card-fold .chev { position: absolute; top: 12px; right: 14px; color: var(--muted); transition: transform .15s ease; flex: none; }
+.card-fold { padding-right: 28px; }
 .hero .fine { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .foot { margin: 8px 0 24px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
 .card:not(.folded) .card-fold .chev { transform: rotate(180deg); }
@@ -757,7 +759,8 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .menu-sep { height: 1px; background: var(--border); margin: 4px 6px; }
 /* Info affordance ---------------------------------------------------------- */
 .info { position: relative; display: inline-block; vertical-align: 2px; margin-left: 6px; }
-.info-btn { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); font: 700 var(--text-xs)/1 var(--display); cursor: help; padding: 0; display: inline-grid; place-items: center; }
+.info-btn { width: 20px; height: 20px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); cursor: help; padding: 0; display: inline-grid; place-items: center; }
+.info-btn svg { display: block; }
 .info-btn:hover, .info.open .info-btn { color: var(--accent); border-color: var(--accent); }
 /* Hidden with display, not visibility: an invisible box would still widen the page and let it scroll sideways. */
 .info-pop { display: none; position: absolute; top: calc(100% + 8px); left: 0; width: 340px; max-width: min(340px, 80vw); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; font: 400 var(--text-md)/1.45 var(--font); color: var(--ink-2); text-align: left; letter-spacing: 0; text-transform: none; z-index: 20; animation: rise .14s ease-out; }

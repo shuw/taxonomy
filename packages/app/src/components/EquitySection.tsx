@@ -56,10 +56,10 @@ export function EquityKnobs({ profile, levers, edit, onOpenFacts }: KnobsProps) 
           {(() => { const l = levers.liquidity?.[c.id] ?? levers.liquidity?.["*"]; const y = l?.year ?? c.liquidityYear; return y ? <div className="company-sub muted">liquidity event {y}{l ? " (from the timeline)" : ""}</div> : null; })()}
         </div>
       ))}
-      {grants.length === 0 && <p className="muted small">No grants yet. Add them under "Edit my information", or fill from documents.</p>}
+      {grants.length === 0 && <p className="muted small">No grants yet. Add them under Edit my information, or fill from documents.</p>}
       {missing.length > 0 && (
         <div className="notice">
-          {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule, so nothing more of them vests here. <button type="button" className="link" onClick={onOpenFacts}>Set the schedule</button>
+          {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} no vesting schedule, so the unvested shares never vest here. <button type="button" className="link" onClick={onOpenFacts}>Set the schedule</button>
         </div>
       )}
       <button type="button" className="link" onClick={onOpenFacts}>Grants, schedules and holdings →</button>
@@ -94,7 +94,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
         const holdingCount = (profile.equity.holdings ?? []).filter(owns).length;
         const remove = () => {
           const what = [grantCount && `${grantCount} grant${grantCount === 1 ? "" : "s"}`, holdingCount && `${holdingCount} holding${holdingCount === 1 ? "" : "s"}`].filter(Boolean).join(" and ");
-          if (what && !window.confirm(`Remove ${c.name} and its ${what}? Decisions about them on the timeline go too.`)) return;
+          if (what && !window.confirm(`Remove ${c.name}, its ${what}, and every decision about them?`)) return;
           const scenarios = Object.fromEntries(Object.entries(profile.scenarios ?? {}).map(([k, s]) => [k, { events: s.events.filter((e) => !("company" in e && e.company === c.id) && !(e.kind === "exercise" && e.company === undefined && i === 0 && grantCount > 0)) }]));
           edit([
             { path: ["equity", "companies"], value: companies.filter((_, j) => j !== i) },
@@ -114,7 +114,7 @@ export function EquityFacts({ profile, years, edit }: { profile: Profile; years:
 
       {missing.length > 0 && (
         <div className="notice">
-          <strong>{missing.length === 1 ? "One grant has" : `${missing.length} grants have`} unvested shares but no vesting schedule</strong>, so nothing more of them vests in the plan: {missing.map((g) => g.name).join(", ")}. Open the grant and set "Vesting".
+          <strong>{missing.length === 1 ? "One grant has" : `${missing.length} grants have`} no vesting schedule</strong>, so the unvested shares never vest: {missing.map((g) => g.name).join(", ")}. Open the grant and set Vesting.
         </div>
       )}
 
@@ -161,7 +161,7 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, onChange, on
           <Field label="Growth" hint="/yr"><PercentInput value={c.growth ?? profile.assumptions.fmvGrowth} onChange={(n) => onChange({ growth: n })} /></Field>
         </div>
         {hasDoubleTrigger && (
-          <Field label="Liquidity event" hint="settles double-trigger RSUs; a liquidity event on the timeline overrides this" wide>
+          <Field label="Liquidity event" note="When double-trigger RSUs settle. A liquidity event on the timeline overrides this." wide>
             <Select options={[{ value: "", label: "none in the plan" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} value={c.liquidityYear ? String(c.liquidityYear) : ""} onChange={(v) => onChange({ liquidityYear: v ? Number(v) : undefined })} />
           </Field>
         )}
@@ -173,7 +173,7 @@ function CompanyRow({ company: c, profile, years, hasDoubleTrigger, onChange, on
           </div>
         ))}
         <div className="add-grant">
-          <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known price in a later year (an IPO, a tender)</button>
+          <button type="button" className="link" onClick={() => updatePath([...pathEntries, [pathEntries.length ? pathEntries[pathEntries.length - 1]![0] + 1 : years[1] ?? years[0]!, c.sharePrice * 2] as const])}>+ Known future price (IPO, tender)</button>
         </div>
       </div>
     </div>
@@ -250,7 +250,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
           </div>
           {companies.length > 1 && <Field label="Company" wide><Select options={companies.map((c) => ({ value: c.id, label: c.name }))} value={g.company ?? companies[0]!.id} onChange={(c) => onChange({ company: c })} /></Field>}
           {g.type === "rsu" && (
-            <Field label="Settles" hint="double-trigger RSUs need a liquidity event before they are income" wide>
+            <Field label="Settles" note="Double-trigger RSUs are not income until a liquidity event." wide>
               <Segmented options={[{ value: "vest", label: "When units vest" }, { value: "liquidity", label: "At a liquidity event (double-trigger)" }]} value={g.settlement ?? "vest"} onChange={(s) => onChange({ settlement: s === "liquidity" ? "liquidity" : undefined })} />
             </Field>
           )}
@@ -267,7 +267,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
               <Field label="Vest start"><span className="input-wrap"><input type="date" value={g.schedule.start} onChange={(e) => onChange({ schedule: { ...g.schedule!, start: e.target.value } })} /></span></Field>
               <Field label="Years"><NumberInput value={g.schedule.years} onChange={(n) => onChange({ schedule: { ...g.schedule!, years: Math.max(0.25, n) } })} decimals={2} /></Field>
               <Field label="Cliff" hint="months"><NumberInput value={g.schedule.cliffMonths ?? 0} onChange={(n) => onChange({ schedule: { ...g.schedule!, cliffMonths: Math.max(0, Math.round(n)) } })} min={0} /></Field>
-              <Field label="Cadence"><Select options={[...CADENCE_OPTIONS]} value={g.schedule.cadence ?? "monthly"} onChange={(c) => onChange({ schedule: { ...g.schedule!, cadence: c } })} /></Field>
+              <Field label="How often"><Select options={[...CADENCE_OPTIONS]} value={g.schedule.cadence ?? "monthly"} onChange={(c) => onChange({ schedule: { ...g.schedule!, cadence: c } })} /></Field>
             </div>
           )}
           {mode === "years" && g.vesting && !Object.keys(g.vesting).some((k) => !/^\d{4}$/.test(k)) && (
@@ -280,7 +280,7 @@ function GrantRow({ grant: g, profile, onChange, onRemove }: { grant: EquityGran
               {Object.entries(g.vesting).sort(([a], [b]) => a.localeCompare(b)).map(([d, n]) => <Field key={d} label={d}><NumberInput value={n} onChange={(v) => onChange({ vesting: { ...g.vesting, [d]: Math.max(0, Math.round(v)) } })} min={0} /></Field>)}
             </div>
           )}
-          {g.splitOf && <div className="muted small">NSO tranche of {profile.equity.grants.find((x) => x.id === g.splitOf)?.name ?? g.splitOf} under the $100k rule: the two share that grant's vesting, ISO first up to $100k of strike value a year.</div>}
+          {g.splitOf && <div className="muted small">Split from {profile.equity.grants.find((x) => x.id === g.splitOf)?.name ?? g.splitOf} by the $100k ISO rule. <Info label="About the $100k rule">Only $100k of strike value can vest as ISOs each year; the rest of that grant vests as NSOs on the same schedule.</Info></div>}
           <div className={"grant-foot " + (noSchedule ? "warn" : "muted")}>
             {g.type === "rsu" ? `${shares(unvested)} unvested.` : `${shares(outstanding)} outstanding, ${shares(exercisableNow ?? 0)} exercisable now.`}
             {noSchedule && " No schedule, so the unvested part never vests here."}

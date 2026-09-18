@@ -2,6 +2,7 @@ import { kindStyle } from "../series.ts";
 import { LogRange, positionOf } from "./LogRange.tsx";
 import { shares, usd } from "../format.ts";
 import { NumberInput } from "./fields.tsx";
+import { Info } from "./Info.tsx";
 
 interface Props {
   label: string;
@@ -24,12 +25,12 @@ export function LeverRow({ label, hint, year, available, value, mark, over, shar
     <div className="lever-row">
       <div className="head">
         <span className="badge" style={kindStyle(label.toLowerCase())}>{label}</span>
-        <span className="lever-hint muted">{hint}</span>
+        <span className="lever-hint muted"><Info label={`About ${label} spread`}>{hint}</Info></span>
         <NumberInput value={value} onChange={(n) => onChange(Math.min(available, n))} min={0} suffix="sh" />
       </div>
       <div className="track">
         <LogRange max={available} value={value} step={available > 5000 ? 50 : 10} onChange={onChange} />
-        {mark !== null && <button type="button" className="mark" style={{ left: `calc(10px + (100% - 20px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares; click to set exactly that`} aria-label={`Set to ${shares(mark)} shares, the AMT line`} onClick={() => onChange(mark)} />}
+        {mark !== null && <button type="button" className="mark" style={{ left: `calc(10px + (100% - 20px) * ${pctOf(mark) / 100})` }} title={`AMT starts after ${shares(mark)} shares. Click to set that.`} aria-label={`Set to ${shares(mark)} shares, the AMT line`} onClick={() => onChange(mark)} />}
       </div>
       <div className="foot">
         <span className={over ? "over" : ""}>

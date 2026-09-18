@@ -14,7 +14,7 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
         <div className="modal-head">
           <div>
             <h3>History</h3>
-            <div className="muted small" style={{ margin: 0 }}>Every change to this profile, by you or by Claude. Any earlier version can be restored.</div>
+            <div className="muted small" style={{ margin: 0 }}>Every change, by you or by Claude. Restore any earlier version.</div>
           </div>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
         </div>

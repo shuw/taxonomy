@@ -34,7 +34,7 @@ export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanRe
         <Tile label="AMT paid" value={t.amt} pinned={p?.amt} color="var(--series-amt)" />
         <Tile label="AMT credit left" value={t.amtCreditCarryforwardEnd} pinned={p?.amtCreditCarryforwardEnd} color="var(--series-amt)" />
         {showState && <Tile label="State" value={t.stateTax} pinned={p?.stateTax} color="var(--series-state)" />}
-        <Tile label="Rate incl. ISO spread" value={t.rateWithSpread} pinned={p?.rateWithSpread} color="var(--series-violet)" unit="rate" />
+        <Tile label="Tax rate" hint="Tax as a share of income, counting the ISO spread as income" value={t.rateWithSpread} pinned={p?.rateWithSpread} color="var(--series-violet)" unit="rate" />
       </div>
       <p className="fine">For understanding, not advice. These are estimates from a model of the rules; confirm anything you act on with a tax professional.</p>
     </section>

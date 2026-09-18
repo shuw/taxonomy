@@ -41,21 +41,21 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
       <Section id="assumptions" title="Assumptions" color="var(--muted)" defaultOpen summary={`wages +${pct(a.wageGrowth)}/yr · CPI ${pct(a.inflation)}${a.bracketRateDelta ? ` · rates ${a.bracketRateDelta > 0 ? "+" : ""}${pct(a.bracketRateDelta)}` : ""}`}>
         <div className="row2">
           <Field label="Wage growth" hint="/yr"><PercentInput value={a.wageGrowth} onChange={(n) => set(["assumptions", "wageGrowth"], n)} /></Field>
-          <Field label="Inflation" hint="indexes brackets"><PercentInput value={a.inflation} onChange={(n) => set(["assumptions", "inflation"], n)} /></Field>
+          <Field label="Inflation" hint="/yr" note="Tax brackets move up with it each year."><PercentInput value={a.inflation} onChange={(n) => set(["assumptions", "inflation"], n)} /></Field>
         </div>
-        <Field label="Bracket rate shift" hint="added to every bracket" wide><PercentInput value={a.bracketRateDelta ?? 0} onChange={(n) => set(["assumptions", "bracketRateDelta"], n || undefined)} /></Field>
+        <Field label="Tax rate change" note="Added to every federal bracket rate, to test a future rate rise." wide><PercentInput value={a.bracketRateDelta ?? 0} onChange={(n) => set(["assumptions", "bracketRateDelta"], n || undefined)} /></Field>
         {profile.filer.state === "WA" && (
           <>
-            <div className="subhead">Washington <Info label="About the Washington taxes">Capital gains excise tax: 7% on long-term gains over about $285k, law since 2022. Surtax: 2.9% more on gains over $1M, since 2025. Millionaires' tax: 9.9% on income over $1M per household from 2028, signed March 2026 and facing a court challenge and a repeal initiative; switch it off to see that outcome. To start or stop any of these in a later year, press + under that year and pick it under Assumptions.</Info></div>
-            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains excise tax</strong> · 7% over $285k</span></label>
-            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>2.9% surtax</strong> · gains over $1M</span></label>
-            <label className="switch"><input type="checkbox" checked={a.state?.waMillionairesTax !== false} onChange={(e) => set(["assumptions", "state", "waMillionairesTax"], e.target.checked ? undefined : false)} /><span><strong>Millionaires' tax</strong> · 9.9% over $1M, from 2028</span></label>
+            <div className="subhead">Washington <Info label="About the Washington taxes">Three state taxes, each on long-term gains or income over its threshold. The millionaires' tax was signed in March 2026 and faces a court challenge and a repeal initiative; switch it off to see that outcome. To start or stop one in a later year, press + under that year.</Info></div>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsTax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsTax"], e.target.checked ? undefined : false)} /><span><strong>Capital gains tax</strong> · 7% over $285k</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waCapitalGainsSurtax !== false} onChange={(e) => set(["assumptions", "state", "waCapitalGainsSurtax"], e.target.checked ? undefined : false)} /><span><strong>Surtax</strong> · 2.9% over $1M</span></label>
+            <label className="switch"><input type="checkbox" checked={a.state?.waMillionairesTax !== false} onChange={(e) => set(["assumptions", "state", "waMillionairesTax"], e.target.checked ? undefined : false)} /><span><strong>Millionaires' tax</strong> · 9.9% over $1M from 2028</span></label>
           </>
         )}
       </Section>
       <div className="sidebar-foot">
-        <button type="button" className="link muted" onClick={resetView} title="Forget which sections and cards are open, the focused year, dismissed suggestions and the selected decision. Your data and theme stay.">Reset view</button>
-        <button type="button" className="link muted" onClick={() => setDemo(!demo.on)} title="Show every amount in a made-up currency at a fixed scale, for screenshots and screen shares. Your file is unchanged.">{demo.on ? "Leave demo mode" : "Demo mode"}</button>
+        <button type="button" className="link muted" onClick={resetView} title="Forgets which cards are open and what is selected. Your data and theme stay.">Reset view</button>
+        <button type="button" className="link muted" onClick={() => setDemo(!demo.on)} title="Shows every amount in a made-up currency, for screenshots. Your file is unchanged.">{demo.on ? "Leave demo mode" : "Demo mode"}</button>
       </div>
     </div>
   );

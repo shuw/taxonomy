@@ -18,7 +18,7 @@ export function CalibrationCard({ profile }: { profile: Profile }) {
         <h2>Your {cal.year} return, recomputed</h2>
         <svg className="chev" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </button>
-      {!expanded && <div className="sub"><span className={"cal-inline " + tone}>{verdict}</span> <Info label="About this check">The same math, run on the numbers from your filed return, as a check that the model reproduces it. Where it diverges is where a simplification matters for you. Open for the line-by-line comparison.</Info></div>}
+      {!expanded && <div className="sub"><span className={"cal-inline " + tone}>{verdict}</span> <Info label="About this check">The app's math, run on your filed return, as a check. Where it differs, a simplification in the model matters for you. Open for the line by line.</Info></div>}
       {expanded && <>
       <div className="cal-head">
         <div className="cal-big"><span className="label">{total.label}</span><span className="value">{usd(total.computed)}</span></div>

@@ -24,7 +24,7 @@ export function LiquidityInspector({ profile, plan, years, event: e, onChange, o
         <label className="ei-price">
           <span className="muted small">Share price at the event</span>
           <MoneyInput value={e.price ?? modeled} onChange={(n) => onChange({ price: Math.abs(n - modeled) < 0.005 ? undefined : n })} decimals={2} />
-          {e.price !== undefined && <button type="button" className="link" onClick={() => onChange({ price: undefined })}>use modeled</button>}
+          {e.price !== undefined && <button type="button" className="link" onClick={() => onChange({ price: undefined })}>use the modeled price</button>}
         </label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>

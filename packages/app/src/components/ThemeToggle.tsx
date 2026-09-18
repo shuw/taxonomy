@@ -6,5 +6,5 @@ const LABEL: Record<Theme, string> = { system: "◐ Auto", light: "☀ Light", d
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(readTheme);
-  return <button type="button" className="btn theme-toggle" title="Cycle light, dark, system" onClick={() => { const t = NEXT[theme]; applyTheme(t); setTheme(t); }}>{LABEL[theme]}</button>;
+  return <button type="button" className="btn theme-toggle" title="Light, dark or auto" onClick={() => { const t = NEXT[theme]; applyTheme(t); setTheme(t); }}>{LABEL[theme]}</button>;
 }

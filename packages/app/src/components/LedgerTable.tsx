@@ -13,9 +13,9 @@ const GROUPS: { title: string; ids: string[] }[] = [
 ];
 const TOTALS = ["federalTotal", "totalTax", "effectiveRate"];
 
-interface Props { plan: PlanResult; pinned: PlanResult | null; focusYear: number; selected: Selection | null; onSelect: (s: Selection) => void; }
+interface Props { plan: PlanResult; pinned: PlanResult | null; focusYear: number; selected: Selection | null; onSelect: (s: Selection) => void; /** Hovering a cell focuses its year, as hovering a bar does. */ onFocus?: (year: number) => void; }
 
-export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Props) {
+export function LedgerTable({ plan, pinned, focusYear, selected, onSelect, onFocus }: Props) {
   const years = plan.years;
   const row = (id: string, total = false) => {
     if (!years.every((y) => y.lines[id])) return null;
@@ -29,7 +29,7 @@ export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Pro
           const delta = pinnedLine ? fmtDelta(line.value - pinnedLine.value, line.unit) : "";
           const isSel = selected?.year === y.year && selected.id === id;
           return (
-            <td key={y.year} className={"num" + (y.year === focusYear ? " focus" : "") + (isSel ? " selected" : "")} onClick={() => onSelect({ year: y.year, id })} title="Why?">
+            <td key={y.year} className={"num" + (y.year === focusYear ? " focus" : "") + (isSel ? " selected" : "")} onClick={() => onSelect({ year: y.year, id })} onMouseEnter={() => onFocus?.(y.year)} title="Why?">
               {fmtLine(line)}
               {pinned && <span className="delta">{delta || " "}</span>}
             </td>
@@ -42,7 +42,7 @@ export function LedgerTable({ plan, pinned, focusYear, selected, onSelect }: Pro
     <div className="table-wrap">
       <div className="table-wrap"><table className="ledger">
         <thead>
-          <tr><th></th>{years.map((y) => <th key={y.year} className={y.year === focusYear ? "focus" : ""}>{y.year}</th>)}</tr>
+          <tr><th></th>{years.map((y) => <th key={y.year} className={y.year === focusYear ? "focus" : ""} onMouseEnter={() => onFocus?.(y.year)}>{y.year}</th>)}</tr>
         </thead>
         <tbody>
           {GROUPS.map((g) => [

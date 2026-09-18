@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, type Attachment } from "../api.ts";
 import { ProfileIdContext } from "../persist.ts";
+import { Info } from "./Info.tsx";
 
 interface Docs { id: string; list: Attachment[]; refresh: () => void; }
 export const DocumentsContext = createContext<Docs | null>(null);
@@ -47,8 +48,8 @@ export function Documents() {
   };
   return (
     <div className="docs">
-      <div className="subhead">Documents</div>
-      <p className="muted small">Pages the numbers came from; a value's source chip links to its page.</p>
+      <div className="subhead">Documents <Info label="About documents">A value's source chip links to its page here.</Info></div>
+      <p className="muted small">The pages your numbers came from.</p>
       {docs.list.length > 0 && (
         <ul className="plain doc-list">
           {docs.list.map((a) => (

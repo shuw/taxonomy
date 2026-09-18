@@ -30,7 +30,7 @@ export function FactChangeInspector({ profile, years, entry, onChange, onRemove 
         <span className="ei-value"><FieldValueInput field={f} value={entry.value} onChange={(v) => onChange({ ...entry, value: v })} /></span>
       </>}>
       <div className="ei-row">
-        <span className="input-wrap ei-note"><input placeholder="note (optional)" value={entry.note ?? ""} onChange={(e) => onChange({ ...entry, note: e.target.value || undefined })} /></span>
+        <span className="input-wrap ei-note"><input placeholder="Note (optional)" value={entry.note ?? ""} onChange={(e) => onChange({ ...entry, note: e.target.value || undefined })} /></span>
         <span className="muted small">{same ? "Same as the current value, so nothing changes yet." : "Applies in every scenario."}</span>
       </div>
     </InspectorShell>

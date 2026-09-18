@@ -25,7 +25,7 @@ export function ScenarioBar({ profile, scenario, edit }: Props) {
   const panel = (close: () => void) => mode === "save" ? (
     <form className="menu-form" onSubmit={(e) => { e.preventDefault(); save(close); }}>
       <p>Save the current decisions as a new scenario.</p>
-      <span className="input-wrap"><input autoFocus value={draft} placeholder="scenario name" onChange={(e) => setDraft(e.target.value)} /></span>
+      <span className="input-wrap"><input autoFocus value={draft} placeholder="Scenario name" onChange={(e) => setDraft(e.target.value)} /></span>
       <div className="menu-actions">
         <button type="button" className="btn" onClick={() => setMode("menu")}>Cancel</button>
         <button type="submit" className="btn primary" disabled={!draft.trim()}>Save</button>

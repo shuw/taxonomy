@@ -19,7 +19,7 @@ interface Basics { name: string }
 const REQUIRED_BASICS: { id: string; text: string; about: string }[] = [
   { id: "filer.filingStatus", text: "How do you file? Single, married filing jointly, separately, or head of household.", about: "filer.filingStatus" },
   { id: "filer.state", text: "Which state do you live in?", about: "filer.state" },
-  { id: "people.self.salary", text: "What is your base salary? Base pay only; equity income is added from your grants.", about: "people.self.salary" },
+  { id: "people.self.salary", text: "What is your base salary? Base pay only; equity is counted from your grants.", about: "people.self.salary" },
   { id: "filer.dependents", text: "Any dependents? Their birth years, comma separated, or leave blank for none.", about: "filer.dependents" },
 ];
 
@@ -63,7 +63,7 @@ function FillModal({ profile, doc, onApply, onClose, onHistory }: FillProps) {
         <header className="modal-head">
           <div>
             <h3>Fill from documents</h3>
-            <div className="muted small" style={{ margin: 0 }}>Connected, Claude fills values in directly. A pasted reply is reviewed here first.</div>
+            <div className="muted small" style={{ margin: 0 }}>With Claude connected, values arrive on their own. A pasted reply is reviewed here first.</div>
           </div>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">×</button>
         </header>
@@ -295,8 +295,8 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
             <AgentSetup status={agent} name={name} create={create} />
           ) : (
             <>
-              <div className="col-title"><span className="step-no">1</span> Give this to any agent that can see your files</div>
-              <p className="muted small">Claude with Drive or mail, ChatGPT with uploads, a CLI agent in a folder. It returns one block of YAML; paste that into step 2.</p>
+              <div className="col-title"><span className="step-no">1</span> Give this to Claude, or any assistant that can read your files</div>
+              <p className="muted small">Claude with Drive or mail, ChatGPT with uploads, or a coding assistant in a folder. Paste its reply into step 2.</p>
               <textarea className="prompt-box" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} />
               <div className="modal-actions">
                 <button type="button" className="btn primary" disabled={sections.length === 0} onClick={() => void copy()}>{copied ? "Copied" : "Copy request"}</button>
@@ -322,7 +322,7 @@ function AgentIntake({ profile, doc, name, create, busy, error, onFinish, scope,
           </div>
         ) : (
         <div className="col">
-          <div className="col-title"><span className="step-no">{mode === "agent" ? "✓" : "2"}</span> Review what it found</div>
+          <div className="col-title"><span className="step-no">{mode === "agent" ? "✓" : "2"}</span> Review what was found</div>
           {sent && pasted === sent.text && <div className="muted small">Sent by Claude {new Date(sent.submitted).toLocaleString()}.</div>}
           {mode === "agent" && !sent && !pasted.trim() && <div className="agent-status"><span className="dot pulse" /> Waiting for Claude…</div>}
           <textarea className="paste-box" placeholder={mode === "agent" ? "Claude's reply appears here on its own." : "Paste the whole reply here."} value={pasted} onChange={(e) => { onInteract?.(); setPasted(e.target.value); setAccepted(null); }} />

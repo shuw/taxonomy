@@ -65,7 +65,7 @@ function DeleteForm({ deleteAccount }: { deleteAccount: (password: string) => Pr
   return (
     <div>
       <div className="subhead">Delete this account</div>
-      <p className="muted small">Removes the account and everything in it: every profile, its history and its documents, and the Claude connector. There is no way back.</p>
+      <p className="muted small">Removes every profile, its history and documents, and the Claude connection. There is no way back.</p>
       {!confirming ? (
         <button type="button" className="btn danger" onClick={() => setConfirming(true)}>Delete my account…</button>
       ) : (

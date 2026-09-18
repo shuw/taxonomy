@@ -26,7 +26,7 @@ export function HistoryTab() {
   for (const r of rows) { const d = new Date(r.at).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }); days.set(d, [...(days.get(d) ?? []), r]); }
   return (
     <>
-      <p className="muted small" style={{ margin: 0 }}>Restore puts the file back to just before that change; the restore is logged too.</p>
+      <p className="muted small" style={{ margin: 0 }}>Restore puts the profile back to just before that change.</p>
       {[...days.entries()].map(([day, list]) => (
         <div key={day}>
           <div className="subhead">{day}</div>
@@ -41,7 +41,7 @@ export function HistoryTab() {
                 <div className="history-actions">
                   {r.restorable && (confirm === r.at
                     ? <><button type="button" className="btn primary" onClick={() => void restore(r.at)}>Restore</button><button type="button" className="btn" onClick={() => setConfirm(null)}>Cancel</button></>
-                    : <button type="button" className="link" onClick={() => setConfirm(r.at)}>Restore the version before this</button>)}
+                    : <button type="button" className="link" onClick={() => setConfirm(r.at)}>Restore to before this</button>)}
                 </div>
               </li>
             ))}

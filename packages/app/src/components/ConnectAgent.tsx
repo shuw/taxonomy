@@ -10,7 +10,7 @@ const CONNECTOR_LINK = "https://claude.ai/new?modal=add-custom-connector#customi
 
 /** MCP clients announce a machine name; show the one people know. */
 export function clientName(raw: string | null | undefined): string {
-  if (!raw) return "an agent";
+  if (!raw) return "Claude";
   const k = raw.toLowerCase();
   if (k === "claude.ai") return "claude.ai";
   if (k.includes("claude-desktop") || k === "claude-ai" || k.includes("claude desktop")) return "Claude Desktop";
@@ -102,7 +102,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
           <Step n={++n} done={shared} title={shared ? "Reachable from claude.ai" : "Open a tunnel to it"}>
             {!shared && (
               <>
-                <span className="muted small">claude.ai can only reach a public address. In a terminal, with a free <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noreferrer">ngrok</a> account set up once (<code>ngrok config add-authtoken …</code>), run and leave running:</span>
+                <span className="muted small">claude.ai needs a public address. In a terminal, with a free <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noreferrer">ngrok</a> account (<code>ngrok config add-authtoken …</code> once), run and leave running:</span>
                 <div className="say"><code>{ngrok}</code><button type="button" className="btn" onClick={() => void copy("ngrok", ngrok)}>{copied === "ngrok" ? "Copied" : "Copy"}</button></div>
                 <span className="muted small">Paste the https address it prints under “Forwarding”:</span>
                 <span className="input-wrap"><input placeholder="https://your-name.ngrok-free.dev" value={tunnelHost} onChange={(e) => setTunnelHost(e.target.value)} /></span>
@@ -116,7 +116,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
                 </details>
               </>
             )}
-            {shared && tunnelHost && <span className="muted small">Through <code>{tunnelHost}</code>. Only the exact address answers; the bare host says “not found”.</span>}
+            {shared && tunnelHost && <span className="muted small">Through <code>{tunnelHost}</code>. Only this exact address works.</span>}
           </Step>
         )}
         <Step n={++n} done={connected} title="Add it in claude.ai">

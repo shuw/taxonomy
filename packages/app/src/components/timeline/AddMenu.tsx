@@ -55,7 +55,7 @@ export function AddMenu({ year, profile, open, onOpen, onAdd, onAddFact }: Props
 
   return (
     <div className="ev-add-wrap" ref={ref}>
-      <button type="button" className={"ev-add" + (open ? " on" : "")} title={`Add something in ${year}`} aria-label={`Add something in ${year}`} onClick={() => onOpen(!open)}>+</button>
+      <button type="button" className={"ev-add" + (open ? " on" : "")} title={`Add to ${year}`} aria-label={`Add to ${year}`} onClick={() => onOpen(!open)}>+</button>
       {open && (
         <div className="ev-menu">
           {kinds.map((k) => <button type="button" key={k.key} onMouseEnter={() => setCategory(null)} onClick={() => onAdd(k.what)}>{k.label}</button>)}

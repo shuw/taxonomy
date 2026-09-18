@@ -12,7 +12,7 @@ const SECTION_FOR: [RegExp, string][] = [
   [/^home\./, "Home"],
   [/^deductions\.charitable/, "Giving"],
   [/^deductions\./, "Other deductions"],
-  [/^(carryforwards\.|returns)/, "Last return and carryforwards"],
+  [/^(carryforwards\.|returns)/, "Last return"],
   [/^assumptions\./, "Assumptions"],
 ];
 

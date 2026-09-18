@@ -10,7 +10,7 @@ interface Series { id: string; label: string; color: string; value: (y: PlanResu
 const TAX_SERIES: Series[] = [
   { id: "regular", label: "Regular tax (after AMT credit)", color: PALETTE.regular, value: (y) => y.lines.regularTax!.value - y.lines.amtCreditUsed!.value },
   { id: "amt", label: "AMT", color: PALETTE.amt, value: (y) => y.lines.amt!.value },
-  { id: "surtax", label: "NIIT + Medicare", color: PALETTE.surtax, value: (y) => y.lines.niit!.value + y.lines.additionalMedicare!.value },
+  { id: "surtax", label: "Surtaxes (NIIT, Medicare)", color: PALETTE.surtax, value: (y) => y.lines.niit!.value + y.lines.additionalMedicare!.value },
 ];
 const STATE_SERIES: Series = { id: "state", label: "State", color: PALETTE.state, value: (y) => y.lines.stateTax!.value };
 
