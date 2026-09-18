@@ -112,6 +112,24 @@ HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com bun packages/a
   send headers should use `Authorization: Bearer <secret>` against `/mcp` instead.
 - Claude Desktop set-up buttons are off on a hosted server; they act on the machine the app runs on.
 
+## Deploy to Fly.io
+
+The repo carries a `Dockerfile` and a `fly.toml` for a single machine with a persistent volume.
+Everything lives in files and one SQLite database, so keep it at one machine.
+
+```sh
+fly launch --copy-config --no-deploy   # pick an app name; it also sets primary_region
+fly volumes create data --size 1       # the /data mount in fly.toml
+fly deploy
+```
+
+Then set `TAXONOMY_PUBLIC_HOST` in `fly.toml` to the app's host (`<name>.fly.dev`, or a custom
+domain once `fly certs add` has it) and deploy again; that host is what claude.ai connectors
+are pointed at. The first visitor creates the first account, after which sign-up is closed
+unless `TAXONOMY_SIGNUP=open` is in `[env]`. Cookies are marked Secure and the sign-in
+throttle trusts Fly's `X-Forwarded-For`, both set in the Dockerfile. Back up the volume
+(`fly volumes snapshots list data`) the way you would any single-machine database.
+
 ## Profile schema (version 3)
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,

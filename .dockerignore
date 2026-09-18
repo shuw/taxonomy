@@ -1,0 +1,8 @@
+node_modules
+.git
+.claude
+data/*
+!data/profile.example.yaml
+docs
+*.md
+.DS_Store

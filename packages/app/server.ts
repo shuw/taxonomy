@@ -256,6 +256,7 @@ function remoteWanted(): boolean {
 /** With accounts, turning remote access off for the last user stops the child. */
 function remoteStillWanted(): boolean { return remoteWanted(); }
 process.on("exit", () => httpChild?.kill());
+for (const sig of ["SIGINT", "SIGTERM"] as const) process.on(sig, () => { httpChild?.kill(); process.exit(0); });
 // The HTTP server comes up with the app once someone has set claude.ai up, replacing any child from a previous run so it runs the current code.
 if (remoteWanted()) void serveLocal(true, true);
 
