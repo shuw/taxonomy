@@ -1,16 +1,16 @@
 import { keyLabel, type Shortcut } from "../hooks/useShortcuts.ts";
 
 /** Help, behind "?": the keyboard shortcuts, then where to read about the model and how to reach the project. */
-export function ShortcutsHelp({ shortcuts, onClose, onRules, onTerms }: { shortcuts: Shortcut[]; onClose: () => void; onRules: () => void; onTerms: () => void }) {
+export function ShortcutsHelp({ shortcuts, onClose, onRules, onTerms, onHow }: { shortcuts: Shortcut[]; onClose: () => void; onRules: () => void; onTerms: () => void; onHow: () => void }) {
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal narrow help" role="dialog" aria-modal="true" aria-label="Help">
+      <div className="modal help" role="dialog" aria-modal="true" aria-label="Help">
         <div className="modal-head">
           <div><h3>Help</h3></div>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="modal-body">
-          <section>
+          <section className="help-keys">
             <div className="subhead">Keyboard shortcuts</div>
             <table className="shortcuts">
               <tbody>
@@ -24,8 +24,9 @@ export function ShortcutsHelp({ shortcuts, onClose, onRules, onTerms }: { shortc
             </table>
           </section>
           <section>
-            <div className="subhead">About the numbers</div>
+            <div className="subhead">About Taxonomy</div>
             <ul className="help-list">
+              <li><button type="button" className="link" onClick={onHow}>How it works</button><span className="muted small">The four things it does, in one screen.</span></li>
               <li><button type="button" className="link" onClick={onRules}>Tax rules this tool models</button><span className="muted small">Every rule and threshold the plan is computed from.</span></li>
             </ul>
           </section>

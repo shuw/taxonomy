@@ -38,6 +38,7 @@ import { setPersisted } from "./persist.ts";
 import { ShortcutsHelp } from "./components/ShortcutsHelp.tsx";
 import { RulesModal } from "./components/RulesModal.tsx";
 import { TermsModal } from "./components/TermsModal.tsx";
+import { HowItWorksModal } from "./components/HowItWorks.tsx";
 import { ClaudePanel, ClaudeStatusButton } from "./components/ClaudePanel.tsx";
 import { HistoryModal } from "./components/HistoryModal.tsx";
 import { useAgentStatus } from "./hooks/useAgentStatus.ts";
@@ -203,6 +204,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
   const [helpOpen, setHelpOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
+  const [howOpen, setHowOpen] = useState(false);
   const stepYear = (d: number) => { const i = years.indexOf(focusYear); const next = years[Math.min(years.length - 1, Math.max(0, i + d))]; if (next !== undefined) pickYear(next); };
   const shortcuts = useMemo<Shortcut[]>(() => [
     { keys: ["1"], label: "Combined view", run: () => setPlanView("combined") },
@@ -323,7 +325,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
           <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={setSelected} onClose={() => setSelected(null)} />
         </aside>
       )}
-      {helpOpen && <ShortcutsHelp shortcuts={shortcuts} onClose={() => setHelpOpen(false)} onRules={() => { setHelpOpen(false); setRulesOpen(true); }} onTerms={() => { setHelpOpen(false); setTermsOpen(true); }} />}
+      {helpOpen && <ShortcutsHelp shortcuts={shortcuts} onClose={() => setHelpOpen(false)} onRules={() => { setHelpOpen(false); setRulesOpen(true); }} onTerms={() => { setHelpOpen(false); setTermsOpen(true); }} onHow={() => { setHelpOpen(false); setHowOpen(true); }} />}
+      {howOpen && <HowItWorksModal onClose={() => setHowOpen(false)} />}
       {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
       {rulesOpen && <RulesModal year={profile.plan.startYear} inflation={profile.assumptions?.inflation ?? 0.025} onClose={() => setRulesOpen(false)} />}
       {claudeOpen && <ClaudePanel profile={profile} news={claudeNews.news} onSeen={claudeNews.markSeen} onHistory={() => { setClaudeOpen(false); setHistoryOpen(true); }} onClose={() => setClaudeOpen(false)} />}

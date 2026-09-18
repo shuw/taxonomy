@@ -834,7 +834,11 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .login .btn.primary { font-size: var(--text-lg); padding: 10px 20px; }
 .login .modal-actions { margin-top: 4px; }
 /* The four reasons: a band of its own under the hero, one row each, picture on one side and words on the other, sides alternating. */
-.landing-points { display: grid; gap: 48px; padding: 40px clamp(20px, 5vw, 56px) 48px; border-radius: 28px; background: var(--surface-2); }
+.landing-points { display: grid; gap: 40px; padding: 40px clamp(20px, 5vw, 56px) 48px; border-radius: 28px; background: var(--surface-2); }
+.how-rows { display: grid; gap: 48px; }
+.how .modal-body { padding-top: 22px; }
+.how .how-rows { gap: 36px; }
+.how .point-art { height: 190px; background: var(--surface-2); }
 .points-head { display: grid; gap: 6px; max-width: 60ch; }
 .points-head h2 { margin: 0; font: 800 clamp(22px, 2.6vw, 30px)/1.15 var(--display); letter-spacing: -0.02em; }
 .points-head p { margin: 0; color: var(--ink-2); font-size: var(--text-lg); }
@@ -890,7 +894,10 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 }
 
 /* The rules dialog: one list per group, each rule a term with its detail and where it comes from. */
-.help .modal-body { display: grid; gap: 18px; }
+.modal.help { width: min(760px, 100%); }
+.help .modal-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px 36px; align-content: start; }
+.help .help-keys { grid-row: 1 / span 2; }
+@media (max-width: 640px) { .help .modal-body { grid-template-columns: 1fr; } .help .help-keys { grid-row: auto; } }
 .help section .subhead { margin-bottom: 8px; }
 .help-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .help-list li { display: grid; gap: 1px; }
