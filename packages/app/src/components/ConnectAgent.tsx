@@ -52,10 +52,15 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
   const hosted = !!status.conn?.hosted;
   const client: AgentClient = hosted && chosen === "desktop" ? "web" : chosen;
   const clients = hosted ? CLIENTS.filter((c) => c.value !== "desktop") : CLIENTS;
+  // The connector's name in claude.ai: a laptop through a tunnel is told apart from a hosted server.
+  const connectorName = hosted ? "Taxonomy" : "Taxonomy (localhost)";
   // Typed here, saved on the server next to the secret; the saved one is the default everywhere.
   const [typedHost, setTypedHost] = useState<string | null>(null);
   const tunnelHost = typedHost ?? status.conn?.remote?.tunnelHost ?? "";
-  const setTunnelHost = (raw: string) => { const host = raw.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); setTypedHost(host); void status.setTunnelHost(host); };
+  const cleanHost = (raw: string) => raw.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  // Typed locally, saved when the field is left, so a half-typed address never reaches the server.
+  const setTunnelHost = (raw: string) => setTypedHost(cleanHost(raw));
+  const saveTunnelHost = () => { const host = cleanHost(tunnelHost); if (host !== (status.conn?.remote?.tunnelHost ?? "")) void status.setTunnelHost(host); };
   const setClient = (c: AgentClient) => { setClientState(c); try { localStorage.setItem(CLIENT_KEY, c); } catch {} };
   const sentence = agentSentence(name, create);
   const [copied, setCopied] = useState<string | null>(null);
@@ -102,14 +107,14 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
           <span className="muted small">{hosted ? "Claude reaches this server at an address only you have." : "Local only; the tunnel forwards to it."}</span>
           {status.error && <div className="error">{status.error}</div>}
         </Step>
-        {!r?.url && (
+        {!hosted && (
           <Step n={++n} done={shared} title={shared ? "Reachable from claude.ai" : "Open a tunnel to it"}>
             {!shared && (
               <>
                 <span className="muted small">claude.ai needs a public address. In a terminal, with a free <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noreferrer">ngrok</a> account (<code>ngrok config add-authtoken …</code> once), run and leave running:</span>
                 <div className="say"><code>{ngrok}</code><button type="button" className="btn" onClick={() => void copy("ngrok", ngrok)}>{copied === "ngrok" ? "Copied" : "Copy"}</button></div>
                 <span className="muted small">Paste the https address it prints under “Forwarding”:</span>
-                <span className="input-wrap"><input placeholder="https://your-name.ngrok-free.dev" value={tunnelHost} onChange={(e) => setTunnelHost(e.target.value)} /></span>
+                <span className="input-wrap"><input placeholder="https://your-name.ngrok-free.dev" value={tunnelHost} onChange={(e) => setTunnelHost(e.target.value)} onBlur={saveTunnelHost} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></span>
                 <details className="sections-details">
                   <summary>Other tunnels</summary>
                   <span className="muted small">
@@ -120,7 +125,12 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
                 </details>
               </>
             )}
-            {shared && tunnelHost && <span className="muted small">Through <code>{tunnelHost}</code>. Only this exact address works.</span>}
+            {shared && tunnelHost && (
+              <>
+                <span className="input-wrap"><input aria-label="Tunnel address" value={tunnelHost} onChange={(e) => setTunnelHost(e.target.value)} onBlur={saveTunnelHost} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></span>
+                <span className="muted small">The tunnel's address; change it here if ngrok gives you a new one. Only this exact address works.</span>
+              </>
+            )}
           </Step>
         )}
         <Step n={++n} done={connected} title="Add it in claude.ai">
@@ -128,7 +138,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
             <a className={"btn" + (shared ? " primary" : "")} href={CONNECTOR_LINK} target="_blank" rel="noreferrer">Open the dialog in claude.ai</a>
             <span className="muted small">Two fields; copy each from here. For authentication pick “No sign in”.</span>
           </div>
-          <div className="say"><span className="muted small">Name</span><code>Taxonomy</code><button type="button" className="btn" onClick={() => void copy("name", "Taxonomy")}>{copied === "name" ? "Copied" : "Copy"}</button></div>
+          <div className="say"><span className="muted small">Name</span><code>{connectorName}</code><button type="button" className="btn" onClick={() => void copy("name", connectorName)}>{copied === "name" ? "Copied" : "Copy"}</button></div>
           {shared
             ? <>
                 <div className="say"><span className="muted small">MCP server URL</span><code className="url">{url}</code><button type="button" className="btn" onClick={() => void copy("url", url!)}>{copied === "url" ? "Copied" : "Copy"}</button></div>

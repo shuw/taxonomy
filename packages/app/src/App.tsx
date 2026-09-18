@@ -7,6 +7,8 @@ import { EventTimeline } from "./components/timeline/EventTimeline.tsx";
 import { factMarkers } from "./components/timeline/factMarkers.ts";
 import { usePlanAnalyses } from "./hooks/usePlanAnalyses.ts";
 import { useDebounced } from "./hooks/useDebounced.ts";
+import { useNarrow } from "./hooks/useNarrow.ts";
+import { Disclaimer } from "./components/Disclaimer.tsx";
 import { useTimelineActions } from "./hooks/useTimelineActions.ts";
 import { Segmented } from "./components/fields.tsx";
 import { Info } from "./components/Info.tsx";
@@ -218,11 +220,18 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
   // Three clicks on the AMT credit tile throw the boomerang: an arc from the AMT year to the year the credit comes back.
   const [boomerang, setBoomerang] = useState(0);
   const throwBoomerang = () => { setBoomerang(Date.now()); setTimeout(() => setBoomerang(0), 2600); };
+  // On a phone the chart shows three years by default; the plan itself, and the totals, keep their full length.
+  const narrow = useNarrow();
+  const [shownYears, setShownYears] = usePersisted<number>("shownYears", 3, (v): v is number => typeof v === "number");
+  const shownCount = narrow ? Math.min(shownYears, years.length) : years.length;
+  const slice = (p: PlanResult | null) => (p && shownCount < p.years.length ? { ...p, years: p.years.slice(0, shownCount) } : p);
+  const shownPlan = slice(plan)!;
+  const shownPinned = slice(pinned?.plan ?? null);
   const strip = planView === "combined"
-    ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
+    ? <CombinedStrip plan={shownPlan} pinned={shownPinned} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
     : planView === "tax"
-      ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
-      : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />;
+      ? <TaxStrip plan={shownPlan} pinned={shownPinned} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
+      : <CashStrip plan={shownPlan} pinned={shownPinned} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />;
   const stripCopy = planView === "combined"
     ? "Each bar is the year's cash in, split into tax, exercise cost, gifts and what is kept."
     : planView === "tax" ? "" : "Cash in (left bar) against cash out (right bar), before living costs; the number is the net.";
@@ -263,11 +272,11 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
               <h2>Your plan, year by year <Info label="How to read the plan">{stripCopy} Press + under a year to add a decision; click a chip to change it.{pinned && planView !== "cash" ? " Gray columns are the pinned scenario." : ""}</Info></h2>
             </div>
             <div className="plan-years"><Segmented options={[{ value: "combined", label: "Combined", key: "1" }, { value: "tax", label: "Tax", key: "2" }, { value: "cash", label: "Cash", key: "3" }]} value={planView} onChange={setPlanView} /></div>
-            <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
+            <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(narrow ? shownCount : profile.plan.years)} onChange={(v) => { if (narrow) setShownYears(Number(v)); else edit([{ path: ["plan", "years"], value: Number(v) }]); }} /></div>
           </div>
           {strip}
           {years.includes(2038) && <p className="muted small footnote">2038: Unix time overflows on January 19. The tax code will probably still be here.</p>}
-          <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} focusYear={focusYear}
+          <EventTimeline profile={profile} levers={levers} plan={shownPlan} years={years.slice(0, shownCount)} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} focusYear={focusYear}
             onSelect={actions.select} onAdd={actions.add} onChange={actions.change} onRemove={actions.remove} onSellToCover={actions.sellToCover}
             onAddFact={actions.addFact} onChangeFact={actions.changeFact} onRemoveFact={actions.removeFact} />
         </section>
@@ -297,7 +306,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
           {ledgerOpen && <LedgerTable plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} selected={selected} onSelect={setSelected} onFocus={setFocusYear} />}
         </section>
         <CalibrationCard profile={profile} />
-        <footer className="foot">Taxonomy is a planning aid, not tax, legal or financial advice, and not a filing tool. Every figure is an estimate; rules, thresholds and your facts change. Your data stays in files on this computer.</footer>
+        <footer className="foot"><Disclaimer /></footer>
       </main>
 
       {selected && (

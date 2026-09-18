@@ -11,7 +11,9 @@ const { answeredFollowUps } = tools;
 import index from "./index.html";
 
 /** With accounts, a hosted deployment's public host name, for the connector address it shows; when unset, the tunnel address saved in local mode (an ngrok host on a laptop) serves. */
-const publicHost = process.env.TAXONOMY_PUBLIC_HOST?.trim() || (authEnabled ? rootStore.remoteConfigIfAny()?.tunnelHost ?? null : null);
+const publicHost = process.env.TAXONOMY_PUBLIC_HOST?.trim() || null;
+/** Somewhere else than this computer: bound beyond loopback, or given a public host. Decides whether Claude Desktop and a tunnel make sense. */
+const hosted = !loopback || !!publicHost;
 
 if (!authEnabled) {
   mkdirSync(rootStore.profilesDir, { recursive: true, mode: 0o700 });
@@ -161,8 +163,8 @@ function agentConnection(store: Store) {
   let current: string | null = null;
   try { current = readFileSync(store.currentFile, "utf8").trim() || null; } catch {}
   // On a hosted server there is no Claude Desktop on this machine to configure; the local paths are still reported for a stdio client.
-  const desktop = authEnabled ? { configPath: "", installed: false, added: false } : desktopState(script);
-  return { root: resolve(import.meta.dir, "../.."), script, command: bun, args: [script], config: { mcpServers: { taxonomy: { command: bun, args: [script] } } }, lastSeen, client, lastProfile, current, desktop, hosted: authEnabled };
+  const desktop = hosted ? { configPath: "", installed: false, added: false } : desktopState(script);
+  return { root: resolve(import.meta.dir, "../.."), script, command: bun, args: [script], config: { mcpServers: { taxonomy: { command: bun, args: [script] } } }, lastSeen, client, lastProfile, current, desktop, hosted };
 }
 
 /** Put Taxonomy into Claude Desktop's config, touching only the `taxonomy` entry and keeping a backup of the file. */
@@ -203,7 +205,7 @@ async function httpRunning(port: number): Promise<boolean> {
   try { await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
 }
 async function tunnelState(port: number): Promise<{ available: boolean; dnsName: string | null; on: boolean }> {
-  if (!tailscaleBin || authEnabled) return { available: false, dnsName: null, on: false };
+  if (!tailscaleBin || hosted) return { available: false, dnsName: null, on: false };
   let dnsName: string | null = null;
   try { dnsName = ((JSON.parse(await read([tailscaleBin, "status", "--json"])) as { Self?: { DNSName?: string } }).Self?.DNSName ?? "").replace(/\.$/, "") || null; } catch {}
   const st = await read([tailscaleBin, "funnel", "status", "--json"]);
@@ -216,9 +218,10 @@ async function remoteState(store: Store) {
   const url = !running ? null : publicHost ? `https://${publicHost}/${cfg.token}/mcp` : tunnel.on && tunnel.dnsName ? `https://${tunnel.dnsName}/${cfg.token}/mcp` : null;
   return {
     running, port, tunnel,
-    funnelCommand: tailscaleBin && !authEnabled ? `${tailscaleBin.includes("Tailscale.app") ? tailscaleBin : "tailscale"} funnel --bg ${port}` : null,
+    funnelCommand: tailscaleBin && !hosted ? `${tailscaleBin.includes("Tailscale.app") ? tailscaleBin : "tailscale"} funnel --bg ${port}` : null,
     path: `/${cfg.token}/mcp`,
-    tunnelHost: publicHost ?? cfg.tunnelHost ?? null,
+    // On a laptop with accounts, a user without a saved tunnel starts from the one saved before accounts existed.
+    tunnelHost: publicHost ?? cfg.tunnelHost ?? (!hosted ? rootStore.remoteConfigIfAny()?.tunnelHost ?? null : null),
     url,
   };
 }
@@ -248,7 +251,7 @@ async function serveLocal(on: boolean, fresh = false): Promise<void> {
 }
 /** Anyone with remote access set up and not turned off wants the child running. */
 function remoteWanted(): boolean {
-  const wants = (s: Store) => { const c = s.remoteConfigIfAny(); return !!c && c.enabled !== false && !!(c.tunnelHost || (authEnabled && publicHost)); };
+  const wants = (s: Store) => { const c = s.remoteConfigIfAny(); return !!c && c.enabled !== false && !!(c.tunnelHost || publicHost); };
   if (wants(rootStore)) return true;
   if (!authEnabled || !exists(usersDir)) return false;
   return readdirSync(usersDir).some((id) => { try { return wants(userStore(id)); } catch { return false; } });
@@ -469,8 +472,8 @@ const server = Bun.serve({
       return Response.json({ ...agentConnection(s), remote: await remoteState(s) });
     }) },
     "/api/current": { POST: guard(async (req) => { const refused = sameOrigin(req); if (refused) return refused; const s = storeOf(req); const { id } = (await req.json()) as { id?: string }; if (!id || !ID.test(id) || !existsSync(s.fileFor(id))) return bad("no such profile", 404); mkdirSync(s.dir, { recursive: true, mode: 0o700 }); writeFileSync(s.currentFile, id, { mode: 0o600 }); return Response.json({ ok: true }); }) },
-    "/api/agent/desktop": { POST: guard(async (req) => { const refused = sameOrigin(req); if (refused) return refused; if (authEnabled) return bad("Claude Desktop is set up on your own computer, not on this server"); const r = addToDesktop(storeOf(req)); return "error" in r ? bad(r.error) : Response.json({ ...agentConnection(storeOf(req)), remote: await remoteState(storeOf(req)) }); }) },
-    "/api/agent/open": { POST: guard(async (req) => { const refused = sameOrigin(req); if (refused) return refused; if (authEnabled) return Response.json({ ok: false }); return Response.json(await openDesktop()); }) },
+    "/api/agent/desktop": { POST: guard(async (req) => { const refused = sameOrigin(req); if (refused) return refused; if (hosted) return bad("Claude Desktop is set up on your own computer, not on this server"); const r = addToDesktop(storeOf(req)); return "error" in r ? bad(r.error) : Response.json({ ...agentConnection(storeOf(req)), remote: await remoteState(storeOf(req)) }); }) },
+    "/api/agent/open": { POST: guard(async (req) => { const refused = sameOrigin(req); if (refused) return refused; if (hosted) return Response.json({ ok: false }); return Response.json(await openDesktop()); }) },
     "/api/profiles": {
       GET: guard((req) => Response.json(listProfiles(storeOf(req)))),
       POST: guard(async (req) => {

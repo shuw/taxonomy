@@ -182,7 +182,6 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .hero { display: flex; flex-wrap: wrap; gap: 18px 40px; align-items: flex-end; }
 .hero > div { flex: 0 0 auto; }
 .hero .tiles { flex: 1 1 540px; }
-.hero .disclaimer { flex-basis: 100%; }
 .hero .big.kept { background: linear-gradient(100deg, var(--series-kept) 0%, var(--accent) 90%); -webkit-background-clip: text; background-clip: text; }
 .hero .big.kept.short { background: linear-gradient(100deg, var(--bad) 0%, var(--accent-2) 90%); -webkit-background-clip: text; background-clip: text; }
 .hero .label { color: var(--ink-2); font-size: var(--text-md); font-weight: 500; margin-bottom: 4px; }
@@ -478,10 +477,9 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .card:has(> .card-fold) { position: relative; }
 .card-fold .chev { position: absolute; top: 12px; right: 14px; color: var(--muted); transition: transform .15s ease; flex: none; }
 .card-fold { padding-right: 28px; }
-.hero .disclaimer { grid-column: 1 / -1; }
 .disclaimer { margin: 0; padding: 10px 14px; border-radius: 10px; border-left: 3px solid var(--series-amt); background: color-mix(in srgb, var(--series-amt) 12%, var(--surface)); color: var(--text); font-size: var(--text-sm); line-height: 1.45; }
 .disclaimer strong { text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--text-xs); margin-right: 8px; }
-.foot { margin: 8px 0 24px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.foot { margin: 8px 0 24px; }
 .card:not(.folded) .card-fold .chev { transform: rotate(180deg); }
 .card.folded .sub { margin-bottom: 0; }
 .cal-inline { font-weight: 600; }

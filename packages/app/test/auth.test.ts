@@ -19,7 +19,7 @@ const get = (path: string, cookie?: string) => fetch(base + path, { headers: coo
 const cookieOf = (res: Response) => (res.headers.get("set-cookie") ?? "").split(";")[0]!;
 
 beforeAll(async () => {
-  server = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "pipe", env: { ...process.env, PORT: String(port), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "closed", TAXONOMY_DESKTOP_CONFIG: join(dataDir, "desktop.json") } });
+  server = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "pipe", env: { ...process.env, PORT: String(port), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "closed", TAXONOMY_PUBLIC_HOST: "tax.example.test", TAXONOMY_DESKTOP_CONFIG: join(dataDir, "desktop.json") } });
   for (let i = 0; i < 50; i++) { try { await fetch(base + "/api/auth/me"); return; } catch { await Bun.sleep(100); } }
   throw new Error("server did not start: " + (await new Response(server.stderr).text()));
 });

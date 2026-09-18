@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import { Disclaimer } from "./Disclaimer.tsx";
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, pct, usd, usdCompact, usdHeadline } from "../format.ts";
 import { useAnimatedNumber } from "../hooks/useAnimatedNumber.ts";
@@ -41,7 +40,6 @@ export function Hero({ plan, pinned, years, onBoomerang }: { plan: PlanResult; p
         {showState && <Tile label="State" value={t.stateTax} pinned={p?.stateTax} color="var(--series-state)" />}
         <Tile label="Tax rate" hint="Tax as a share of income, counting the ISO spread as income" value={t.rateWithSpread} pinned={p?.rateWithSpread} color="var(--series-violet)" unit="rate" />
       </div>
-      <Disclaimer />
     </section>
   );
 }
