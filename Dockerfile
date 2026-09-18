@@ -10,6 +10,7 @@ COPY packages/mcp/package.json packages/mcp/
 RUN bun install --frozen-lockfile
 
 COPY packages packages
+COPY scripts scripts
 COPY data/profile.example.yaml data/demo.yaml data/
 
 # Binding to a non-loopback address turns accounts on; the data directory is the mounted volume.
