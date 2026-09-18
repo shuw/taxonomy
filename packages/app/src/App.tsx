@@ -68,7 +68,7 @@ export function App() {
   return <Signed account={session.user} signOut={signOut} deleteAccount={deleteAccount} />;
 }
 
-function Signed({ account, signOut, deleteAccount }: { account: { email: string } | null; signOut: () => Promise<void>; deleteAccount: (password: string) => Promise<void> }) {
+function Signed({ account, signOut, deleteAccount }: { account: { email: string; guest?: boolean } | null; signOut: () => Promise<void>; deleteAccount: (password: string) => Promise<void> }) {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
   const [creating, setCreating] = useHashState((h) => h === "#new", (v) => (v ? "new" : null));
@@ -124,19 +124,19 @@ function Signed({ account, signOut, deleteAccount }: { account: { email: string 
 
   return (
     <ProfileIdContext.Provider value={file.id}>
-      <ErrorBoundary where="the plan"><Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
+      <ErrorBoundary where="the plan"><Workspace key={file.id} notice={account?.guest ? <div className="notice demo-note">You are trying Taxonomy as Ada, a made-up engineer. Change anything; it is yours for a day. <button type="button" className="link" onClick={() => void signOut()}>Create your own account</button></div> : null} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
         switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} /></ErrorBoundary>
-      {accountOpen && account && <AccountModal email={account.email} signOut={signOut} deleteAccount={deleteAccount} onClose={() => setAccountOpen(false)} />}
+      {accountOpen && account && <AccountModal email={account.email} guest={account.guest} signOut={signOut} deleteAccount={deleteAccount} onClose={() => setAccountOpen(false)} />}
     </ProfileIdContext.Provider>
   );
 }
 
-interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
+interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; notice?: React.ReactNode; }
 
 type PlanView = "combined" | "tax" | "cash";
 const isPlanView = (v: unknown): v is PlanView => v === "combined" || v === "tax" || v === "cash";
 
-function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
+function Workspace({ profile, profileText, path, error, edit, saving, switcher, notice }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = usePersisted<number>("focusYear", years[0]!, (v): v is number => typeof v === "number");
@@ -249,6 +249,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher }
       <main className="main">
         <MobileNotice />
         {error && <div className="error">{error}</div>}
+        {notice}
         <ProposalBanner profile={profile} edit={edit} onCompare={() => setPinned({ levers, plan })} onReviewIntake={(d) => { setReviewDocId(d.id); setIntakeOpen(true); }} onCopyRequest={() => { setReviewDocId(null); setIntakeOpen(true); }} onEditFacts={() => openFacts("you")} onClaude={() => setClaudeOpen(true)} />
         <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
         <FollowUps profile={profile} edit={edit} onSecondLook={() => openFacts("history")} />

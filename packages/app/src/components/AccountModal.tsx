@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { api } from "../api.ts";
 import { Field } from "./fields.tsx";
 
-interface Props { email: string; signOut: () => Promise<void>; deleteAccount: (password: string) => Promise<void>; onClose: () => void; }
+interface Props { email: string; guest?: boolean; signOut: () => Promise<void>; deleteAccount: (password: string) => Promise<void>; onClose: () => void; }
 
 /** The account behind a hosted Taxonomy: sign out, a new password, or delete it all. Reached from the profile menu. */
-export function AccountModal({ email, signOut, deleteAccount, onClose }: Props) {
+export function AccountModal({ email, guest, signOut, deleteAccount, onClose }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -17,14 +17,13 @@ export function AccountModal({ email, signOut, deleteAccount, onClose }: Props) 
         <div className="modal-head">
           <div>
             <h3>Account</h3>
-            <div className="muted small" style={{ margin: 0 }}>Signed in as {email}</div>
+            <div className="muted small" style={{ margin: 0 }}>{guest ? "The demo account" : `Signed in as ${email}`}</div>
           </div>
           <button type="button" className="btn" onClick={() => void signOut()}>Sign out</button>
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="modal-body">
-          <PasswordForm />
-          <DeleteForm deleteAccount={deleteAccount} />
+          {guest ? <p className="muted">This account and everything in it go away after a day. Sign out to create one of your own.</p> : <><PasswordForm /><DeleteForm deleteAccount={deleteAccount} /></>}
         </div>
       </div>
     </div>

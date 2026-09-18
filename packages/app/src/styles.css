@@ -507,6 +507,7 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .company-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .company.open .company-line .grant-name { flex: 1; }
 .notice .link { padding: 0; font-size: inherit; }
+.demo-note { margin-bottom: 12px; }
 @media (max-width: 760px) { .facts-body { grid-template-columns: 1fr; } .facts-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); } .facts-tab-summary { display: none; } }
 .btn.edit-info { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 

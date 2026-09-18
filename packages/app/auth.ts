@@ -13,7 +13,11 @@ import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { dataDir } from "../mcp/store.ts";
 
-export interface User { id: string; email: string; createdAt: string; }
+export interface User { id: string; email: string; createdAt: string; guest?: boolean; }
+/** Demo visitors get a throwaway account at this address, gone a day later. */
+const GUEST_DOMAIN = "demo.invalid";
+const GUEST_HOURS = 24;
+const isGuest = (email: string) => email.endsWith("@" + GUEST_DOMAIN);
 
 export const HOST = process.env.HOST ?? "127.0.0.1";
 /** Bound to this machine only. Accounts default off here, and the page is served in development mode (rebuilt as files change). */
@@ -54,8 +58,12 @@ export function hasAccount(emailRaw: unknown): boolean {
   const email = normalizeEmail(emailRaw);
   return emailOk(email) && !!open().query("SELECT 1 FROM users WHERE email = ?").get(email);
 }
+/** Accounts people made; demo visitors do not take a seat. */
 export function userCount(): number {
-  return (open().query("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
+  return (open().query("SELECT COUNT(*) AS n FROM users WHERE email NOT LIKE ?").get("%@" + GUEST_DOMAIN) as { n: number }).n;
+}
+export function guestCount(): number {
+  return (open().query("SELECT COUNT(*) AS n FROM users WHERE email LIKE ?").get("%@" + GUEST_DOMAIN) as { n: number }).n;
 }
 /** How many accounts an open server takes before it says it is full. */
 export const MAX_USERS = Number(process.env.TAXONOMY_MAX_USERS) > 0 ? Number(process.env.TAXONOMY_MAX_USERS) : 1000;
@@ -73,7 +81,7 @@ export class AuthError extends Error { constructor(message: string, public statu
 
 export async function register(emailRaw: unknown, password: unknown): Promise<User> {
   const email = normalizeEmail(emailRaw);
-  if (!emailOk(email)) throw new AuthError("that is not an email address", 400);
+  if (!emailOk(email) || isGuest(email)) throw new AuthError("that is not an email address", 400);
   if (typeof password !== "string" || password.length === 0) throw new AuthError("a password is required", 400);
   if (password.length > MAX_PASSWORD) throw new AuthError("the password is too long", 400);
   if (serverFull()) throw new AuthError("this server is full; no new accounts right now", 403);
@@ -116,10 +124,25 @@ export async function login(emailRaw: unknown, password: unknown, clientKey: str
   return { user: { id: row.id, email: row.email, createdAt: row.created_at }, sessionId: startSession(row.id) };
 }
 
-function startSession(userId: string): string {
+/** A demo visitor: an account nobody can sign in to, with one session that ends after a day. */
+export async function startGuest(): Promise<{ user: User; sessionId: string }> {
+  const user: User = { id: randomBytes(16).toString("base64url"), email: `guest-${randomBytes(6).toString("base64url").toLowerCase()}@${GUEST_DOMAIN}`, createdAt: now(), guest: true };
+  const hash = await Bun.password.hash(randomBytes(32).toString("base64url"), { algorithm: "argon2id" });
+  open().query("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)").run(user.id, user.email, hash, user.createdAt);
+  return { user, sessionId: startSession(user.id, GUEST_HOURS * 3_600_000) };
+}
+/** Guests whose day is over: their rows go here, their directories are the caller's to remove. */
+export function expiredGuests(): string[] {
+  const d = open();
+  const rows = d.query("SELECT u.id FROM users u WHERE u.email LIKE ? AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.expires_at >= ?)").all("%@" + GUEST_DOMAIN, now()) as { id: string }[];
+  for (const { id } of rows) { d.query("DELETE FROM sessions WHERE user_id = ?").run(id); d.query("DELETE FROM users WHERE id = ?").run(id); }
+  return rows.map((r) => r.id);
+}
+
+function startSession(userId: string, ttlMs = SESSION_DAYS * 86_400_000): string {
   const id = randomBytes(32).toString("base64url");
   const t = now();
-  const expires = new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString();
+  const expires = new Date(Date.now() + ttlMs).toISOString();
   open().query("INSERT INTO sessions (id_hash, user_id, created_at, expires_at, last_seen_at) VALUES (?, ?, ?, ?, ?)").run(hashOf(id), userId, t, expires, t);
   return id;
 }
@@ -132,10 +155,11 @@ export function userFor(sessionId: string | null | undefined): User | null {
   const row = d.query("SELECT s.expires_at, s.last_seen_at, u.id, u.email, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id_hash = ?").get(h) as { expires_at: string; last_seen_at: string; id: string; email: string; created_at: string } | null;
   if (!row) return null;
   if (row.expires_at < now()) { d.query("DELETE FROM sessions WHERE id_hash = ?").run(h); return null; }
-  if (Date.now() - Date.parse(row.last_seen_at) > 3_600_000) {
+  const guest = isGuest(row.email);
+  if (!guest && Date.now() - Date.parse(row.last_seen_at) > 3_600_000) {
     d.query("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id_hash = ?").run(now(), new Date(Date.now() + SESSION_DAYS * 86_400_000).toISOString(), h);
   }
-  return { id: row.id, email: row.email, createdAt: row.created_at };
+  return { id: row.id, email: row.email, createdAt: row.created_at, ...(guest ? { guest: true } : {}) };
 }
 
 export function logout(sessionId: string | null | undefined): void {

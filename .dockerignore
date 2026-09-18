@@ -3,6 +3,7 @@ node_modules
 .claude
 data/*
 !data/profile.example.yaml
+!data/demo.yaml
 docs
 *.md
 .DS_Store

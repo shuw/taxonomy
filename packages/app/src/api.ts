@@ -36,7 +36,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export interface Session { enabled: boolean; user: { id: string; email: string } | null; signup: boolean; full?: boolean; }
+export interface Session { enabled: boolean; user: { id: string; email: string; guest?: boolean } | null; signup: boolean; full?: boolean; }
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export interface HistoryRow { at: string; actor: string; lines: string[]; restorable: boolean; }

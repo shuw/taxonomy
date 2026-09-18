@@ -1,0 +1,112 @@
+# The demo profile behind /demo. Ada is made up; so is Lumen Robotics. Every number is invented to show
+# the tool at work: options of both kinds, RSUs, a raise next year, gifts, and an exercise that trips AMT.
+version: 3
+name: Ada (demo)
+
+filer:
+  filingStatus: single
+  state: WA
+  dependents: []
+
+plan:
+  startYear: 2026
+  years: 5
+
+assumptions:
+  inflation: 0.025
+  wageGrowth: 0.03
+  fmvGrowth: 0.15
+
+people:
+  self:
+    name: Ada
+    salary: 265000
+    bonus: 30000
+    pretaxContributions: 23500
+
+income:
+  otherOrdinary: 0
+  interest: 3500
+  ordinaryDividends: 2600
+  qualifiedDividends: 2200
+  shortTermGains: 0
+  longTermGains: 0
+
+carryforwards:
+  amtCredit: 0
+  capitalLoss: { shortTerm: 0, longTerm: 0 }
+  charitable: 0
+
+equity:
+  companies:
+    - id: lumen
+      name: Lumen Robotics
+      sharePrice: 14.50            # 409A, spring 2026
+      pricePath: { 2028: 34 }      # the assumed listing price
+      liquidityYear: 2028
+  grants:
+    - id: iso2022
+      name: "2022 ISO grant"
+      type: iso
+      company: lumen
+      grantDate: 2022-02-01
+      granted: 60000
+      vestedToDate: 52500
+      exercisedToDate: 10000
+      strike: 1.20
+      schedule: { start: 2022-02-01, years: 4, cliffMonths: 12, cadence: monthly }
+    - id: nso2024
+      name: "2024 NSO refresh"
+      type: nso
+      company: lumen
+      grantDate: 2024-06-01
+      granted: 25000
+      vestedToDate: 9375
+      exercisedToDate: 0
+      strike: 6.50
+      schedule: { start: 2024-06-01, years: 4, cliffMonths: 12, cadence: quarterly }
+    - id: rsu2025
+      name: "2025 RSU grant"
+      type: rsu
+      company: lumen
+      grantDate: 2025-09-01
+      granted: 12000
+      settlement: liquidity
+      schedule: { start: 2025-09-01, years: 4, cliffMonths: 12, cadence: quarterly }
+  holdings:
+    - id: h1
+      lot: "ISO shares exercised March 2024"
+      company: lumen
+      quantity: 10000
+      acquired: 2024-03-01
+      via: iso_exercise
+      costBasis: 1.20
+      amtBasis: 4.00
+      grantDate: 2022-02-01
+
+home:
+  propertyTax: 0
+
+deductions:
+  stateIncomeTax: 0
+  charitable: { cash: 4000, appreciatedStock: 0, daf: 0 }
+
+timeline:
+  - { year: 2027, path: people.self.salary, value: 310000, note: "staff engineer promotion" }
+
+scenarios:
+  default:
+    events:
+      - { id: e1, kind: exercise, type: iso, year: 2026, date: 2026-04-15, shares: 20000 }
+      - { id: e2, kind: give, year: 2026, how: cash, amount: 8000 }
+      - { id: e3, kind: exercise, type: nso, year: 2027, shares: 6000 }
+      - { id: e4, kind: give, year: 2028, how: stock, amount: 25000 }
+      - { id: e5, kind: sell, year: 2029, shares: 15000 }
+activeScenario: default
+
+sources:
+  people.self.salary: "offer letter, January 2026"
+  grants.iso2022: "Carta grant detail, 2026-03-01"
+  grants.nso2024: "Carta grant detail, 2026-03-01"
+  grants.rsu2025: "Carta grant detail, 2026-03-01"
+  companies.lumen: "409A valuation notice, 2026-02-15"

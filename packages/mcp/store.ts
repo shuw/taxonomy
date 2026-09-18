@@ -15,6 +15,7 @@ export const root = resolve(import.meta.dir, "../..");
 export const dataDir = process.env.TAXONOMY_DATA ? resolve(process.env.TAXONOMY_DATA) : join(root, "data");
 export const usersDir = join(dataDir, "users");
 export const examplePath = join(root, "data", "profile.example.yaml");
+export const demoPath = join(root, "data", "demo.yaml");
 
 /** Profile ids: the file name without `.yaml`. */
 export const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;

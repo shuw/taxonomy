@@ -4,8 +4,8 @@ import { homedir, platform } from "node:os";
 import { parse } from "yaml";
 import { editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
 // Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
-import { ID, dataDir, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
-import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, hasAccount, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, userFor, type User } from "./auth.ts";
+import { ID, dataDir, demoPath, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
+import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, expiredGuests, guestCount, hasAccount, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, startGuest, userFor, type User } from "./auth.ts";
 import { existsSync as exists, readdirSync } from "node:fs";
 const { answeredFollowUps } = tools;
 import index from "./index.html";
@@ -263,6 +263,27 @@ if (remoteWanted()) void serveLocal(true, true);
 /** The user behind a guarded request; only meaningful with accounts. */
 const userOf = (req: Request): User => { const u = users.get(req); if (!u) throw new Unauthenticated(); return u; };
 
+/** The demo profile in a store: found by name, or made from data/demo.yaml. */
+const DEMO_NAME = "Ada (demo)";
+const MAX_GUESTS = 500;
+function demoProfile(s: Store): string {
+  const have = listProfiles(s).find((p) => p.name === DEMO_NAME);
+  if (have) return have.id;
+  const text = readFileSync(demoPath, "utf8");
+  mkdirSync(s.profilesDir, { recursive: true, mode: 0o700 });
+  const id = s.uniqueId(DEMO_NAME);
+  writeFileSync(s.fileFor(id), text, { mode: 0o600 });
+  s.recordChange(id, null, text, "you");
+  return id;
+}
+/** Demo accounts whose day is over go, files and all. */
+function sweepGuests(): void {
+  if (!authEnabled) return;
+  for (const id of expiredGuests()) { const dir = resolve(usersDir, id); if (dir.startsWith(usersDir + sep)) rmSync(dir, { recursive: true, force: true }); }
+}
+sweepGuests();
+setInterval(sweepGuests, 3_600_000).unref();
+
 const port = Number(process.env.PORT ?? 5180);
 const server = Bun.serve({
   port,
@@ -275,7 +296,25 @@ const server = Bun.serve({
     "/api/auth/me": (req: Request) => {
       let user: User | null = null;
       try { user = authEnabled ? userFor(sessionIdOf(req)) : null; } catch {}
-      return withHeaders(Response.json({ enabled: authEnabled, user: user ? { id: user.id, email: user.email } : null, signup: authEnabled && !user && signupOpen(), full: authEnabled && !user && serverFull() }));
+      return withHeaders(Response.json({ enabled: authEnabled, user: user ? { id: user.id, email: user.email, ...(user.guest ? { guest: true } : {}) } : null, signup: authEnabled && !user && signupOpen(), full: authEnabled && !user && serverFull() }));
+    },
+    // ---- the demo: Ada's profile in a throwaway account (hosted) or in the local data directory ----
+    "/demo": async (req: Request) => {
+      const headers = new Headers();
+      let store: Store;
+      if (!authEnabled) store = rootStore;
+      else {
+        const user = userFor(sessionIdOf(req));
+        if (user) store = userStore(user.id);
+        else {
+          if (guestCount() >= MAX_GUESTS) return withHeaders(new Response("The demo is busy right now; try again in a while.", { status: 503 }));
+          const guest = await startGuest();
+          store = userStore(guest.user.id);
+          headers.set("set-cookie", sessionCookie(guest.sessionId, req));
+        }
+      }
+      headers.set("location", `/?p=${demoProfile(store)}`);
+      return withHeaders(new Response(null, { status: 303, headers }));
     },
     "/api/auth/register": { POST: async (req: Request) => {
       const refused = sameOrigin(req);

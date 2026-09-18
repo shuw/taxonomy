@@ -70,6 +70,13 @@ information" → "Notes from Claude", grouped by section with the value alongsid
 versus last year are the app's own comparison, and sit under "Last return" with a one-click
 fill or "Not needed" on each. Nothing on the main screen asks for a tick.
 
+## The demo
+
+`/demo` opens the app as Ada, a made-up engineer at a made-up startup with ISOs, NSOs and RSUs,
+a raise next year, a couple of gifts and an exercise that trips AMT. The profile is
+`data/demo.yaml`. On a hosted server the visitor gets a throwaway account that lasts a day and
+takes no seat; locally the profile is simply added to `data/profiles`. The sign-in card links to it.
+
 ## Demo mode
 
 "Demo mode" at the bottom of the sidebar (or `?demo=1` in the address) shows every amount in a

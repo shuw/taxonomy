@@ -65,6 +65,7 @@ export function Login({ signup, full, onDone }: { signup: boolean; full?: boolea
         </label>
         {error && <div className="error">{error}</div>}
         <div className="modal-actions">
+          <a className="link" href="/demo">Try the demo first</a>
           <span className="spacer" />
           <button type="submit" className="btn primary" disabled={busy || !email || !password}>{busy ? "…" : mode === "new" ? "Create account" : mode === "in" ? "Sign in" : "Continue"}</button>
         </div>
