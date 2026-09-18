@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "workspaces": ["packages/*"],
   "engines": { "bun": ">=1.2" },
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "bun --watch packages/app/server.ts",
     "test": "bun test packages/engine packages/app/test",

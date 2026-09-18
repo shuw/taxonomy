@@ -123,6 +123,11 @@ share it.
 Add `TAXONOMY_SIGNUP = "closed"` under `[env]` to keep the server to yourself. Fly snapshots the
 volume daily (`fly volumes snapshots list data`).
 
+## Licence
+
+AGPL-3.0: run it, change it, share it; a modified copy served to others must publish its source.
+See `LICENSE`, and `CONTRIBUTING.md` for the one-paragraph contributor agreement.
+
 ## Profile schema
 
 Facts, choices and dates are separate things. `people`, `income`, `carryforwards`, `returns`,
