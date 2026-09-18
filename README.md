@@ -97,8 +97,9 @@ HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com bun packages/a
 ```
 
 - Accounts are on whenever `TAXONOMY_AUTH=1` or the server is bound to anything but loopback.
-  The first visitor creates the first account; after that sign-up is closed unless
-  `TAXONOMY_SIGNUP=open`.
+  Anyone who reaches the server can create an account, up to `TAXONOMY_MAX_USERS` (1000 by
+  default), after which sign-up says the server is full. `TAXONOMY_SIGNUP=closed` stops
+  sign-up after the first account.
 - Each account has its own `data/users/<id>/` with its profiles, history, attachments and
   connector secret; nothing is shared. Passwords are argon2id hashes and sessions are 30-day
   HttpOnly cookies, both in `data/auth.sqlite` (gitignored, owner-only).
@@ -125,8 +126,8 @@ fly deploy
 
 Then set `TAXONOMY_PUBLIC_HOST` in `fly.toml` to the app's host (`<name>.fly.dev`, or a custom
 domain once `fly certs add` has it) and deploy again; that host is what claude.ai connectors
-are pointed at. The first visitor creates the first account, after which sign-up is closed
-unless `TAXONOMY_SIGNUP=open` is in `[env]`. Cookies are marked Secure and the sign-in
+are pointed at. Sign-up is open for up to 1000 accounts (`TAXONOMY_MAX_USERS` in `[env]`);
+`TAXONOMY_SIGNUP = "closed"` there keeps the server to your own account. Cookies are marked Secure and the sign-in
 throttle trusts Fly's `X-Forwarded-For`, both set in the Dockerfile. Back up the volume
 (`fly volumes snapshots list data`) the way you would any single-machine database.
 

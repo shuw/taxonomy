@@ -49,12 +49,24 @@ const hashOf = (s: string) => createHash("sha256").update(s).digest("base64url")
 const normalizeEmail = (e: unknown) => (typeof e === "string" ? e : "").trim().toLowerCase();
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 254;
 
+/** Whether an account exists for an address; the sign-in card uses it to pick sign-in or create. */
+export function hasAccount(emailRaw: unknown): boolean {
+  const email = normalizeEmail(emailRaw);
+  return emailOk(email) && !!open().query("SELECT 1 FROM users WHERE email = ?").get(email);
+}
 export function userCount(): number {
   return (open().query("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
 }
-/** The first account can always be made; after that only when the operator opens sign-up. */
+/** How many accounts an open server takes before it says it is full. */
+export const MAX_USERS = Number(process.env.TAXONOMY_MAX_USERS) > 0 ? Number(process.env.TAXONOMY_MAX_USERS) : 1000;
+const signupClosed = () => process.env.TAXONOMY_SIGNUP === "closed";
+/** True once every seat is taken. */
+export function serverFull(): boolean {
+  return !signupClosed() && userCount() >= MAX_USERS;
+}
+/** The first account can always be made; after that anyone can join while there is room, unless the operator closed sign-up. */
 export function signupOpen(): boolean {
-  return userCount() === 0 || process.env.TAXONOMY_SIGNUP === "open";
+  return userCount() === 0 || (!signupClosed() && !serverFull());
 }
 
 export class AuthError extends Error { constructor(message: string, public status: number, public retryAfter?: number) { super(message); } }
@@ -64,6 +76,7 @@ export async function register(emailRaw: unknown, password: unknown): Promise<Us
   if (!emailOk(email)) throw new AuthError("that is not an email address", 400);
   if (typeof password !== "string" || password.length === 0) throw new AuthError("a password is required", 400);
   if (password.length > MAX_PASSWORD) throw new AuthError("the password is too long", 400);
+  if (serverFull()) throw new AuthError("this server is full; no new accounts right now", 403);
   if (!signupOpen()) throw new AuthError("sign-up is closed; ask whoever runs this server for an account", 403);
   const d = open();
   if (d.query("SELECT 1 FROM users WHERE email = ?").get(email)) throw new AuthError("an account with that email already exists", 409);

@@ -9,8 +9,10 @@ primary_region = "sjc"
 [env]
   # The public host claude.ai connectors are told to use: https://<this>/<secret>/mcp
   TAXONOMY_PUBLIC_HOST = "taxonomy.fly.dev"
-  # Sign-up closes after the first account; set to "open" to let more people join.
-  # TAXONOMY_SIGNUP = "open"
+  # Anyone with the address can make an account, up to this many; after that sign-up says the server is full.
+  TAXONOMY_MAX_USERS = "1000"
+  # Set to "closed" to stop sign-up after the first account.
+  # TAXONOMY_SIGNUP = "closed"
 
 [mounts]
   source = "data"

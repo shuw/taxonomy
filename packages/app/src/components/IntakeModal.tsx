@@ -156,7 +156,7 @@ function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<Cr
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) void close(); }} onKeyDown={(e) => { if (e.key === "Escape") void close(); }}>
-      <div className="modal intake-modal wide" role="dialog" aria-modal="true" aria-label="New profile">
+      <div className={"modal intake-modal " + (step === 1 ? "narrow" : "wide")} role="dialog" aria-modal="true" aria-label="New profile">
         <header className="modal-head">
           <div>
             <h3>New profile <span className="muted step-count">step {step} of 2</span></h3>

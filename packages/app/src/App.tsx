@@ -64,7 +64,7 @@ function remember(id: string) {
 export function App() {
   const { session, refresh, signOut, deleteAccount } = useSession();
   if (session === null) return <div className="empty">Loading…</div>;
-  if (session.enabled && !session.user) return <Login signup={session.signup} onDone={() => void refresh()} />;
+  if (session.enabled && !session.user) return <Login signup={session.signup} full={session.full} onDone={() => void refresh()} />;
   return <Signed account={session.user} signOut={signOut} deleteAccount={deleteAccount} />;
 }
 

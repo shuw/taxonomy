@@ -36,7 +36,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export interface Session { enabled: boolean; user: { id: string; email: string } | null; signup: boolean; }
+export interface Session { enabled: boolean; user: { id: string; email: string } | null; signup: boolean; full?: boolean; }
 const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export interface HistoryRow { at: string; actor: string; lines: string[]; restorable: boolean; }
@@ -45,6 +45,7 @@ export interface Attachment { name: string; size: number; mtime: number; }
 export const api = {
   me: () => call<Session>("/api/auth/me"),
   login: (email: string, password: string) => call<{ user: Session["user"] }>("/api/auth/login", json("POST", { email, password })),
+  lookup: (email: string) => call<{ exists: boolean | null }>("/api/auth/lookup", json("POST", { email })),
   register: (email: string, password: string) => call<{ user: Session["user"] }>("/api/auth/register", json("POST", { email, password })),
   logout: () => call<{ ok: true }>("/api/auth/logout", json("POST", {})),
   changePassword: (current: string, next: string) => call<{ ok: true }>("/api/auth/password", json("POST", { current, next })),

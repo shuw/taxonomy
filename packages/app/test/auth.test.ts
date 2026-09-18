@@ -19,7 +19,7 @@ const get = (path: string, cookie?: string) => fetch(base + path, { headers: coo
 const cookieOf = (res: Response) => (res.headers.get("set-cookie") ?? "").split(";")[0]!;
 
 beforeAll(async () => {
-  server = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "pipe", env: { ...process.env, PORT: String(port), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_DESKTOP_CONFIG: join(dataDir, "desktop.json") } });
+  server = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "pipe", env: { ...process.env, PORT: String(port), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "closed", TAXONOMY_DESKTOP_CONFIG: join(dataDir, "desktop.json") } });
   for (let i = 0; i < 50; i++) { try { await fetch(base + "/api/auth/me"); return; } catch { await Bun.sleep(100); } }
   throw new Error("server did not start: " + (await new Response(server.stderr).text()));
 });
@@ -31,7 +31,7 @@ let bob = "";
 describe("accounts", () => {
   test("nothing is served before signing in", async () => {
     const me = await (await get("/api/auth/me")).json();
-    expect(me).toEqual({ enabled: true, user: null, signup: true });
+    expect(me).toEqual({ enabled: true, user: null, signup: true, full: false });
     const res = await get("/api/profiles");
     expect(res.status).toBe(401);
     expect(res.headers.get("cache-control")).toBe("no-store");
@@ -77,17 +77,20 @@ describe("accounts", () => {
     const { id } = await created.json() as { id: string };
     expect(readdirSync(join(dataDir, "users")).length).toBe(1);
 
-    // Bob joins once the operator opens sign-up: same server, the switch is read at each sign-up.
-    process.env.TAXONOMY_SIGNUP = "open";
-    // The server process has its own environment, so open it there through a second server run.
+    // Bob joins on a server that was not closed: the first one under test runs with TAXONOMY_SIGNUP=closed.
     const port2 = port + 1;
-    const server2 = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "ignore", env: { ...process.env, PORT: String(port2), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "open" } });
+    const server2 = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "ignore", env: { ...process.env, PORT: String(port2), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "" } });
     const base2 = `http://127.0.0.1:${port2}`;
     for (let i = 0; i < 50; i++) { try { await fetch(base2 + "/api/auth/me"); break; } catch { await Bun.sleep(100); } }
     try {
       const reg = await fetch(base2 + "/api/auth/register", { method: "POST", headers: { "content-type": "application/json", origin: base2 }, body: JSON.stringify({ email: "bob@example.com", password: "another good password" }) });
       expect(reg.status).toBe(200);
       bob = cookieOf(reg);
+      // The sign-in card asks which way to go for an address; only an open server answers.
+      const look = async (b: string, email: string) => (await (await fetch(b + "/api/auth/lookup", { method: "POST", headers: { "content-type": "application/json", origin: b }, body: JSON.stringify({ email }) })).json()) as { exists: boolean | null };
+      expect(await look(base2, "BOB@example.com")).toEqual({ exists: true });
+      expect(await look(base2, "nobody@example.com")).toEqual({ exists: false });
+      expect(await look(base, "bob@example.com")).toEqual({ exists: null });
       const mine = await (await fetch(base2 + "/api/profiles", { headers: { cookie: bob } })).json() as unknown[];
       expect(mine).toEqual([]);
       const theirs = await fetch(base2 + `/api/profiles/${id}`, { headers: { cookie: bob } });
@@ -95,6 +98,21 @@ describe("accounts", () => {
       const history = await fetch(base2 + `/api/profiles/${id}/history`, { headers: { cookie: bob } });
       expect(await history.json()).toEqual([]);
     } finally { server2.kill(); }
+  });
+
+  test("an open server stops at its seat limit and says so", async () => {
+    const port3 = port + 2;
+    const server3 = Bun.spawn(["bun", "packages/app/server.ts"], { cwd: root, stdout: "ignore", stderr: "ignore", env: { ...process.env, PORT: String(port3), TAXONOMY_DATA: dataDir, TAXONOMY_AUTH: "1", TAXONOMY_SIGNUP: "", TAXONOMY_MAX_USERS: "2" } });
+    const base3 = `http://127.0.0.1:${port3}`;
+    for (let i = 0; i < 50; i++) { try { await fetch(base3 + "/api/auth/me"); break; } catch { await Bun.sleep(100); } }
+    try {
+      const me = await (await fetch(base3 + "/api/auth/me")).json() as { signup: boolean; full: boolean };
+      expect(me).toMatchObject({ signup: false, full: true });
+      const reg = await fetch(base3 + "/api/auth/register", { method: "POST", headers: { "content-type": "application/json", origin: base3 }, body: JSON.stringify({ email: "carol@example.com", password: "one more password" }) });
+      expect(reg.status).toBe(403);
+      expect(((await reg.json()) as { error: string }).error).toContain("full");
+      expect((await fetch(base3 + "/api/auth/login", { method: "POST", headers: { "content-type": "application/json", origin: base3 }, body: JSON.stringify({ email: "bob@example.com", password: "another good password" }) })).status).toBe(200);
+    } finally { server3.kill(); }
   });
 
   test("signing out ends the session; a password change ends every other one", async () => {

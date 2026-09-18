@@ -5,7 +5,7 @@ import { parse } from "yaml";
 import { editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
 // Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
 import { ID, dataDir, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
-import { AuthError, HOST, authEnabled, changePassword, clientKey, deleteAccount, login, logout, loopback, register, sessionCookie, sessionIdOf, signupOpen, userFor, type User } from "./auth.ts";
+import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, hasAccount, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, userFor, type User } from "./auth.ts";
 import { existsSync as exists, readdirSync } from "node:fs";
 const { answeredFollowUps } = tools;
 import index from "./index.html";
@@ -275,7 +275,7 @@ const server = Bun.serve({
     "/api/auth/me": (req: Request) => {
       let user: User | null = null;
       try { user = authEnabled ? userFor(sessionIdOf(req)) : null; } catch {}
-      return withHeaders(Response.json({ enabled: authEnabled, user: user ? { id: user.id, email: user.email } : null, signup: authEnabled && !user && signupOpen() }));
+      return withHeaders(Response.json({ enabled: authEnabled, user: user ? { id: user.id, email: user.email } : null, signup: authEnabled && !user && signupOpen(), full: authEnabled && !user && serverFull() }));
     },
     "/api/auth/register": { POST: async (req: Request) => {
       const refused = sameOrigin(req);
@@ -287,6 +287,14 @@ const server = Bun.serve({
         const { sessionId } = await login(user.email, body.password, clientKey(req, server.requestIP(req)?.address));
         return withHeaders(Response.json({ user: { id: user.id, email: user.email } }, { headers: { "set-cookie": sessionCookie(sessionId, req) } }));
       } catch (e) { return authFailed(e); }
+    } },
+    // Says whether an address has an account, so the card can offer the right button. Only while anyone may sign up; a closed server keeps its list to itself.
+    "/api/auth/lookup": { POST: async (req: Request) => {
+      const refused = sameOrigin(req);
+      if (refused) return refused;
+      if (!authEnabled) return bad("accounts are off on this server", 404);
+      const body = (await req.json()) as { email?: unknown };
+      return withHeaders(Response.json({ exists: signupOpen() ? hasAccount(body.email) : null }));
     } },
     "/api/auth/login": { POST: async (req: Request) => {
       const refused = sameOrigin(req);
@@ -494,7 +502,7 @@ const server = Bun.serve({
   fetch: () => new Response("Not found", { status: 404 }),
 });
 if (authEnabled) {
-  console.log(`Taxonomy: http://${HOST}:${port}  accounts on; each user's data under ${relative(root, usersDir)}${signupOpen() ? "; sign-up open" : "; sign-up closed (TAXONOMY_SIGNUP=open to allow)"}`);
+  console.log(`Taxonomy: http://${HOST}:${port}  accounts on; each user's data under ${relative(root, usersDir)}${signupOpen() ? `; sign-up open (${userCount()} of ${MAX_USERS} seats taken)` : serverFull() ? "; sign-up closed, the server is full" : "; sign-up closed"}`);
   if (publicHost) console.log(`claude.ai connectors reach the MCP server through https://${publicHost}/<secret>/mcp; the secret is in that path, so keep proxy access logs private or off`);
 } else {
   console.log(`Taxonomy: http://${HOST}:${port}  (${listProfiles(rootStore).length} profile(s) in ${relative(root, rootStore.profilesDir) || rootStore.profilesDir})`);
