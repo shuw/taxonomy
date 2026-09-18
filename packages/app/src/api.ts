@@ -4,6 +4,8 @@ export interface AgentConnection {
   root: string; script: string; command: string; args: string[];
   config: { mcpServers: Record<string, { command: string; args: string[] }> };
   lastSeen: string | null; client: string | null;
+  /** Accounts on: the server is somewhere else, so Claude Desktop cannot be set up from here. */
+  hosted?: boolean;
   /** The profile the agent's last call was about. */
   lastProfile: string | null;
   /** The profile the app is showing; the MCP server's default. */

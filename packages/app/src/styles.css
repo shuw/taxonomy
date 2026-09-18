@@ -394,7 +394,6 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 /* Simplified intake ---------------------------------------------------------------- */
 .modal { width: min(720px, 100%); }
 .modal.wide { width: min(1180px, 100%); }
-.modal.narrow { width: min(560px, 100%); }
 .create-head { padding-bottom: 0; flex: none; }
 @media (max-width: 640px) { .start-cards { grid-template-columns: 1fr; } }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
@@ -663,6 +662,7 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .segmented button kbd { margin-left: 5px; }
 .segmented button:not(.on) kbd { opacity: .55; }
 .modal.narrow { width: min(460px, 100%); }
+.modal.medium { width: min(880px, 100%); }
 .shortcuts { border-collapse: collapse; width: 100%; }
 .shortcuts td { padding: 7px 4px; border-bottom: 1px solid var(--border); font-size: var(--text-md); }
 .shortcuts td:first-child { width: 110px; white-space: nowrap; }

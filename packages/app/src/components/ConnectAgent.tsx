@@ -47,7 +47,11 @@ interface SetupProps {
 export function AgentSetup({ status, name, create, between, expect, onConnected }: SetupProps) {
   const d = status.conn?.desktop;
   const r = status.conn?.remote;
-  const [client, setClientState] = useState<AgentClient>(readClient);
+  const [chosen, setClientState] = useState<AgentClient>(readClient);
+  // Hosted, Claude Desktop cannot be set up from here (it would configure the server), so claude.ai is the default.
+  const hosted = !!status.conn?.hosted;
+  const client: AgentClient = hosted && chosen === "desktop" ? "web" : chosen;
+  const clients = hosted ? CLIENTS.filter((c) => c.value !== "desktop") : CLIENTS;
   // Typed here, saved on the server next to the secret; the saved one is the default everywhere.
   const [typedHost, setTypedHost] = useState<string | null>(null);
   const tunnelHost = typedHost ?? status.conn?.remote?.tunnelHost ?? "";
@@ -64,7 +68,7 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
   const connected = fresh && forThis;
   const elsewhere = fresh && !forThis ? status.conn?.lastProfile : null;
   useEffect(() => { if (connected && onConnected) onConnected(); }, [connected]);
-  const pick = <div className="segmented small">{CLIENTS.map((c) => <button key={c.value} type="button" role="radio" aria-checked={client === c.value} className={client === c.value ? "on" : ""} onClick={() => setClient(c.value)}>{c.label}</button>)}</div>;
+  const pick = <div className="segmented small">{clients.map((c) => <button key={c.value} type="button" role="radio" aria-checked={client === c.value} className={client === c.value ? "on" : ""} onClick={() => setClient(c.value)}>{c.label}</button>)}</div>;
   const say = (where: string, extra?: ReactNode) => (
     <>
       <div className="say"><q>{sentence}</q></div>
@@ -93,9 +97,9 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
     const ngrok = `ngrok http ${r?.port ?? 5182}`;
     return (
       <ol className="setup">
-        <Step n={++n} done={!!r?.running} title={r?.running ? "Local server running" : "Starting the local server…"}>
+        <Step n={++n} done={!!r?.running} title={r?.running ? (hosted ? "Taxonomy is ready for Claude" : "Local server running") : "Starting the server…"}>
           {pick}
-          <span className="muted small">Local only; the tunnel forwards to it.</span>
+          <span className="muted small">{hosted ? "Claude reaches this server at an address only you have." : "Local only; the tunnel forwards to it."}</span>
           {status.error && <div className="error">{status.error}</div>}
         </Step>
         {!r?.url && (
@@ -122,11 +126,14 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
         <Step n={++n} done={connected} title="Add it in claude.ai">
           <div className="step-actions">
             <a className={"btn" + (shared ? " primary" : "")} href={CONNECTOR_LINK} target="_blank" rel="noreferrer">Open the dialog in claude.ai</a>
-            <span className="muted small">Two fields; copy each from here. Leave authentication empty.</span>
+            <span className="muted small">Two fields; copy each from here. For authentication pick “No sign in”.</span>
           </div>
           <div className="say"><span className="muted small">Name</span><code>Taxonomy</code><button type="button" className="btn" onClick={() => void copy("name", "Taxonomy")}>{copied === "name" ? "Copied" : "Copy"}</button></div>
           {shared
-            ? <div className="say"><span className="muted small">MCP server URL</span><code className="url">{url}</code><button type="button" className="btn" onClick={() => void copy("url", url!)}>{copied === "url" ? "Copied" : "Copy"}</button></div>
+            ? <>
+                <div className="say"><span className="muted small">MCP server URL</span><code className="url">{url}</code><button type="button" className="btn" onClick={() => void copy("url", url!)}>{copied === "url" ? "Copied" : "Copy"}</button></div>
+                <span className="muted small">The address is the key: anyone who has it can read and change your profiles. Keep it to yourself.</span>
+              </>
             : <span className="muted small">The address appears here once the tunnel is up.</span>}
         </Step>
         {between && <Step n={++n} title="Create the profile">{between}</Step>}
@@ -139,9 +146,15 @@ export function AgentSetup({ status, name, create, between, expect, onConnected 
   if (client === "code") {
     return (
       <ol className="setup">
-        <Step n={++n} done title="Claude Code finds Taxonomy on its own">
+        <Step n={++n} done={!hosted || connected} title={hosted ? "Add it to Claude Code" : "Claude Code finds Taxonomy on its own"}>
           {pick}
-          <span className="muted small">Open Claude Code in this folder; the repository's <code>.mcp.json</code> registers the server. Elsewhere: <code>claude mcp add taxonomy -- {status.conn?.command ?? "bun"} {status.conn?.script ?? "packages/mcp/server.ts"}</code></span>
+          {hosted
+            ? <>
+                <span className="muted small">In a terminal, once:</span>
+                <div className="say"><code className="url">claude mcp add --transport http taxonomy {r?.url ?? "…"}</code><button type="button" className="btn" onClick={() => void copy("code-add", `claude mcp add --transport http taxonomy ${r?.url ?? ""}`)}>{copied === "code-add" ? "Copied" : "Copy"}</button></div>
+                <span className="muted small">The address is the key: anyone who has it can read and change your profiles. Keep it to yourself.</span>
+              </>
+            : <span className="muted small">Open Claude Code in this folder; the repository's <code>.mcp.json</code> registers the server. Elsewhere: <code>claude mcp add taxonomy -- {status.conn?.command ?? "bun"} {status.conn?.script ?? "packages/mcp/server.ts"}</code></span>}
         </Step>
         {between && <Step n={++n} title="Create the profile">{between}</Step>}
         <Step n={++n} done={connected} title="In Claude Code, say">{say("code")}</Step>
