@@ -7,7 +7,7 @@ engine. Read `docs/ARCHITECTURE.md` first; `docs/DATA-MODEL.md`, `docs/INTAKE.md
 ## Commands
 
 ```sh
-bun run dev          # app on http://127.0.0.1:5180 (restart: pkill -f packages/app/server.ts; bun run dev)
+bun run dev          # app on http://127.0.0.1:5180 with accounts (restart: pkill -f packages/app/server.ts; bun run dev); dev:solo for none
 bun test packages/engine
 bun run typecheck    # engine, app and mcp packages
 bun run mcp          # the MCP server over stdio (what Claude Desktop runs)

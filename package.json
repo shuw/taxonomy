@@ -6,7 +6,8 @@
   "engines": { "bun": ">=1.2" },
   "license": "AGPL-3.0-only",
   "scripts": {
-    "dev": "bun --watch packages/app/server.ts",
+    "dev": "TAXONOMY_AUTH=1 bun --watch packages/app/server.ts",
+    "dev:solo": "bun --watch packages/app/server.ts",
     "test": "bun test packages/engine packages/app/test",
     "golden": "UPDATE_GOLDEN=1 bun test packages/engine/test/golden.test.ts",
     "typecheck": "tsc -p packages/engine && tsc -p packages/app && tsc -p packages/mcp",

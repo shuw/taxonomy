@@ -295,6 +295,8 @@ const server = Bun.serve({
   development: loopback,
   routes: {
     "/": index,
+    // A profile's own address; the page reads the id from the path.
+    "/profiles/:id": index,
     // ---- accounts ----
     "/api/auth/me": (req: Request) => {
       let user: User | null = null;
@@ -316,7 +318,7 @@ const server = Bun.serve({
           headers.set("set-cookie", sessionCookie(guest.sessionId, req));
         }
       }
-      headers.set("location", `/?p=${demoProfile(store)}`);
+      headers.set("location", `/profiles/${demoProfile(store)}`);
       return withHeaders(new Response(null, { status: 303, headers }));
     },
     "/api/auth/register": { POST: async (req: Request) => {

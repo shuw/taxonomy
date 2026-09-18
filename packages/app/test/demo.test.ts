@@ -29,12 +29,13 @@ describe("/demo", () => {
     expect(((await (await fetch(base + "/api/auth/me")).json()) as { signup: boolean }).signup).toBe(true);
     const list = await (await fetch(base + "/api/profiles", { headers: { cookie } })).json() as { id: string; name: string }[];
     expect(list.map((p) => p.name)).toEqual(["Ada (demo)"]);
-    expect(res.headers.get("location")).toBe(`/?p=${list[0]!.id}`);
+    expect(res.headers.get("location")).toBe(`/profiles/${list[0]!.id}`);
     // Coming back with the cookie reuses the same account and profile; a new visitor gets their own.
     const again = await fetch(base + "/demo", { redirect: "manual", headers: { cookie } });
     expect(again.headers.get("set-cookie")).toBeNull();
-    expect(again.headers.get("location")).toBe(`/?p=${list[0]!.id}`);
+    expect(again.headers.get("location")).toBe(`/profiles/${list[0]!.id}`);
     await fetch(base + "/demo", { redirect: "manual" });
+    expect((await fetch(base + `/profiles/${list[0]!.id}`, { headers: { cookie } })).headers.get("content-type")).toContain("text/html");
     expect(readdirSync(join(dataDir, "users")).length).toBe(2);
   });
   test("nobody can register or sign in at the guest address", async () => {

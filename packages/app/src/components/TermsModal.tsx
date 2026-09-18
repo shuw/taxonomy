@@ -17,7 +17,7 @@ export function TermsModal({ onClose }: { onClose: () => void }) {
           <button type="button" className="btn icon" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="modal-body">
-          <p><strong>A side project.</strong> Taxonomy is made by <a href="https://shuw.github.io" target="_blank" rel="noreferrer">Shu</a> in spare time and offered free, as is. There are no promises: none that it is correct, complete, or up, and no liability for anything you do with it, as far as the law allows.</p>
+          <p><strong>A side project.</strong> Taxonomy is <a href="https://shuw.github.io" target="_blank" rel="noreferrer">one person's side project</a>, made in spare time and offered free, as is. There are no promises: none that it is correct, complete, or up, and no liability for anything you do with it, as far as the law allows.</p>
           <p><strong>Not advice.</strong> It is a model of the tax rules, for understanding. It is not tax, legal or financial advice and not a filing tool. Confirm anything you act on with a professional.</p>
           <p><strong>What you put in it.</strong> On this server your profiles live in your account and only you can open them. They are not sold, shared or used for anything else. Delete your account and everything in it whenever you like. There is no promise of backups or uptime: everything sits on one small machine, and a side project can break.</p>
           <p><strong>Better still, run your own.</strong> The code is <a href="https://github.com/shuw/taxonomy" target="_blank" rel="noreferrer">open source</a> under the GNU Affero General Public License, and the README shows how to run it on your laptop, where nothing leaves your computer.</p>

@@ -10,7 +10,8 @@ Try it without installing anything: <https://taxonomy.fly.dev/demo>.
 Needs [Bun](https://bun.sh) 1.2 or later; nothing else.
 
 1. `bun install`
-2. `bun run dev`, then open <http://127.0.0.1:5180>.
+2. `bun run dev`, then open <http://127.0.0.1:5180> and make an account (it stays on your machine).
+   `bun run dev:solo` runs without accounts, one set of profiles for whoever opens the page.
 3. Name a profile and connect Claude, or skip and fill the sidebar in by hand.
 
 ```sh
@@ -78,9 +79,10 @@ screenshots and screen shares. The file is untouched.
 
 ## Self-host
 
-Locally there are no accounts and the app binds 127.0.0.1. Bound to any other address, or with
-`TAXONOMY_AUTH=1`, it has accounts: each user gets their own `users/<id>/` under the data
-directory with profiles, history, documents and connector secret, and nothing is shared.
+The app binds 127.0.0.1 and has accounts whenever `TAXONOMY_AUTH=1` is set (the `dev` script
+sets it) or it is bound to any other address. Each user gets their own `users/<id>/` under the
+data directory with profiles, history, documents and connector secret, and nothing is shared.
+Without accounts (`dev:solo`), everything lives directly in the data directory.
 
 | Variable | Meaning |
 |---|---|

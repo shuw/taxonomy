@@ -52,16 +52,20 @@ export interface Selection { year: number; id: string; }
 
 const STORAGE_KEY = "taxonomy.profile";
 
+/** The profile in the address: /profiles/<id>. The older ?p=<id> form is still read, then rewritten. */
 function rememberedId(): string | null {
-  const fromUrl = new URLSearchParams(location.search).get("p");
-  if (fromUrl) return fromUrl;
+  const m = /^\/profiles\/([a-z0-9][a-z0-9-]*)\/?$/.exec(location.pathname);
+  if (m) return m[1]!;
+  const fromQuery = new URLSearchParams(location.search).get("p");
+  if (fromQuery) return fromQuery;
   try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
 }
 
 function remember(id: string) {
   try { localStorage.setItem(STORAGE_KEY, id); } catch {}
   const url = new URL(location.href);
-  url.searchParams.set("p", id);
+  url.pathname = `/profiles/${id}`;
+  url.searchParams.delete("p");
   history.replaceState(null, "", url);
 }
 
