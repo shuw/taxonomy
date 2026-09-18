@@ -24,10 +24,7 @@ describe("intake parsing", () => {
     expect(d.equity?.grants?.[1]?.type).toBe("nqso");
     expect(d.home?.mortgage?.rate).toBeCloseTo(0.0575);
     expect(d.unknown).toHaveLength(2);
-  });
-  test("accepts JSON too", () => {
-    const r = parseIntake(JSON.stringify({ taxonomy_intake: 1, income: { interest: 100 } }));
-    expect(r.doc?.income?.interest).toBe(100);
+    expect(parseIntake(JSON.stringify({ taxonomy_intake: 1, income: { interest: 100 } })).doc?.income?.interest).toBe(100);
   });
   test("reports precise problems", () => {
     const r = parseIntake("taxonomy_intake: 1\nequity:\n  grants:\n    - name: x\n      type: warrant\n    - name: y\n      type: iso\n      granted: 10\nhome:\n  mortgage: { rate: 0.05 }\n");

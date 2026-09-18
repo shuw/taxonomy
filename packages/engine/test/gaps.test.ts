@@ -67,10 +67,6 @@ describe("gaps and the plan for an agent", () => {
     expect(y.why?.amt ?? "").toContain("minimum tax");
   });
 
-  test("zero-share events are refused", () => {
-    const p = parseProfile(example);
-    expect(() => tools.whatIf(p, [{ kind: "exercise", type: "nso", year: 2027, shares: 0 }])).toThrow("more than 0");
-  });
 });
 
 describe("which grant an in-plan lot came from", () => {

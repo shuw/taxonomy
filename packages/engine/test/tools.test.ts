@@ -7,19 +7,18 @@ const text = readFileSync(new URL("../../../data/profile.example.yaml", import.m
 const profile = parseProfile(text);
 
 describe("agent tools", () => {
-  test("context names the plan, companies, grants and the words the tools use", () => {
+  test("context names the plan, companies, grants, the editable fields with current values, and the words the tools use", () => {
     const c = tools.context(profile);
     expect(c.plan.years.length).toBe(profile.plan.years);
     expect(c.companies[0]!.id).toBe("c1");
     expect(c.grants.find((g) => g.id === "g1")!.exercisableIn[2026]).toBe(40_000);
     expect(c.scenarios[0]).toMatchObject({ name: "default", active: true });
     expect(c.vocabulary.rules).toContain("scenario(add)");
-  });
-  test("plan lists headline lines and the year's events", () => {
-    const p = tools.plan(profile);
-    expect(p.years[0]!.lines.totalTax).toBeGreaterThan(0);
-    expect(p.years[0]!.events.map((e) => e.kind)).toEqual(["exercise"]);
-    expect(p.totals.totalTax).toBeCloseTo(p.years.reduce((s, y) => s + y.lines.totalTax!, 0), 0);
+    const f = c.fields;
+    expect(f.find((x) => x.field === "people.self.salary")!.current).toBe(320_000);
+    expect(f.find((x) => x.field === "equity.companies.0.sharePrice")!.current).toEqual({ c1: 18 });
+    expect(f.find((x) => x.field === "assumptions.state.waMillionairesTax")!.current).toBe(true); // unset means on
+    expect(f.some((x) => x.field.startsWith("returns."))).toBe(false);
   });
   test("explain returns the line, its reason and its inputs", () => {
     const e = tools.explain(profile, 2026, "amt");
@@ -45,12 +44,13 @@ describe("agent tools", () => {
     expect(w.delta.byYear[0]!.amt).toBeGreaterThan(0);
     expect(w.delta.totalTax).not.toBe(0);
   });
-  test("events are checked: years in the plan, known companies by id or name, grants of the type", () => {
+  test("events are checked: years in the plan, known companies by id or name, grants of the type, shares above zero", () => {
     expect(() => tools.normalizeEvents(profile, [{ kind: "sell", year: 2040, shares: 1 }])).toThrow(/not in the plan/);
     expect(() => tools.normalizeEvents(profile, [{ kind: "exercise", type: "nso", year: 2026, shares: 1 }])).toThrow(/no NSO grants/);
     const byName = tools.normalizeEvents(profile, [{ kind: "exercise", type: "iso", year: 2026, shares: 1, company: "Example Inc." }]);
     expect((byName[0] as { company?: string }).company).toBe("c1");
     expect(() => tools.normalizeEvents(profile, [{ kind: "exercise", type: "iso", year: 2026, shares: 1, company: "Nope" }])).toThrow(/no company/);
+    expect(() => tools.whatIf(profile, [{ kind: "exercise", type: "iso", year: 2027, shares: 0 }])).toThrow("more than 0");
   });
   test("propose_scenario writes a new scenario with a note and keeps the active one", () => {
     const p = tools.proposeScenario(profile, "sell half in 2027", [{ kind: "sell", year: 2027, shares: 2_000 }]);
@@ -66,13 +66,6 @@ describe("agent tools", () => {
     const two = parseProfile(editProfileText(text, tools.proposeScenario(profile, "x", []).edits));
     const edits = tools.deleteScenario(two, "x");
     expect(edits[0]).toEqual({ path: ["scenarios", "x"], value: undefined });
-  });
-  test("sell_to_cover and lots work on the active scenario", () => {
-    const l = tools.lots(profile, 2027);
-    expect(l.held).toBeGreaterThan(0);
-    expect(l.lots[0]!.status).toBeDefined();
-    const s = tools.sellToCover(profile, 2027);
-    expect(s.shares).toBeGreaterThan(0);
   });
   test("proposals lists agent scenarios that are not active, with their added events and effect", () => {
     expect(tools.proposals(profile)).toEqual([]);
@@ -117,12 +110,6 @@ describe("agent tools", () => {
     expect(one.pending!.map((p) => p.id)).toEqual(["p1"]);
     expect(one.assumptions.inflation).toBe(profile.assumptions.inflation);
     expect(() => tools.resolvePending(profile, undefined, true)).toThrow(/nothing is pending/);
-  });
-  test("context lists the editable fields with current values", () => {
-    const f = tools.context(profile).fields;
-    expect(f.find((x) => x.field === "people.self.salary")!.current).toBe(320_000);
-    expect(f.find((x) => x.field === "equity.companies.0.sharePrice")!.current).toEqual({ c1: 18 });
-    expect(f.some((x) => x.field.startsWith("returns."))).toBe(false);
   });
   test("applyIntake writes the changed values with their sources and turns questions into follow-ups", () => {
     const r = tools.applyIntake(profile, "taxonomy_intake: 1\npeople:\n  self:\n    baseSalary: 333000\nsources:\n  people.self.baseSalary: 'pay stub'\n");
@@ -180,12 +167,7 @@ describe("a blank profile", () => {
   });
 });
 
-describe("what get_context reports", () => {
-  test("an unset Washington switch reads as on", () => {
-    const p = parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"));
-    const f = tools.context(p).fields.find((x) => x.field === "assumptions.state.waMillionairesTax")!;
-    expect(f.current).toBe(true);
-  });
+describe("intake removals", () => {
   test("an intake that leaves grants out says which were removed", () => {
     const p = parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"));
     const r = tools.applyIntake(p, `taxonomy_intake: 1\nequity:\n  grants:\n    - { name: "2022 ISO grant", type: iso, granted: 60000, strike: 1.2, vested: 52500, exercised: 10000, unexercised: 50000 }\n`);

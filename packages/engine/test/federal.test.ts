@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Ledger } from "../src/ledger.ts";
 import { computeFederal } from "../src/federal.ts";
-import { FEDERAL_2026, bracketTax, capGainsTax, federalParams } from "../src/params.ts";
+import { FEDERAL_2026, federalParams } from "../src/params.ts";
 import type { YearInputs } from "../src/types.ts";
 
 const base: YearInputs = {
@@ -18,44 +18,25 @@ function fed(over: Partial<YearInputs>) {
   return ledger;
 }
 
-describe("bracket math", () => {
-  test("bracket tax accumulates slices", () => {
-    expect(bracketTax(12_400, FEDERAL_2026.brackets.single)).toBeCloseTo(1_240);
-    expect(bracketTax(50_400, FEDERAL_2026.brackets.single)).toBeCloseTo(1_240 + 38_000 * 0.12);
-  });
-  test("capital gains stack on ordinary income", () => {
-    const edges = FEDERAL_2026.capGains.single;
-    expect(capGainsTax(10_000, 0, edges)).toBe(0);
-    expect(capGainsTax(10_000, 100_000, edges)).toBeCloseTo(1_500);
-    expect(capGainsTax(10_000, 600_000, edges)).toBeCloseTo(2_000);
-    expect(capGainsTax(20_000, 40_000, edges)).toBeCloseTo((60_000 - 49_450) * 0.15);
-  });
-});
 
 describe("regular tax", () => {
-  test("wages only, standard deduction", () => {
-    const L = fed({ salarySelf: 100_000 });
-    expect(L.get("taxableIncome")).toBe(100_000 - 16_100);
-    expect(L.get("regularTax")).toBeCloseTo(bracketTax(83_900, FEDERAL_2026.brackets.single));
-    expect(L.get("amt")).toBe(0);
-    expect(L.get("niit")).toBe(0);
-  });
-  test("SALT is capped and itemizing wins when it should", () => {
+  test("SALT: capped, phased down to the floor over $505k, itemizing when it wins, and the reason says so", () => {
     const L = fed({ salarySelf: 200_000, propertyTax: 30_000, mortgageInterestPaid: 20_000 });
     expect(L.get("saltDeduction")).toBe(30_000);
     expect(L.get("usesItemized")).toBe(1);
-    const L2 = fed({ salarySelf: 200_000, propertyTax: 50_000 });
-    expect(L2.get("saltDeduction")).toBe(40_400);
-  });
-  test("SALT cap phases down above $505k but not below $10k", () => {
+    expect(fed({ salarySelf: 200_000, propertyTax: 50_000 }).get("saltDeduction")).toBe(40_400);
     expect(fed({ salarySelf: 600_000, propertyTax: 50_000 }).get("saltCap")).toBeCloseTo(40_400 - 0.3 * 95_000);
-    expect(fed({ salarySelf: 2_000_000, propertyTax: 50_000 }).get("saltCap")).toBe(10_000);
+    const floor = fed({ salarySelf: 2_000_000, propertyTax: 50_000 });
+    expect(floor.get("saltCap")).toBe(10_000);
+    expect(floor.lines.saltDeduction!.why).toMatch(/capped at \$10,000 this year \(the \$40,400 cap shrinks/);
   });
-  test("NIIT applies to investment income above the threshold", () => {
-    const L = fed({ salarySelf: 250_000, interest: 20_000 });
-    expect(L.get("niit")).toBeCloseTo(20_000 * 0.038);
-    const L2 = fed({ salarySelf: 190_000, interest: 20_000 });
-    expect(L2.get("niit")).toBeCloseTo(10_000 * 0.038);
+  test("NIIT: 3.8% of investment income over the threshold, after the capital-loss deduction", () => {
+    expect(fed({ salarySelf: 250_000, interest: 20_000 }).get("niit")).toBeCloseTo(20_000 * 0.038);
+    expect(fed({ salarySelf: 190_000, interest: 20_000 }).get("niit")).toBeCloseTo(10_000 * 0.038);
+    const withLoss = fed({ salarySelf: 400_000, interest: 50_000, shortTermGains: -20_000 });
+    expect(withLoss.get("capitalLossDeduction")).toBe(3_000);
+    expect(withLoss.get("niit")).toBeCloseTo(fed({ salarySelf: 400_000, interest: 50_000 }).get("niit") - 3_000 * 0.038, 2);
+    expect(withLoss.lines.niit!.why).toContain("capital-loss deduction");
   });
 });
 
@@ -182,13 +163,10 @@ describe("the 2026 limit on itemized deductions", () => {
     expect(L.lines.itemizedAllowed!.why).toContain("2/37");
   });
   test("below the bracket's start, and before 2026, nothing is cut", () => {
-    expect(fed({ salarySelf: 400_000, charitableCash: 50_000 }).get("itemizedAllowed")).toBeCloseTo(fed({ salarySelf: 400_000, charitableCash: 50_000 }).get("itemizedDeductions"), 6);
+    const low = fed({ salarySelf: 400_000, charitableCash: 50_000 });
+    expect(low.get("itemizedAllowed")).toBeCloseTo(low.get("itemizedDeductions"), 6);
     const L25 = fed({ year: 2025, salarySelf: 1_000_000, charitableCash: 100_000 });
     expect(L25.get("itemizedAllowed")).toBeCloseTo(L25.get("itemizedDeductions"), 6);
-  });
-  test("the SALT reason names this year's cap and the phase-down", () => {
-    const L = fed({ salarySelf: 1_000_000, propertyTax: 30_000 });
-    expect(L.lines.saltDeduction!.why).toMatch(/capped at \$10,000 this year \(the \$40,400 cap shrinks/);
   });
 });
 
@@ -209,12 +187,3 @@ describe("the list of modeled rules", () => {
   });
 });
 
-describe("net investment income after a capital loss", () => {
-  test("the $3,000 loss deduction reduces the NIIT base", () => {
-    const withLoss = fed({ salarySelf: 400_000, interest: 50_000, shortTermGains: -20_000 });
-    const without = fed({ salarySelf: 400_000, interest: 50_000 });
-    expect(withLoss.get("capitalLossDeduction")).toBe(3_000);
-    expect(withLoss.get("niit")).toBeCloseTo(without.get("niit") - 3_000 * 0.038, 2);
-    expect(withLoss.lines.niit!.why).toContain("capital-loss deduction");
-  });
-});

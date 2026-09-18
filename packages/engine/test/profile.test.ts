@@ -114,11 +114,9 @@ sources: { "equity.grants.1": "Shareworks", "equity.sharePrice": "409A", "people
     expect(p.sources).toEqual({ "grants.g2": "Shareworks", "companies.c1.sharePrice": "409A", "people.self.salary": "stub" });
     expect(runPlan(p).years[0]!.inputs.isoSharesExercised).toBe(5);
   });
-  test("stringifyProfile round-trips the example", () => {
+  test("stringifyProfile round-trips the example, and a profile missing the basics is rejected", () => {
     const p = parseProfile(example);
     expect(parseProfile(stringifyProfile(p))).toEqual(p);
-  });
-  test("rejects a profile missing the basics", () => {
     expect(() => parseProfile("version: 1\nfiler: { filingStatus: single }\n")).toThrow(/state/);
   });
 });

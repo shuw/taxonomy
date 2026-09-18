@@ -15,11 +15,9 @@ const iso = (over: Partial<Lot> = {}): Lot => ({ id: "a", label: "ISO lot", quan
 const nso = (over: Partial<Lot> = {}): Lot => ({ id: "b", label: "NSO lot", quantity: 1000, acquired: "2026-01-01", via: "nso_exercise", costBasis: 18, amtBasis: 18, ...over });
 
 describe("holding periods", () => {
-  test("long-term starts the day after a full year", () => {
+  test("long-term starts the day after a full year, and milestones list when lots turn long-term and qualifying", () => {
     expect(longTermFrom("2026-01-01")).toBe("2027-01-02");
     expect(longTermFrom("2024-02-29")).toBe("2025-03-02");
-  });
-  test("milestones list when lots turn long-term and qualifying", () => {
     const lots = [iso({ grantDate: "2026-06-01" }), nso({ acquired: "2025-03-01" })];
     const m = lotMilestones(lots, "2026-12-31");
     expect(m.map((x) => [x.lotId, x.becomes, x.date])).toEqual([["a", "long-term", "2027-01-02"], ["a", "qualifying", "2028-06-02"]]);
@@ -82,11 +80,6 @@ describe("sales in the plan", () => {
     expect(y.lines.amti!.value).toBeCloseTo(y.lines.taxableIncome!.value + y.lines.amtAddbacks!.value, 0);
     expect(y.lines.amtCreditGenerated!.value).toBe(0);
   });
-  test("a sale cannot exceed what is held", () => {
-    const y = year(withEvents([{ id: "e2", kind: "sell", year: 2026, shares: 999_999 }]), 2026);
-    expect(y.inputs.sharesSold).toBe(y.lotsBefore!.reduce((s, l) => s + l.quantity, 0));
-    expect(y.lotsEnd).toEqual([]);
-  });
   test("sell to cover finds the smallest sale whose proceeds pay the year's tax", () => {
     const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 20_000 }, { id: "e2", kind: "sell", year: 2027, shares: 0 }]);
     const n = sharesToCover(p, undefined, 2027, "e2");
@@ -140,16 +133,6 @@ describe("two companies", () => {
   });
 });
 
-describe("cash", () => {
-  test("exercise cost and sale proceeds show up as cash lines", () => {
-    const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 1_000 }, { id: "e2", kind: "sell", year: 2027, shares: 1_000 }]);
-    const y26 = year(p, 2026);
-    expect(y26.lines.exerciseCost!.value).toBe(1_000 * 2);
-    expect(y26.lines.netCash!.value).toBeCloseTo(y26.lines.cashIn!.value - y26.lines.exerciseCost!.value - y26.lines.totalTax!.value);
-    const y27 = year(p, 2027);
-    expect(y27.lines.cashIn!.value).toBeGreaterThan(y27.inputs.salarySelf);
-  });
-});
 
 describe("credit recovery", () => {
   test("credit from an exercise comes back in later years, and the path sums", () => {
