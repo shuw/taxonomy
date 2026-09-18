@@ -374,6 +374,8 @@ export function applyIntake(profile: Profile, text: string): { edits: ProfileEdi
   if (!parsed.doc) return { edits: [], applied: [], questions: 0, problems: parsed.problems.map((p) => `${p.path}: ${p.message}`), warnings };
   const review = reviewIntake(parsed.doc, profile);
   const changes = review.changes.filter((c) => c.status !== "same");
+  const removed = changes.filter((c) => c.format === "grant" && c.proposed === undefined).map((c) => c.label.replace(/^Grant: /, ""));
+  if (removed.length) warnings.push(`${removed.length} grant${removed.length === 1 ? "" : "s"} on file ${removed.length === 1 ? "was" : "were"} not in the document and ${removed.length === 1 ? "was" : "were"} removed: ${removed.join(", ")}. Submit the whole grant list if that was not meant.`);
   return {
     edits: [...changesToEdits(changes, profile), ...followUpEdits(review, profile)],
     applied: changes.map((c) => ({ path: c.path.join("."), label: c.label, from: c.current, to: c.proposed, source: c.source, ...(c.note ? { note: c.note } : {}) })),
@@ -396,7 +398,7 @@ function editableFields(profile: Profile) {
     datable: f.timeline || undefined,
     current: f.path.startsWith(COMPANY_PREFIX)
       ? Object.fromEntries(profile.equity.companies.map((c, i) => [c.id, getPath(profile, f.path.replace(COMPANY_PREFIX, `equity.companies.${i}.`))]))
-      : getPath(profile, f.path),
+      : getPath(profile, f.path) ?? f.default,
   }));
 }
 

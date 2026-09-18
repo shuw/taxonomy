@@ -265,12 +265,13 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   const federalIncomeTax = L.put("federalIncomeTax", "Federal income tax", regularTax + amt - creditUsed, "Regular tax + AMT - AMT credit used.", ["regularTax", "amt", "amtCreditUsed"]);
 
   // Surtaxes ---------------------------------------------------------------------
-  const nii = inputs.interest + inputs.nonqualifiedDividends + inputs.qualifiedDividends + Math.max(0, cap.ordinaryGain + cap.preferentialGain);
-  const niitBase = Math.min(nii, Math.max(0, agi - p.niit.threshold[fs]));
+  // Net investment income counts net gains and, when losses win, the capital-loss deduction taken this year (Form 8960 line 5).
+  const nii = inputs.interest + inputs.nonqualifiedDividends + inputs.qualifiedDividends + cap.ordinaryGain + cap.preferentialGain - cap.lossDeduction;
+  const niitBase = Math.min(Math.max(0, nii), Math.max(0, agi - p.niit.threshold[fs]));
   L.put(
     "niit", "Net investment income tax", niitBase * p.niit.rate,
     niitBase > 0
-      ? `3.8% of the lesser of net investment income (${usd(nii)}) and AGI over ${usd(p.niit.threshold[fs])} (${usd(agi - p.niit.threshold[fs])}). The threshold is not indexed for inflation.`
+      ? `3.8% of the lesser of net investment income (${usd(Math.max(0, nii))}${cap.lossDeduction > 0 ? `, after the ${usd(cap.lossDeduction)} capital-loss deduction` : ""}) and AGI over ${usd(p.niit.threshold[fs])} (${usd(agi - p.niit.threshold[fs])}). The threshold is not indexed for inflation.`
       : agi > p.niit.threshold[fs] ? "AGI is over the threshold but there is no investment income." : `AGI is under the ${usd(p.niit.threshold[fs])} threshold.`,
     ["agi", "interest", "nonqualifiedDividends", "qualifiedDividends", "netLongTermGain", "netShortTermGain"],
   );

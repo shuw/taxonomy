@@ -168,6 +168,7 @@ describe("hold or sell", () => {
   test("holding defers to long-term gain; selling the same day is ordinary income with no AMT", () => {
     const p = withEvents([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 20_000 }]);
     const h = holdOrSell(p, undefined, 2026)!;
+    expect(h.hold.why).toMatch(/AMT on the spread now/); expect(h.sell.why).toMatch(/disqualifying/); expect(h.fields.cashNeeded).toMatch(/negative/);
     expect(h.shares).toBe(20_000);
     expect(h.hold.saleYear).toBe(2027);
     expect(h.holdPrice).toBeGreaterThan(h.sellPrice);

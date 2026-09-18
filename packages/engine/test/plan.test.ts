@@ -183,7 +183,9 @@ describe("timeline, scenarios and companies", () => {
     const plan = runPlan(p);
     expect(plan.years[0]!.inputs.filingStatus).toBe("single");
     expect(plan.years[1]!.inputs.filingStatus).toBe("mfj");
-    expect(plan.years[2]!.inputs.salarySelf).toBeCloseTo(500_000 * 1.03 ** 2);
+    // A salary set for 2028 is 2028 dollars; growth resumes from there.
+    expect(plan.years[2]!.inputs.salarySelf).toBeCloseTo(500_000);
+    expect(plan.years[3]!.inputs.salarySelf).toBeCloseTo(500_000 * 1.03);
   });
   test("unsafe timeline paths are refused", () => {
     const p = { ...profile, timeline: [{ year: 2026, path: "__proto__.polluted", value: 1 }, { year: 2026, path: "constructor.prototype.x", value: 1 }] };
@@ -260,5 +262,18 @@ describe("exercises draw only on shares vested by the exercise date", () => {
     ]);
     expect(tools.whatIf(p, [{ kind: "exercise", type: "iso", year: 2026, date: "2026-11-01", shares: 1500 }]).warnings).toBeUndefined();
     expect(tools.plan(p).years[0]!.lines).toHaveProperty("isoDisqualifyingIncome");
+  });
+});
+
+describe("a dated pay change is in that year's dollars", () => {
+  const text = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
+  test("a bonus set from 2027 is exactly that in 2027 and grows from there; salary keeps growing from the start", () => {
+    const p = parseProfile(editProfileText(text, [{ path: ["timeline"], value: [{ year: 2027, path: "people.self.bonus", value: 100_000 }] }]));
+    const plan = runPlan(p, activeLevers(p));
+    const g = p.assumptions.wageGrowth;
+    const wages = (y: number) => plan.years.find((r) => r.year === y)!.inputs.salarySelf;
+    expect(wages(2027)).toBeCloseTo(p.people.self.salary * (1 + g) + 100_000, 2);
+    expect(wages(2028)).toBeCloseTo(p.people.self.salary * (1 + g) ** 2 + 100_000 * (1 + g), 2);
+    expect(wages(2026)).toBeCloseTo(p.people.self.salary, 2);
   });
 });

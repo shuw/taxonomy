@@ -251,7 +251,7 @@ server.registerTool("facts", {
   // Written as pending, then accepted in the same save: one logged change, the same sources as an accepted proposal.
   const staged = parseProfile(editProfileText(f.text, proposed.edits));
   write(f.id, actor, [...removal, ...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
-  return about(f, { applied: proposed.rows, ...(remove?.length ? { removed: remove } : {}), delta: proposed.delta });
+  return about(f, { applied: proposed.rows.map(({ id: _id, current, proposed: now, ...r }) => ({ ...r, was: current, now })), ...(remove?.length ? { removed: remove } : {}), delta: proposed.delta });
 }));
 
 server.registerTool("intake", {

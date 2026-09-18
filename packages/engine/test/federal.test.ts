@@ -191,3 +191,30 @@ describe("the 2026 limit on itemized deductions", () => {
     expect(L.lines.saltDeduction!.why).toMatch(/capped at \$10,000 this year \(the \$40,400 cap shrinks/);
   });
 });
+
+describe("the list of modeled rules", () => {
+  test("is stated from the year's parameters and names every ledger-visible rule family", () => {
+    const { modeledRules } = require("../src/rules.ts") as typeof import("../src/rules.ts");
+    const groups = modeledRules(2026);
+    const titles = groups.map((g) => g.title);
+    expect(titles.some((t) => t.startsWith("Federal income tax, 2026"))).toBe(true);
+    expect(titles).toContain("Not modeled yet");
+    const all = groups.flatMap((g) => g.items);
+    expect(all.find((i) => i.name === "Standard deduction")!.detail).toBe("$16,100 single, $32,200 joint.");
+    expect(all.find((i) => i.name === "State and local taxes")!.detail).toContain("$40,400");
+    expect(all.some((i) => i.name.startsWith("Top-bracket limit"))).toBe(true);
+    expect(modeledRules(2025).flatMap((g) => g.items).some((i) => i.name.startsWith("Top-bracket limit"))).toBe(false);
+    expect(all.filter((i) => i.name.includes("WA")).length).toBe(1);
+    for (const i of all) { expect(i.name.length).toBeGreaterThan(2); expect(i.detail.endsWith(".")).toBe(true); }
+  });
+});
+
+describe("net investment income after a capital loss", () => {
+  test("the $3,000 loss deduction reduces the NIIT base", () => {
+    const withLoss = fed({ salarySelf: 400_000, interest: 50_000, shortTermGains: -20_000 });
+    const without = fed({ salarySelf: 400_000, interest: 50_000 });
+    expect(withLoss.get("capitalLossDeduction")).toBe(3_000);
+    expect(withLoss.get("niit")).toBeCloseTo(without.get("niit") - 3_000 * 0.038, 2);
+    expect(withLoss.lines.niit!.why).toContain("capital-loss deduction");
+  });
+});

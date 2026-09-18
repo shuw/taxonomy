@@ -48,6 +48,13 @@ export function profileInYear(profile: Profile, year: number): Profile {
 }
 
 /** Timeline entries that first take effect in `year`, for display. */
+/** The year a value was last set: the latest timeline entry for the path in force in `year`, else the plan's first year. Growth compounds from there. */
+export function setYearOf(profile: Profile, path: string, year: number): number {
+  let from = profile.plan.startYear;
+  for (const e of profile.timeline ?? []) if (e.path === path && e.year <= year && (e.until === undefined || year <= e.until) && e.year > from) from = e.year;
+  return from;
+}
+
 export function changesIn(profile: Profile, year: number): TimelineEntry[] {
   return (profile.timeline ?? []).filter((e) => e.year === year);
 }

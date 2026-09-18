@@ -47,10 +47,18 @@ export function TooltipRow({ label, value, color, className }: { label: ReactNod
   );
 }
 
-export function Legend({ items }: { items: { id: string; label: string; color: string; hatch?: boolean }[] }) {
+export function Legend({ items, note }: { items: { id: string; label: string; color: string; colors?: string[]; hatch?: boolean }[]; note?: string }) {
   return (
     <div className="legend">
-      {items.map((s) => <span key={s.id}><span className={"sw" + (s.hatch ? " hatch" : "")} style={{ background: s.color }} />{s.label}</span>)}
+      {items.map((s) => (
+        <span key={s.id}>
+          {s.colors && s.colors.length > 1
+            ? <span className="sw multi">{s.colors.map((c, i) => <span key={i} style={{ background: c }} />)}</span>
+            : <span className={"sw" + (s.hatch ? " hatch" : "")} style={{ background: s.colors?.[0] ?? s.color }} />}
+          {s.label}
+        </span>
+      ))}
+      {note && <span className="legend-note muted">{note}</span>}
     </div>
   );
 }

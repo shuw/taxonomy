@@ -20,6 +20,8 @@ export interface FieldDef {
   /** Literal shown in the request template instead of the type's default. */
   example?: string;
   enum?: string[];
+  /** What an unset value means, reported as the current value (the Washington switches are on unless turned off). */
+  default?: unknown;
   /** Reviewed as its own row (default). Structured rows (prior return, mortgage) consume the rest. */
   review?: boolean;
   /** Offered in the timeline picker. */
@@ -114,9 +116,9 @@ export const FIELDS: FieldDef[] = [
   { path: "assumptions.wageGrowth", intake: "assumptions.wageGrowth", label: "Wage growth", section: "assumptions", type: "pct", timeline: true },
   { path: "assumptions.inflation", intake: "assumptions.inflation", label: "Inflation", section: "assumptions", type: "pct", timeline: true },
   { path: "assumptions.bracketRateDelta", label: "Bracket rate shift", section: "assumptions", type: "pct", hint: "added to every ordinary bracket rate", timeline: true },
-  { path: "assumptions.state.waCapitalGainsTax", label: "WA capital gains tax (on/off)", section: "assumptions", type: "bool", timeline: true },
-  { path: "assumptions.state.waCapitalGainsSurtax", label: "WA 2.9% surtax over $1M (on/off)", section: "assumptions", type: "bool", timeline: true },
-  { path: "assumptions.state.waMillionairesTax", label: "WA millionaires' tax (on/off)", section: "assumptions", type: "bool", timeline: true },
+  { path: "assumptions.state.waCapitalGainsTax", label: "WA capital gains tax (on/off)", section: "assumptions", type: "bool", timeline: true, default: true },
+  { path: "assumptions.state.waCapitalGainsSurtax", label: "WA 2.9% surtax over $1M (on/off)", section: "assumptions", type: "bool", timeline: true, default: true },
+  { path: "assumptions.state.waMillionairesTax", label: "WA millionaires' tax (on/off)", section: "assumptions", type: "bool", timeline: true, default: true },
 ];
 
 export const fieldByPath = (path: string): FieldDef | undefined => FIELDS.find((f) => f.path === path);

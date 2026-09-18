@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../api.ts";
 import { Disclaimer } from "./Disclaimer.tsx";
+import { TermsModal } from "./TermsModal.tsx";
 import { Mark, Wordmark } from "./Mark.tsx";
 
 const looksLikeEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -14,6 +15,7 @@ export function Login({ signup, full, onDone }: { signup: boolean; full?: boolea
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const [terms, setTerms] = useState(false);
 
   const exists = known && known.email === email.trim().toLowerCase() ? known.exists : null;
   const mode: "in" | "new" | "ask" = !signup ? "in" : exists === null ? "ask" : exists ? "in" : "new";
@@ -69,7 +71,9 @@ export function Login({ signup, full, onDone }: { signup: boolean; full?: boolea
           <span className="spacer" />
           <button type="submit" className="btn primary" disabled={busy || !email || !password}>{busy ? "…" : mode === "new" ? "Create account" : mode === "in" ? "Sign in" : "Continue"}</button>
         </div>
+        <p className="muted small login-terms">A side project, offered as is. By continuing you accept the <button type="button" className="link" onClick={() => setTerms(true)}>terms of use</button>.</p>
       </form>
+      {terms && <TermsModal onClose={() => setTerms(false)} />}
       <div className="login-fine"><Disclaimer /></div>
     </div>
   );

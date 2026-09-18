@@ -179,3 +179,16 @@ describe("a blank profile", () => {
     expect(plan.years[0]!.lines).toHaveProperty("charitableCarryOut");
   });
 });
+
+describe("what get_context reports", () => {
+  test("an unset Washington switch reads as on", () => {
+    const p = parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"));
+    const f = tools.context(p).fields.find((x) => x.field === "assumptions.state.waMillionairesTax")!;
+    expect(f.current).toBe(true);
+  });
+  test("an intake that leaves grants out says which were removed", () => {
+    const p = parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"));
+    const r = tools.applyIntake(p, `taxonomy_intake: 1\nequity:\n  grants:\n    - { name: "2022 ISO grant", type: iso, granted: 60000, strike: 1.2, vested: 52500, exercised: 10000, unexercised: 50000 }\n`);
+    expect(r.warnings.some((w) => /2 grants on file were not in the document and were removed: 2024 NSO refresh, 2025 RSU grant/.test(w))).toBe(true);
+  });
+});

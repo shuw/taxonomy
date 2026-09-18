@@ -36,6 +36,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { AccountModal } from "./components/AccountModal.tsx";
 import { setPersisted } from "./persist.ts";
 import { ShortcutsHelp } from "./components/ShortcutsHelp.tsx";
+import { RulesModal } from "./components/RulesModal.tsx";
+import { TermsModal } from "./components/TermsModal.tsx";
 import { ClaudePanel, ClaudeStatusButton } from "./components/ClaudePanel.tsx";
 import { HistoryModal } from "./components/HistoryModal.tsx";
 import { useAgentStatus } from "./hooks/useAgentStatus.ts";
@@ -195,6 +197,8 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
     if (selectedYear !== undefined && selectedYear !== y) setSelectedEvent(null);
   };
   const [helpOpen, setHelpOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
   const stepYear = (d: number) => { const i = years.indexOf(focusYear); const next = years[Math.min(years.length - 1, Math.max(0, i + d))]; if (next !== undefined) pickYear(next); };
   const shortcuts = useMemo<Shortcut[]>(() => [
     { keys: ["1"], label: "Combined view", run: () => setPlanView("combined") },
@@ -206,7 +210,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
     { keys: ["l"], label: "Show or hide the ledger", run: () => setLedgerOpen((o) => !o) },
     { keys: ["c"], label: "Claude", run: () => setClaudeOpen(true) },
     { keys: ["h"], label: "History of changes", run: () => setHistoryOpen(true) },
-    { keys: ["?"], label: "These shortcuts", run: () => setHelpOpen((o) => !o), always: true },
+    { keys: ["?"], label: "Help", run: () => setHelpOpen((o) => !o), always: true },
     { keys: ["Escape"], label: "Close the panel or dialog", run: () => {
       // A dialog closes itself; only when none is open does Escape clear what is selected on the page.
       if (helpOpen || claudeOpen || historyOpen || factsTab || intakeOpen) { setHelpOpen(false); setClaudeOpen(false); setHistoryOpen(false); return; }
@@ -252,7 +256,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
         <ThemeToggle />
         <ClaudeStatusButton status={agent} news={claudeNews.news.length} onClick={() => setClaudeOpen(true)} />
         <button type="button" className="btn history-btn with-icon" title="History of changes (H)" aria-label="History of changes" onClick={() => setHistoryOpen(true)}><span className="label">History</span><span className="label-short"><Icon name="history" /></span></button>
-        <button type="button" className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>?</button>
+        <button type="button" className="btn icon" title="Help (?)" aria-label="Help" onClick={() => setHelpOpen(true)}>?</button>
         <button type="button" className="btn edit-info" onClick={() => openFacts()}><span className="label">Edit my information</span><span className="label-short">Edit</span> <kbd>E</kbd></button>
       </header>
 
@@ -315,7 +319,9 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
           <ExplainPanel plan={plan} pinned={pinned?.plan ?? null} selection={selected} onSelect={setSelected} onClose={() => setSelected(null)} />
         </aside>
       )}
-      {helpOpen && <ShortcutsHelp shortcuts={shortcuts} onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <ShortcutsHelp shortcuts={shortcuts} onClose={() => setHelpOpen(false)} onRules={() => { setHelpOpen(false); setRulesOpen(true); }} onTerms={() => { setHelpOpen(false); setTermsOpen(true); }} />}
+      {termsOpen && <TermsModal onClose={() => setTermsOpen(false)} />}
+      {rulesOpen && <RulesModal year={profile.plan.startYear} inflation={profile.assumptions?.inflation ?? 0.025} onClose={() => setRulesOpen(false)} />}
       {claudeOpen && <ClaudePanel profile={profile} news={claudeNews.news} onSeen={claudeNews.markSeen} onHistory={() => { setClaudeOpen(false); setHistoryOpen(true); }} onClose={() => setClaudeOpen(false)} />}
       {historyOpen && <HistoryModal onClose={() => setHistoryOpen(false)} />}
       {factsTab && <FactsModal profile={profile} years={years} tab={factsTab} onTab={openFacts} edit={edit} onClose={closeFacts} onOpenIntake={() => setIntakeOpen(true)} path={path} saving={saving} />}

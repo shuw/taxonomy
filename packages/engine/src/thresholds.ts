@@ -1,6 +1,7 @@
 import { exerciseDraws, exercisedIn, resolveCompany, sharesExercisable } from "./equity.ts";
 import { resolveLevers, runPlan, stateBefore, yearFrom, runPlanFrom } from "./plan.ts";
 import type { Levers, PlanResult, Profile } from "./types.ts";
+import { usd } from "./ledger.ts";
 
 export interface AmtCrossover {
   year: number;
@@ -168,8 +169,10 @@ export interface HoldOrSell {
   /** Price per share assumed for the sale in each path. */
   holdPrice: number;
   sellPrice: number;
-  hold: { taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number; saleYear: number };
-  sell: { taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number };
+  /** Field meanings, the same for both paths. */
+  fields: Record<"taxInYear" | "taxOverPlan" | "cashNeeded" | "proceeds" | "netOverPlan", string>;
+  hold: { why: string; taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number; saleYear: number };
+  sell: { why: string; taxInYear: number; taxOverPlan: number; cashNeeded: number; proceeds: number; netOverPlan: number };
 }
 
 /**
@@ -203,5 +206,17 @@ export function holdOrSell(profile: Profile, leverOverrides: Partial<Levers> | u
   const hold = summarize(holdPlan, saleYear);
   const sell = summarize(sellPlan, year);
   const price = (p: typeof none, y: number) => { const s = yr(p, y).sales?.find((s) => s.lots.some((l) => l.lotId in lots)); const l = s?.lots.find((l) => l.lotId in lots); return l?.price ?? 0; };
-  return { year, company: c, shares, holdPrice: price(holdPlan, saleYear), sellPrice: price(sellPlan, year), hold: { ...hold, saleYear }, sell };
+  const holdPrice = price(holdPlan, saleYear), sellPrice = price(sellPlan, year);
+  return {
+    year, company: c, shares, holdPrice, sellPrice,
+    fields: {
+      taxInYear: `Total tax in ${year} on this path, the whole year, not just this exercise.`,
+      taxOverPlan: "Extra tax across every plan year compared with not exercising at all; smaller than the year's tax when AMT comes back as credit.",
+      cashNeeded: `Exercise cost plus ${year}'s tax, less same-day proceeds; negative when the sale covers both.`,
+      proceeds: "What the shares sell for on this path.",
+      netOverPlan: "Proceeds less the extra tax and the exercise cost.",
+    },
+    hold: { why: `Exercise in ${year} and sell on ${saleYear}-12-30 at ${usd(holdPrice)}: AMT on the spread now, then a long-term ${saleYear > year + 1 || saleYear === year ? "" : "and, if the grant is old enough, qualifying "}sale, so the AMT paid comes back as credit.`, ...hold, saleYear },
+    sell: { why: `Exercise and sell the same day at ${usd(sellPrice)}: a disqualifying disposition, so the spread is ordinary income and there is no AMT; the proceeds land in ${year}.`, ...sell },
+  };
 }

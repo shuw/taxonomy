@@ -5,14 +5,14 @@ import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, usd, usdCompact } from "../format.ts";
 import { AxisTicks, ChartTooltip, Legend, TooltipRow, columnLayout } from "./charts.tsx";
 
-interface Series { id: string; label: string; color: string; value: (y: PlanResult["years"][number]) => number; /** Draw with a hatch over the color instead of a solid fill. */ hatch?: boolean; }
+interface Series { id: string; label: string; color: string; value: (y: PlanResult["years"][number]) => number; /** Draw with a hatch over the color instead of a solid fill. */ hatch?: boolean; /** One of the taxes: the legend folds these into a single "Taxes" entry. */ tax?: boolean; }
 
 const TAX_SERIES: Series[] = [
-  { id: "regular", label: "Regular tax (after AMT credit)", color: PALETTE.regular, value: (y) => y.lines.regularTax!.value - y.lines.amtCreditUsed!.value },
-  { id: "amt", label: "AMT", color: PALETTE.amt, value: (y) => y.lines.amt!.value },
-  { id: "surtax", label: "Surtaxes (NIIT, Medicare)", color: PALETTE.surtax, value: (y) => y.lines.niit!.value + y.lines.additionalMedicare!.value },
+  { id: "regular", label: "Regular tax (after AMT credit)", color: PALETTE.regular, tax: true, value: (y) => y.lines.regularTax!.value - y.lines.amtCreditUsed!.value },
+  { id: "amt", label: "AMT", color: PALETTE.amt, tax: true, value: (y) => y.lines.amt!.value },
+  { id: "surtax", label: "Surtaxes (NIIT, Medicare)", color: PALETTE.surtax, tax: true, value: (y) => y.lines.niit!.value + y.lines.additionalMedicare!.value },
 ];
-const STATE_SERIES: Series = { id: "state", label: "State", color: PALETTE.state, value: (y) => y.lines.stateTax!.value };
+const STATE_SERIES: Series = { id: "state", label: "State", color: PALETTE.state, tax: true, value: (y) => y.lines.stateTax!.value };
 
 /** State tax as the lines the state module wrote, so Washington's two taxes show apart. */
 function taxSeries(plan: PlanResult): Series[] {
@@ -20,8 +20,8 @@ function taxSeries(plan: PlanResult): Series[] {
   if (lines.stateCapitalGainsTax && lines.stateMillionairesTax) {
     return [
       ...TAX_SERIES,
-      { id: "stateCg", label: lines.stateCapitalGainsTax.label, color: PALETTE.state, value: (y) => y.lines.stateCapitalGainsTax?.value ?? 0 },
-      { id: "stateM", label: lines.stateMillionairesTax.label, color: PALETTE.state2, value: (y) => y.lines.stateMillionairesTax?.value ?? 0 },
+      { id: "stateCg", label: lines.stateCapitalGainsTax.label, color: PALETTE.state, tax: true, value: (y) => y.lines.stateCapitalGainsTax?.value ?? 0 },
+      { id: "stateM", label: lines.stateMillionairesTax.label, color: PALETTE.state2, tax: true, value: (y) => y.lines.stateMillionairesTax?.value ?? 0 },
     ];
   }
   return [...TAX_SERIES, { ...STATE_SERIES, label: lines.stateTax?.label ?? "State" }];
@@ -61,6 +61,14 @@ export const CombinedStrip = (p: StripProps) => (
 );
 export const CreditStrip = (p: StripProps) => <ColumnStrip {...p} series={CREDIT_SERIES} height={170} />;
 
+/** The taxes fold into one legend entry with a swatch per tax that actually appears in the plan; the rest keep their own. */
+function legendItems(series: Series[], years: PlanResult["years"]): { id: string; label: string; color: string; colors?: string[]; hatch?: boolean }[] {
+  const taxes = series.filter((s) => s.tax);
+  const present = taxes.filter((s) => years.some((y) => s.value(y) > 0));
+  const rest = series.filter((s) => !s.tax).map(({ id, label, color, hatch }) => ({ id, label, color, hatch }));
+  if (taxes.length === 0) return rest;
+  return [{ id: "taxes", label: "Taxes", color: PALETTE.regular, colors: (present.length ? present : taxes.slice(0, 1)).map((s) => s.color) }, ...rest];
+}
 const GAP = 2;
 /** Columns grow with the card up to this width; bars take a share of the column. */
 export const MAX_BAND = 260;
@@ -161,7 +169,10 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, serie
           {pinnedTotals && capLabel && <TooltipRow className="muted" label="vs pinned" value={fmtDelta((years[hover]!.lines.netCash?.value ?? 0) - (pinned!.years[hover]?.lines.netCash?.value ?? 0)) || "same"} />}
         </ChartTooltip>
       )}
-      {(series.length > 1 || pinned) && <Legend items={[...(series.length > 1 ? series : []), ...(pinned ? [{ id: "pinned", label: "Pinned scenario", color: PALETTE.pinned }] : [])]} />}
+      {(series.length > 1 || pinned) && <Legend note="Tap a year for details." items={[
+        ...(series.length > 1 ? legendItems(series, years) : []),
+        ...(pinned ? [{ id: "pinned", label: "Pinned scenario", color: PALETTE.pinned }] : []),
+      ]} />}
     </div>
   );
 }

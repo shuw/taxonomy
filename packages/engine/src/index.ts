@@ -36,3 +36,5 @@ export type { Gap } from "./gaps.ts";
 export { describeChanges } from "./history.ts";
 export type { HistoryEntry } from "./history.ts";
 export { describeSource, sourceKeyFor, sourcesAfterEdit } from "./provenance.ts";
+export { modeledRules } from "./rules.ts";
+export type { RuleGroup } from "./rules.ts";

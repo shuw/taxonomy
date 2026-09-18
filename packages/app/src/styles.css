@@ -155,6 +155,9 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .brand .rest { font-weight: 500; color: var(--muted); letter-spacing: -0.01em; }
 .theme-toggle { font-size: var(--text-md); padding: 5px 10px; }
 .topbar .btn, .topbar .chip { white-space: nowrap; }
+/* Every top-bar control shares the pill menus' height. */
+.topbar .btn { padding: 6px 13px; font-size: var(--text-md); line-height: 1.2; }
+.topbar .btn.icon { padding: 6px 12px; font-size: var(--text-md); line-height: 1.2; }
 @media (max-width: 1500px) { .topbar .chip.ghost { display: none; } }
 /* Under a laptop width the filing-status chip and the key hints go, so the bar stays one row longer. */
 @media (max-width: 1200px) { .topbar .chip.filer { display: none; } .topbar kbd { display: none; } }
@@ -271,6 +274,9 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .chart .baseline { stroke: var(--axis); stroke-width: 1; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: var(--text-md); color: var(--ink-2); margin-top: 10px; }
 .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .sw.multi { display: inline-flex; gap: 2px; background: none; width: auto; }
+.legend .sw.multi > span { display: block; width: 10px; height: 10px; border-radius: 3px; }
+.legend .legend-note { font-size: var(--text-sm); }
 .tooltip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; font-size: var(--text-md); box-shadow: var(--shadow); min-width: 170px; z-index: 2; }
 .tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
 .tooltip .row.total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; font-weight: 600; }
@@ -851,7 +857,28 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 @media (max-width: 1000px) {
   .topbar .theme-toggle .label, .topbar .history-btn .label { display: none; }
   .topbar .history-btn .label-short { display: inline-flex; }
-  .topbar .btn.with-icon, .topbar .btn.icon { width: 36px; height: 36px; padding: 0; justify-content: center; display: inline-flex; align-items: center; gap: 0; }
-  .topbar .btn.with-icon svg { width: 20px; height: 20px; }
-  .topbar .btn.icon { font-size: var(--text-lg); }
+  .topbar .btn.with-icon, .topbar .btn.icon { width: 32px; height: 32px; padding: 0; justify-content: center; display: inline-flex; align-items: center; gap: 0; }
+  .topbar .btn.with-icon svg { width: 19px; height: 19px; }
+  .topbar .btn.icon { font-size: var(--text-md); font-weight: 700; }
 }
+
+/* The rules dialog: one list per group, each rule a term with its detail and where it comes from. */
+.help .modal-body { display: grid; gap: 18px; }
+.help section .subhead { margin-bottom: 8px; }
+.help-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.help-list li { display: grid; gap: 1px; }
+.help-list .link { padding: 0; text-align: left; justify-self: start; text-decoration: none; }
+.rules .modal-body { display: grid; gap: 18px; }
+.rule-group h4 { margin: 0 0 8px; font: 700 var(--text-md)/1.3 var(--display); }
+.rule-group dl { margin: 0; display: grid; gap: 8px; }
+.rule { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 4px 14px; }
+.rule dt { font-weight: 600; }
+.rule dd { margin: 0; color: var(--ink); line-height: 1.45; }
+.rule-source { display: block; color: var(--muted); font-size: var(--text-xs); margin-top: 2px; }
+@media (max-width: 640px) { .rule { grid-template-columns: 1fr; gap: 2px; } }
+
+.terms .modal-body { display: grid; gap: 12px; }
+.terms .modal-body p { margin: 0; line-height: 1.5; }
+.terms a { color: var(--accent); }
+.login-terms { margin: 0; text-align: center; }
+.login-terms .link { padding: 0; font-size: inherit; }

@@ -4,7 +4,7 @@ import { Ledger, pct, usd } from "./ledger.ts";
 import { amortize, type MortgageYear } from "./mortgage.ts";
 import { federalParams } from "./params.ts";
 import { stateModule } from "./state/index.ts";
-import { activeLevers, profileInYear } from "./timeline.ts";
+import { activeLevers, profileInYear, setYearOf } from "./timeline.ts";
 import { applySale, lotsFromRsu, lotsFromExercise, openingLots, type Lot, type SaleResult } from "./lots.ts";
 import type { Levers, PlanResult, Profile, YearInputs, YearResult } from "./types.ts";
 
@@ -65,11 +65,11 @@ export function openingCarries(profile: Profile): Carries {
 
 /**
  * Inputs for one year. `profile` should already be the timeline-adjusted profile for that year
- * (see profileInYear); growth assumptions compound from plan.startYear.
+ * (see profileInYear). Wage growth compounds from the year a pay figure was set: the plan's first
+ * year, or the dated change that set it, whose value is in that year's dollars.
  */
 export function yearInputs(profile: Profile, levers: Levers, year: number, carries: Carries, mortgage?: MortgageYear): YearInputs {
-  const t = year - profile.plan.startYear;
-  const grow = (x: number) => x * (1 + profile.assumptions.wageGrowth) ** t;
+  const grow = (x: number, path: string) => x * (1 + profile.assumptions.wageGrowth) ** (year - setYearOf(profile, path, year));
   const self = profile.people.self;
   const spouse = profile.people.spouse;
   const inc = profile.income;
@@ -84,8 +84,8 @@ export function yearInputs(profile: Profile, levers: Levers, year: number, carri
     year,
     filingStatus: profile.filer.filingStatus,
     state: profile.filer.state,
-    salarySelf: grow(self.salary + (self.bonus ?? 0)),
-    salarySpouse: spouse ? grow(spouse.salary + (spouse.bonus ?? 0)) : 0,
+    salarySelf: grow(self.salary, "people.self.salary") + grow(self.bonus ?? 0, "people.self.bonus"),
+    salarySpouse: spouse ? grow(spouse.salary, "people.spouse.salary") + grow(spouse.bonus ?? 0, "people.spouse.bonus") : 0,
     pretaxContributions: (self.pretaxContributions ?? 0) + (spouse?.pretaxContributions ?? 0),
     otherOrdinary: inc.otherOrdinary ?? 0,
     interest: inc.interest ?? 0,
