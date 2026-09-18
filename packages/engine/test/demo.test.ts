@@ -14,7 +14,7 @@ describe("the demo profile", () => {
     expect(by[2027]!.nsoIncome!.value).toBeGreaterThan(0);
     expect(by[2028]!.rsuIncome!.value).toBeGreaterThan(0);
     expect(by[2027]!.wages!.value).toBeGreaterThan(by[2026]!.wages!.value * 1.1);
-    expect(by[2026]!.giving!.value).toBeGreaterThan(profile.deductions.charitable.cash);
+    expect(by[2026]!.giving!.value).toBeGreaterThan(4000); // the recurring gift plus the one-off
     expect(by[2028]!.givingStock!.value).toBeGreaterThan(0);
     expect(plan.years[plan.years.length - 1]!.lines.amtCreditCarryforwardOut!.value).toBe(0);
   });
