@@ -7,7 +7,7 @@ basics:
   dependents: 1
 people:
   self:
-    name: Shu
+    name: Sam
     baseSalary: "620,000"
     pretaxContributions: 23500
     withholdingToDate: 141000

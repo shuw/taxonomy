@@ -86,7 +86,7 @@ function untouched(p: Profile): boolean {
  */
 function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<CreateProps, "mode">) {
   const scope = "new";
-  // On a hosted server the account's email suggests the name: "shu.wu@…" starts as "Shu".
+  // On a hosted server the account's email suggests the name: "sam.lee@…" starts as "Sam".
   const suggested = account?.email ? (account.email.split("@")[0]!.split(/[._+-]/)[0] || "Me") : "Me";
   const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: suggested.charAt(0).toUpperCase() + suggested.slice(1) }));
   useEffect(() => { saveDraft(`${scope}.basics`, basics); }, [basics]);
