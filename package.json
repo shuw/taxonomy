@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": ["packages/*"],
+  "engines": { "bun": ">=1.2" },
   "scripts": {
     "dev": "bun --watch packages/app/server.ts",
     "test": "bun test packages/engine packages/app/test",

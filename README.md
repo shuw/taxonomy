@@ -3,6 +3,8 @@
 A personal tax planning tool for understanding, not filing. Move a lever, watch six years of
 federal and state tax respond, and click any number to see why it is what it is.
 
+Needs [Bun](https://bun.sh) 1.2 or later; nothing else.
+
 ```sh
 bun install
 bun run dev            # http://127.0.0.1:5180 — first run asks for the basics and writes data/profiles/<name>.yaml
@@ -93,16 +95,17 @@ Locally there are no accounts: the app binds 127.0.0.1 and everything lives in `
 run it for several people, put it behind TLS and start it with accounts on:
 
 ```sh
-HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com bun packages/app/server.ts
+HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com TAXONOMY_DATA=/srv/taxonomy bun packages/app/server.ts
 ```
 
+- **Sign-up is open by default.** Anyone who reaches the server can create an account, up to
+  `TAXONOMY_MAX_USERS` (1000), after which sign-up says the server is full. Hosting it for
+  yourself or one household? Set `TAXONOMY_SIGNUP=closed`: the first account is the only one.
 - Accounts are on whenever `TAXONOMY_AUTH=1` or the server is bound to anything but loopback.
-  Anyone who reaches the server can create an account, up to `TAXONOMY_MAX_USERS` (1000 by
-  default), after which sign-up says the server is full. `TAXONOMY_SIGNUP=closed` stops
-  sign-up after the first account.
-- Each account has its own `data/users/<id>/` with its profiles, history, attachments and
-  connector secret; nothing is shared. Passwords are argon2id hashes and sessions are 30-day
-  HttpOnly cookies, both in `data/auth.sqlite` (gitignored, owner-only).
+- `TAXONOMY_DATA` moves the data directory out of the repo. Each account has its own
+  `users/<id>/` under it with its profiles, history, attachments and connector secret; nothing
+  is shared. Passwords are argon2id hashes and sessions are 30-day HttpOnly cookies, both in
+  `auth.sqlite` there (owner-only). A backup is that one directory.
 - Behind a TLS proxy, set `TAXONOMY_SECURE_COOKIES=1` so the cookie is marked Secure even
   though the server itself sees plain http, and `TAXONOMY_TRUST_PROXY=1` so the sign-in
   throttle keys on the proxy's `X-Forwarded-For` rather than the proxy's own address. Leave the
@@ -113,23 +116,40 @@ HOST=0.0.0.0 TAXONOMY_AUTH=1 TAXONOMY_PUBLIC_HOST=tax.example.com bun packages/a
   send headers should use `Authorization: Bearer <secret>` against `/mcp` instead.
 - Claude Desktop set-up buttons are off on a hosted server; they act on the machine the app runs on.
 
-## Deploy to Fly.io
+### With Docker
 
-The repo carries a `Dockerfile` and a `fly.toml` for a single machine with a persistent volume.
-Everything lives in files and one SQLite database, so keep it at one machine.
+The `Dockerfile` works on any container host. It already sets the proxy flags above, listens on
+8080 and keeps data in `/data`, so mount a volume there and put TLS in front:
 
 ```sh
-fly launch --copy-config --no-deploy   # pick an app name; it also sets primary_region
-fly volumes create data --size 1       # the /data mount in fly.toml
-fly deploy
+docker build -t taxonomy .
+docker run -d --name taxonomy -p 127.0.0.1:8080:8080 -v taxonomy-data:/data \
+  -e TAXONOMY_PUBLIC_HOST=tax.example.com -e TAXONOMY_SIGNUP=closed taxonomy
 ```
 
-Then set `TAXONOMY_PUBLIC_HOST` in `fly.toml` to the app's host (`<name>.fly.dev`, or a custom
-domain once `fly certs add` has it) and deploy again; that host is what claude.ai connectors
-are pointed at. Sign-up is open for up to 1000 accounts (`TAXONOMY_MAX_USERS` in `[env]`);
-`TAXONOMY_SIGNUP = "closed"` there keeps the server to your own account. Cookies are marked Secure and the sign-in
-throttle trusts Fly's `X-Forwarded-For`, both set in the Dockerfile. Back up the volume
-(`fly volumes snapshots list data`) the way you would any single-machine database.
+The shortest TLS proxy is [Caddy](https://caddyserver.com) with a one-line Caddyfile,
+`tax.example.com { reverse_proxy 127.0.0.1:8080 }`, which fetches its own certificate. Back up
+the `taxonomy-data` volume.
+
+## Deploy to Fly.io
+
+The repo carries a `fly.toml` for a single machine with a persistent volume. Everything lives in
+files and one SQLite database, so keep it at one machine: `--ha=false` below stops Fly from
+starting a second one, which could not share the volume.
+
+```sh
+fly launch --copy-config --no-deploy      # pick an app name; it rewrites `app` (and the region) in fly.toml
+fly volumes create data --size 1 -r sjc   # same region as primary_region in fly.toml
+fly deploy --ha=false
+```
+
+Then set `TAXONOMY_PUBLIC_HOST` in `fly.toml` to the host you now have (`<app name>.fly.dev`, or
+a custom domain once `fly certs add` has it) and run `fly deploy --ha=false` again; that host is
+what claude.ai connectors are pointed at. Sign-up is open for up to 1000 accounts
+(`TAXONOMY_MAX_USERS` in `[env]`); add `TAXONOMY_SIGNUP = "closed"` there to keep the server to
+your own account. Cookies are marked Secure and the sign-in throttle trusts Fly's
+`X-Forwarded-For`, both set in the Dockerfile. Fly snapshots the volume daily
+(`fly volumes snapshots list data`); treat it the way you would any single-machine database.
 
 ## Profile schema (version 3)
 
