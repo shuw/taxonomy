@@ -54,8 +54,11 @@ export function Sidebar({ profile, levers, years, edit, onOpenFacts }: Props) {
         )}
       </Section>
       <div className="sidebar-foot">
-        <button type="button" className="link muted" onClick={resetView} title="Forgets which cards are open and what is selected. Your data and theme stay.">Reset view</button>
-        <button type="button" className="link muted" onClick={() => setDemo(!demo.on)} title="Shows every amount in a made-up currency, for screenshots. Your file is unchanged.">{demo.on ? "Leave demo mode" : "Demo mode"}</button>
+        <a className="btn" href="https://github.com/shuw/taxonomy/issues" target="_blank" rel="noreferrer" title="A problem, a wrong number, an idea: it goes to the project's issues on GitHub">Send feedback</a>
+        <div className="foot-links">
+          <button type="button" className="link muted" onClick={resetView} title="Forgets which cards are open and what is selected. Your data and theme stay.">Reset view</button>
+          <button type="button" className="link muted" onClick={() => setDemo(!demo.on)} title="Shows every amount in a made-up currency, for screenshots. Your file is unchanged.">{demo.on ? "Leave demo mode" : "Demo mode"}</button>
+        </div>
       </div>
     </div>
   );

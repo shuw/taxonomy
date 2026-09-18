@@ -746,7 +746,9 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .news .subhead { margin-top: 0; }
 .chip.demo { background: color-mix(in srgb, var(--series-amt) 18%, var(--surface)); color: var(--series-amt); font-weight: 700; }
 .input-wrap.demo input { color: var(--ink-2); }
-.sidebar-foot { display: flex; gap: 14px; flex-wrap: wrap; }
+.sidebar-foot { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.sidebar-foot .foot-links { display: flex; gap: 14px; flex-wrap: wrap; }
+.sidebar-foot a.btn { text-decoration: none; color: inherit; }
 /* Pickers: the app's own menu in place of the browser's select popup ------- */
 .picker { position: relative; display: flex; align-items: center; }
 .pill-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: var(--surface-2); border-radius: 999px; padding: 6px 10px 6px 12px; font: 600 var(--text-md)/1.2 var(--display); color: var(--ink); cursor: pointer; max-width: 240px; }
