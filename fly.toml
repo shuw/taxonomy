@@ -1,7 +1,7 @@
 # Fly.io deployment: one machine, one volume. The app keeps everything in files and a small
 # SQLite database, so it must not scale past a single machine.
 app = "taxonomy"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
