@@ -10,8 +10,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { editProfileText, migrateProfileText, parseProfile, tools, type EventInput, type ProfileEdit } from "@taxonomy/engine";
-import { examplePath, rootStore, type Store } from "./store.ts";
+import { blankProfileText, editProfileText, migrateProfileText, parseProfile, tools, type EventInput, type ProfileEdit } from "@taxonomy/engine";
+import { rootStore, type Store } from "./store.ts";
 
 /** Everything that reads or writes profile files, bound to one store: one data directory, or one user's. */
 function ops(store: Store) {
@@ -26,7 +26,7 @@ function ops(store: Store) {
  * Which profile a call means: the one named (by id or by name), else the only one, else the one
  * open in the app. With several and no way to choose, the agent has to ask.
  */
-function load(ref?: string): { id: string; text: string; profile: ReturnType<typeof parseProfile>; chosenBy: "name" | "only" | "app" } {
+function load(ref?: string): { id: string; text: string; profile: ReturnType<typeof parseProfile>; chosenBy: "name" | "only" | "app"; changedAt: string } {
   const all = listProfiles();
   if (all.length === 0) throw new Error("no profiles yet; create_profile, or create one in the app");
   let chosen: { id: string; name: string } | undefined;
@@ -51,7 +51,7 @@ function load(ref?: string): { id: string; text: string; profile: ReturnType<typ
   }
   if (!chosen) throw new Error(`several profiles exist and none is open in the app; pass profile: one of ${all.map((p) => `"${p.id}" (${p.name})`).join(", ")}`);
   const text = migrateProfileText(readFileSync(store.fileFor(chosen.id), "utf8"));
-  return { id: chosen.id, text, profile: parseProfile(text), chosenBy };
+  return { id: chosen.id, text, profile: parseProfile(text), chosenBy, changedAt: new Date(statSync(store.fileFor(chosen.id)).mtimeMs).toISOString() };
 }
 
   /** Read, edit and write in one go; the app's poll picks the change up within two seconds. */
@@ -76,7 +76,7 @@ function load(ref?: string): { id: string; text: string; profile: ReturnType<typ
     if (taken) throw new Error(`a profile named "${clean}" already exists (id "${taken.id}"); use it, or pick another name`);
     mkdirSync(store.profilesDir, { recursive: true, mode: 0o700 });
     const id = store.uniqueId(clean);
-    const text = editProfileText(readFileSync(examplePath, "utf8"), [{ path: ["name"], value: clean }]);
+    const text = blankProfileText(clean);
     parseProfile(text);
     writeFileSync(store.fileFor(id), text, { mode: 0o600 });
     store.recordChange(id, null, text, actor);
@@ -87,10 +87,10 @@ function load(ref?: string): { id: string; text: string; profile: ReturnType<typ
 }
 type Loaded = ReturnType<ReturnType<typeof ops>["load"]>;
 
-/** Every result says which profile it is about, so the agent can tell the user when there are several. */
+/** Every result says which profile it is about and when the file last changed, so the agent can tell the user when there are several and notice edits made in the app. */
 function about(f: Loaded, result: unknown): unknown {
   const note = f.chosenBy === "app" ? `${f.id} (the one open in the app)` : f.id;
-  return Array.isArray(result) ? { profile: note, result } : { ...(result as Record<string, unknown>), profile: note };
+  return Array.isArray(result) ? { profile: note, changedAt: f.changedAt, result } : { ...(result as Record<string, unknown>), profile: note, changedAt: f.changedAt };
 }
 
 const json = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 1) }] });
@@ -118,6 +118,7 @@ export function createServer(opts: { clientLabel?: string; store?: Store } = {})
     "Profiles: a person or a household each has one; what-ifs are scenarios inside a profile. Every tool takes `profile` (id or name). Without it, the only profile or the one open in the app is used, and each result names the profile it is about; when several exist, say which one you are talking about, and ask if the user's words could mean another.",
     "When the user says to connect to (or set up) a Taxonomy profile, call get_context on it right away (the app watches for that call). Then say in two or three lines what the profile holds and what is still missing (its `outstanding` section), and offer the next step: read a document, or answer a question here.",
     "Filling in a profile is a conversation, not one sweep. Simple facts the user can state (salary, birth years, a bonus, a balance): ask in chat and call `facts`. Documents: intake(request) for one section at a time, then intake(submit); several submissions are expected. Never stall on something missing; note it and move on.",
+    "Every result carries `changedAt`, the profile's last save. When it moves between two calls, someone edited the profile in the app: call get_context again before quoting numbers.",
     "Then get_plan. Never state a tax figure you did not get from a tool; when asked why, quote the line's reason from explain or analyze(compare_years).",
     "To change the plan: call what_if to show the effect if the user is weighing it, then scenario(add) with a name that reads like the request; the app switches to it and shows what changed.",
     "To change a fact or assumption the user states (a raise, a growth rate, a switch), call facts; it is applied at once, logged, and undoable in the app.",
@@ -238,14 +239,17 @@ server.registerTool("scenario", {
 server.registerTool("facts", {
   description: "Set facts and assumptions the user states: salary, growth, inflation, share price, the Washington tax switches, years to plan and so on, now or from a given year. Applied at once with the source recorded; the app shows what changed and the history can undo it. Returns before/after rows and the effect on the plan.",
   annotations: { title: "Set facts", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  inputSchema: { profile: profileArg, changes: z.array(factChange).min(1) },
-}, async ({ profile, changes }) => run(() => {
+  inputSchema: { profile: profileArg, changes: z.array(factChange).optional(), remove: z.array(z.string()).optional().describe("grants or holdings to delete, by id from get_context: grants.g2, holdings.h1") },
+}, async ({ profile, changes, remove }) => run(() => {
   const f = use(profile);
+  if (!changes?.length && !remove?.length) throw new Error("give changes, remove, or both");
+  const removal = remove?.length ? tools.removeEquity(f.profile, remove) : [];
+  if (!changes?.length) { write(f.id, actor, removal); return about(f, { removed: remove }); }
   const proposed = tools.updateFacts(f.profile, changes);
   // Written as pending, then accepted in the same save: one logged change, the same sources as an accepted proposal.
   const staged = parseProfile(editProfileText(f.text, proposed.edits));
-  write(f.id, actor, [...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
-  return about(f, { applied: proposed.rows, effect: proposed.delta });
+  write(f.id, actor, [...removal, ...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
+  return about(f, { applied: proposed.rows, ...(remove?.length ? { removed: remove } : {}), effect: proposed.delta });
 }));
 
 server.registerTool("intake", {

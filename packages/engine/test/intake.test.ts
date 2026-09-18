@@ -200,3 +200,19 @@ describe("a $100k split reported tranche by tranche", () => {
     expect(nso.splitOf).toBeDefined();
   });
 });
+
+describe("the grant list is the whole list", () => {
+  test("a grant on file that the documents no longer show is removed, and its source with it", () => {
+    const text = editProfileText(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"), [{ path: ["sources", "grants.g2"], value: "old portal export" }]);
+    const profile = parseProfile(text);
+    const r = parseIntake(`taxonomy_intake: 1\nequity:\n  grants:\n    - { name: "2023 ISO grant", type: iso, granted: 40000, strike: 2, vested: 40000, exercised: 0, unexercised: 40000 }\n`);
+    expect(r.problems).toEqual([]);
+    const review = reviewIntake(r.doc!, profile);
+    const gone = review.changes.find((c) => c.id === "grants.g2");
+    expect(gone?.proposed).toBeUndefined();
+    expect(gone?.note).toContain("removed");
+    const after = parseProfile(editProfileText(text, changesToEdits(review.changes.filter((c) => c.status !== "same"), profile)));
+    expect(after.equity.grants.map((g) => g.id)).toEqual(["g1"]);
+    expect(after.sources?.["grants.g2"]).toBeUndefined();
+  });
+});

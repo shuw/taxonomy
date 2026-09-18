@@ -19,7 +19,7 @@ export { calibrate, latestReturn } from "./calibration.ts";
 export type { Calibration, CalibrationRow } from "./calibration.ts";
 export { amtCrossover, sweepIsoExercise, sharesToCover, creditRecovery, holdOrSell } from "./thresholds.ts";
 export type { AmtCrossover, SweepPoint, CreditRecovery, HoldOrSell } from "./thresholds.ts";
-export { parseProfile, editProfileText, migrateProfileText, isLegacyProfileText, stringifyProfile, stripUndefined, FILING_STATUSES, CURRENT_VERSION } from "./profile.ts";
+export { parseProfile, editProfileText, migrateProfileText, isLegacyProfileText, stringifyProfile, blankProfileText, stripUndefined, FILING_STATUSES, CURRENT_VERSION } from "./profile.ts";
 export type { ProfileEdit, ProfilePath } from "./profile.ts";
 export { parseIntake, unfence } from "./intake/schema.ts";
 export type { IntakeDocument, IntakeGrant, IntakeHolding, IntakePerson, IntakePriorReturn, IntakeProblem, IntakeParse, IntakeQuestion } from "./intake/schema.ts";

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, stringifyProfile, type IntakeChange, type IntakeSection, type PendingIntake, type Profile, type ProfileEdit } from "@taxonomy/engine";
+import { blankProfileText, changesToEdits, DOCUMENT_SECTIONS, editProfileText, followUpEdits, intakePrompt, INTAKE_SECTIONS, parseIntake, parseProfile, profilePathForIntake, reviewIntake, type IntakeChange, type IntakeSection, type PendingIntake, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd, demoText } from "../format.ts";
 import { Field, parseAmount } from "./fields.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -26,17 +26,7 @@ const REQUIRED_BASICS: { id: string; text: string; about: string }[] = [
 const thisYear = () => Math.max(2026, new Date().getFullYear());
 const SHORT: Partial<Record<IntakeSection, string>> = { basics: "Filing", pay: "Pay", prior_return: "Last return", income: "Income", equity: "Equity", home: "Home", giving: "Giving", assumptions: "Assumptions" };
 
-function profileTextFrom(b: Basics): string {
-  return stringifyProfile({
-    version: 3, name: b.name.trim() || "New profile",
-    filer: { filingStatus: "single", state: "WA", dependents: [] },
-    plan: { startYear: thisYear(), years: 5 },
-    assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
-    people: { self: { salary: 0 } },
-    income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
-    timeline: [], scenarios: { default: { events: [] } }, activeScenario: "default",
-  });
-}
+function profileTextFrom(b: Basics): string { return blankProfileText(b.name, thisYear()); }
 
 const DRAFT_KEY = (scope: string) => `taxonomy.intake.${scope}`;
 function loadDraft<T>(scope: string, fallback: T): T {

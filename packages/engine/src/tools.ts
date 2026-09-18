@@ -24,7 +24,7 @@ import { profileGaps } from "./gaps.ts";
 export const HEADLINE_LINES = [
   "agi", "taxableIncome", "regularTax", "amt", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "additionalMedicare", "stateTax", "totalTax", "effectiveRate", "effectiveRateWithSpread",
   "isoSharesExercised", "isoBargainElement", "nsoSharesExercised", "nsoIncome", "rsuSharesVested", "rsuIncome", "sharesSold", "saleProceeds", "netLongTermGain", "netShortTermGain",
-  "cashIn", "exerciseCost", "giving", "givingStock", "netCash",
+  "cashIn", "exerciseCost", "giving", "givingStock", "charitableDeduction", "charitableCarryOut", "netCash",
 ] as const;
 
 export interface YearHeadline { year: number; lines: Record<string, number>; why?: Record<string, string>; events: ScenarioEvent[]; }
@@ -32,7 +32,7 @@ export interface YearHeadline { year: number; lines: Record<string, number>; why
 const round = (n: number) => Math.round(n * 100) / 100;
 
 /** The lines whose reason is worth carrying without an explain call. */
-const WHY_LINES = ["amt", "amtCreditUsed", "amtCreditCarryforwardOut"];
+const WHY_LINES = ["amt", "amtCreditUsed", "amtCreditCarryforwardOut", "charitableDeduction", "charitableCarryOut"];
 
 function headline(y: YearResult, events: ScenarioEvent[]): YearHeadline {
   const lines: Record<string, number> = {};
@@ -357,7 +357,7 @@ export function applyIntake(profile: Profile, text: string): { edits: ProfileEdi
   const changes = review.changes.filter((c) => c.status !== "same");
   return {
     edits: [...changesToEdits(changes, profile), ...followUpEdits(review, profile)],
-    applied: changes.map((c) => ({ path: c.path.join("."), label: c.label, from: c.current, to: c.proposed, source: c.source })),
+    applied: changes.map((c) => ({ path: c.path.join("."), label: c.label, from: c.current, to: c.proposed, source: c.source, ...(c.note ? { note: c.note } : {}) })),
     questions: review.questions.length,
     problems: [],
     warnings,
@@ -487,6 +487,21 @@ export function updateFacts(profile: Profile, changes: FactChangeInput[]): { edi
   const pending = [...existing.filter((p) => !added.some((a) => a.path === p.path && a.from === p.from)), ...added];
   const next = { ...profile, pending };
   return { edits: [{ path: ["pending"], value: pending }], rows: added.map((p) => rowOf(next, p)), delta: deltas(runPlan(profile), runPlan(profileWithPending(profile, pending))) };
+}
+
+/** Drop grants or holdings by id ("grants.g2", "holdings.h1"), with their sources. */
+export function removeEquity(profile: Profile, ids: string[]): ProfileEdit[] {
+  const edits: ProfileEdit[] = [];
+  const grants = ids.filter((i) => i.startsWith("grants.")).map((i) => i.slice(7));
+  const holdings = ids.filter((i) => i.startsWith("holdings.")).map((i) => i.slice(9));
+  const bad = ids.filter((i) => !i.startsWith("grants.") && !i.startsWith("holdings."));
+  if (bad.length) throw new Error(`remove takes grants.<id> or holdings.<id>; not ${bad.join(", ")}`);
+  for (const id of grants) if (!profile.equity.grants.some((g) => g.id === id)) throw new Error(`no grant "${id}"; have ${profile.equity.grants.map((g) => g.id).join(", ") || "none"}`);
+  for (const id of holdings) if (!(profile.equity.holdings ?? []).some((h) => h.id === id)) throw new Error(`no holding "${id}"; have ${(profile.equity.holdings ?? []).map((h) => h.id).join(", ") || "none"}`);
+  if (grants.length) edits.push({ path: ["equity", "grants"], value: profile.equity.grants.filter((g) => !grants.includes(g.id) && !(g.splitOf && grants.includes(g.splitOf))) });
+  if (holdings.length) edits.push({ path: ["equity", "holdings"], value: (profile.equity.holdings ?? []).filter((h) => !holdings.includes(h.id)) });
+  for (const id of ids) if (profile.sources?.[id] !== undefined) edits.push({ path: ["sources", id], value: undefined });
+  return edits;
 }
 
 /** Accept or discard pending changes by id (all of them when none are named). Accepting records the source. */

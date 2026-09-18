@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unli
 import { relative, resolve, sep } from "node:path";
 import { homedir, platform } from "node:os";
 import { parse } from "yaml";
-import { editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
+import { blankProfileText, editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
 // Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
 import { ID, dataDir, demoPath, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
 import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, expiredGuests, guestCount, hasAccount, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, startGuest, userFor, type User } from "./auth.ts";
@@ -481,7 +481,7 @@ const server = Bun.serve({
         const name = (body.name ?? "").trim();
         if (!name) return bad("name is required");
         if (nameIsTaken(listProfiles(s), name)) return bad(`a profile named "${name}" already exists`, 422);
-        const text = editProfileText(body.text ?? readFileSync(examplePath, "utf8"), [{ path: ["name"], value: name }]);
+        const text = editProfileText(body.text ?? blankProfileText(name), [{ path: ["name"], value: name }]);
         const problem = validate(text);
         if (problem) return bad(problem);
         mkdirSync(s.profilesDir, { recursive: true, mode: 0o700 });

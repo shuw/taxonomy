@@ -121,6 +121,13 @@ export function reviewIntake(doc: IntakeDocument, profile: Profile): IntakeRevie
         const index = hit ? hit.index : profile.equity.grants.length + added++;
         add({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${id}`, current: hit?.grant, proposed, format: "grant", source: src(`equity.grants[${i}]`), sourceKey: `grants.${id}`, intakeKey: `equity.grants[${i}]` });
       });
+      // The list is the whole list: a grant on file that the documents no longer show is removed (a split tranche follows its ISO).
+      const named = new Set(eq.grants.map((g) => g.name));
+      profile.equity.grants.forEach((g, index) => {
+        if (named.has(g.name)) return;
+        if (g.splitOf && named.has(profile.equity.grants.find((x) => x.id === g.splitOf)?.name ?? "")) return;
+        changes.push({ section: "equity", label: `Grant: ${g.name}`, path: ["equity", "grants", index], id: `grants.${g.id}`, current: g, proposed: undefined, format: "grant", note: "not in the documents; removed", sourceKey: `grants.${g.id}`, status: "changed" });
+      });
       // An NSO tranche names the ISO tranche it was split from; link it by id once every grant has one.
       // The pair vests as one grant on the ISO's schedule, so vests the portal lists on the NSO side are folded into the ISO's map.
       for (const { g, proposed } of built) {
@@ -212,13 +219,14 @@ export function changesToEdits(changes: IntakeChange[], profile: Profile): Profi
   const edits: ProfileEdit[] = [];
   const grantChanges = changes.filter((c) => c.format === "grant");
   if (grantChanges.length) {
-    const grants = [...profile.equity.grants];
+    const grants: (EquityGrant | undefined)[] = [...profile.equity.grants];
     for (const c of grantChanges) {
       const idx = c.path[2] as number;
-      if (idx < grants.length) grants[idx] = c.proposed as EquityGrant;
+      if (idx < grants.length) grants[idx] = c.proposed as EquityGrant | undefined;
       else grants.push(c.proposed as EquityGrant);
     }
-    edits.push({ path: ["equity", "grants"], value: grants });
+    edits.push({ path: ["equity", "grants"], value: grants.filter((g): g is EquityGrant => g !== undefined) });
+    for (const c of grantChanges) if (c.proposed === undefined && profile.sources?.[c.sourceKey] !== undefined) edits.push({ path: ["sources", c.sourceKey], value: undefined });
   }
   const returnChanges = changes.filter((c) => c.format === "priorReturn");
   if (returnChanges.length) {
@@ -260,7 +268,7 @@ export function followUpEdits(review: IntakeReview, profile: Profile): ProfileEd
   const added = new Date().toISOString().slice(0, 10);
   // Grants that arrived with unvested shares but no schedule will never vest in the plan; say so.
   const scheduleGaps: FollowUp[] = review.changes
-    .filter((c) => c.format === "grant")
+    .filter((c) => c.format === "grant" && c.proposed !== undefined)
     .map((c) => c.proposed as EquityGrant)
     .filter((g) => !g.schedule && !g.vesting && g.granted - (g.vestedToDate ?? 0) > 0)
     .map((g): FollowUp => ({ id: "", text: `${g.name}: ${Math.round(g.granted - (g.vestedToDate ?? 0)).toLocaleString("en-US")} unvested ${g.type === "rsu" ? "units" : "shares"} but no vesting schedule, so none of them vest in the plan. Add the schedule on the grant card.`, about: `grants.${g.id}` }));

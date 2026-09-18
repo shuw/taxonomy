@@ -273,6 +273,19 @@ const COMMENTS: Record<string, string> = {
 };
 
 /** Emit a profile as YAML with a comment on each top-level section. */
+/** A new profile with nothing in it: no company, grants, holdings or decisions. Filled in by hand or by an agent. */
+export function blankProfileText(name: string, startYear = new Date().getFullYear()): string {
+  return stringifyProfile({
+    version: 3, name: name.trim() || "New profile",
+    filer: { filingStatus: "single", state: "WA", dependents: [] },
+    plan: { startYear, years: 5 },
+    assumptions: { inflation: 0.025, wageGrowth: 0.03, fmvGrowth: 0.1 },
+    people: { self: { salary: 0 } },
+    income: {}, carryforwards: {}, equity: { companies: [], grants: [], holdings: [] }, home: {}, deductions: {},
+    timeline: [], scenarios: { default: { events: [] } }, activeScenario: "default",
+  } as Profile);
+}
+
 export function stringifyProfile(profile: Profile): string {
   const doc = new Document(stripUndefined(profile));
   const top = doc.contents;

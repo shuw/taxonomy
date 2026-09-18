@@ -92,3 +92,14 @@ describe("which grant an in-plan lot came from", () => {
     expect(gap.fill!.edits).toContainEqual({ path: ["equity", "grants", 1, "exercisedToDate"], value: 4_000 });
   });
 });
+
+describe("an exercise lot without its value at exercise", () => {
+  test("is flagged rather than silently valued at the modeled price", () => {
+    const base = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
+    const lot: Holding = { id: "h7", lot: "March exercise", quantity: 1000, acquired: `${base.plan.startYear}-03-01`, via: "iso_exercise", costBasis: 2, grantDate: "2023-02-01" };
+    const p = parseProfile(editProfileText(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"), [{ path: ["equity", "holdings"], value: [lot] }]));
+    const gaps = profileGaps(p);
+    expect(gaps.some((g) => g.id === "holdings.h7.amtBasis" && /value at exercise/.test(g.text))).toBe(true);
+    expect(profileGaps(parseProfile(editProfileText(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"), [{ path: ["equity", "holdings"], value: [{ ...lot, amtBasis: 15 }] }]))).some((g) => g.id === "holdings.h7.amtBasis")).toBe(false);
+  });
+});

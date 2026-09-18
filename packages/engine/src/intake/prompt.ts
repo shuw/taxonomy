@@ -173,6 +173,7 @@ Everything else: fill it when a document shows it, leave it out otherwise.
 - If the return shows AMT (Form 6251) with an ISO exercise but no Form 8801, say so under \`questions\`; the credit that carries forward is worked out from it.
 - Base salary is base pay only; the tool adds RSU and option income from the grants.
 - Options: granted, vested, exercised and unexercised as separate counts, as the portal shows them. NQSO is \`nso\`.
+- \`grants\` is the whole list: every grant the documents show, including ones already on file. A grant left out is removed from the profile.
 - Omit \`spouse\` when there is none.
 - Whatever you couldn't find goes under \`unknown\`, one path per line; the tool turns each into a question for me.
 - \`questions\` is for judgment calls I should double-check later: a derived value, disagreeing sources, something hinted but not shown. One sentence each, with \`about\` (the path) and \`proposed\` (the value you used).${opts.onlyPaths?.length ? `\n- Follow-up: report only these paths: ${opts.onlyPaths.join(", ")}.` : ""}

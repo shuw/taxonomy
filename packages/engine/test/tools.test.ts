@@ -149,3 +149,33 @@ describe("agent tools", () => {
     expect(tools.submitIntake(profile, "not: yaml intake").problems.length).toBeGreaterThan(0);
   });
 });
+
+describe("removing equity", () => {
+  const profile = parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"));
+  test("drops a grant or a holding by id, with its source", () => {
+    const edits = tools.removeEquity(profile, ["grants.nso2024", "holdings.h1"]);
+    const after = parseProfile(editProfileText(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8"), edits));
+    expect(after.equity.grants.map((g) => g.id)).toEqual(["iso2022", "rsu2025"]);
+    expect(after.equity.holdings ?? []).toEqual([]);
+    expect(after.sources?.["grants.nso2024"]).toBeUndefined();
+    expect(after.sources?.["grants.iso2022"]).toBeDefined();
+  });
+  test("refuses ids it does not have", () => {
+    expect(() => tools.removeEquity(profile, ["grants.nope"])).toThrow(/no grant "nope"/);
+    expect(() => tools.removeEquity(profile, ["people.self"])).toThrow(/grants\.<id> or holdings\.<id>/);
+  });
+});
+
+describe("a blank profile", () => {
+  test("has nothing in it and the demo's headline lines include the charitable carryforward", () => {
+    const { blankProfileText } = require("../src/profile.ts") as typeof import("../src/profile.ts");
+    const p = parseProfile(blankProfileText("Sam", 2026));
+    expect(p.name).toBe("Sam");
+    expect(p.equity.companies).toEqual([]);
+    expect(p.equity.grants).toEqual([]);
+    expect(Object.values(p.scenarios ?? {}).every((s) => s.events.length === 0)).toBe(true);
+    const plan = tools.plan(parseProfile(readFileSync(new URL("../../../data/demo.yaml", import.meta.url), "utf8")));
+    expect(plan.years[0]!.lines).toHaveProperty("charitableDeduction");
+    expect(plan.years[0]!.lines).toHaveProperty("charitableCarryOut");
+  });
+});

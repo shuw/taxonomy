@@ -82,6 +82,10 @@ export function profileGaps(profile: Profile): Gap[] {
     const r = lotAsExercise(profile, h, scenario.events);
     const type = h.via === "iso_exercise" ? "ISO" : "NSO";
     const year = r.event.year;
+    // Without the value at exercise, modeling the lot would tax the spread at the modeled price for the year, which can be far off.
+    if (!(h.amtBasis && h.amtBasis > 0)) {
+      gaps.push({ id: `holdings.${h.id}.amtBasis`, section: "Equity", text: `Lot "${h.lot}": ${int(h.quantity)} ${type} shares exercised ${h.acquired}, but the share value at exercise (Form 3921 box 4, or the 409A then) is not recorded. Set AMT basis on the lot; until then the exercise is valued at the modeled ${year} price.` });
+    }
     gaps.push({
       id: `holdings.${h.id}.exercise`, section: "Equity",
       text: `Lot "${h.lot}": ${int(h.quantity)} ${type} shares exercised ${h.acquired}, inside the plan, but not modeled, so ${year} is missing its ${type === "ISO" ? "AMT" : "wage income"}. Model it to add the exercise to the ${name} scenario.`,
