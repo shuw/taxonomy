@@ -167,3 +167,27 @@ describe("indexing", () => {
     expect(p.niit.threshold.single).toBe(200_000);
   });
 });
+
+describe("the 2026 limit on itemized deductions", () => {
+  test("a 37%-bracket filer loses 2/37 of the lesser of the deductions or the income over the bracket's start, and AMT ignores the cut", () => {
+    const L = fed({ salarySelf: 1_000_000, charitableCash: 100_000 });
+    const itemized = L.get("itemizedDeductions"); // 100,000 less the 0.5% floor
+    expect(itemized).toBeCloseTo(95_000, 0);
+    const topStart = FEDERAL_2026.brackets.single[FEDERAL_2026.brackets.single.length - 2]!.upTo;
+    const cut = (2 / 37) * Math.min(itemized, 1_000_000 - topStart);
+    expect(L.get("itemizedAllowed")).toBeCloseTo(itemized - cut, 2);
+    expect(L.get("deduction")).toBeCloseTo(itemized - cut, 2);
+    expect(L.get("taxableIncome")).toBeCloseTo(1_000_000 - itemized + cut, 2);
+    expect(L.get("amtAddbacks")).toBeCloseTo(cut, 2);
+    expect(L.lines.itemizedAllowed!.why).toContain("2/37");
+  });
+  test("below the bracket's start, and before 2026, nothing is cut", () => {
+    expect(fed({ salarySelf: 400_000, charitableCash: 50_000 }).get("itemizedAllowed")).toBeCloseTo(fed({ salarySelf: 400_000, charitableCash: 50_000 }).get("itemizedDeductions"), 6);
+    const L25 = fed({ year: 2025, salarySelf: 1_000_000, charitableCash: 100_000 });
+    expect(L25.get("itemizedAllowed")).toBeCloseTo(L25.get("itemizedDeductions"), 6);
+  });
+  test("the SALT reason names this year's cap and the phase-down", () => {
+    const L = fed({ salarySelf: 1_000_000, propertyTax: 30_000 });
+    expect(L.lines.saltDeduction!.why).toMatch(/capped at \$10,000 this year \(the \$40,400 cap shrinks/);
+  });
+});

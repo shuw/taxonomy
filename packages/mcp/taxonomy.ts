@@ -87,11 +87,6 @@ function load(ref?: string): { id: string; text: string; profile: ReturnType<typ
 }
 type Loaded = ReturnType<ReturnType<typeof ops>["load"]>;
 
-/** Every result says which profile it is about and when the file last changed, so the agent can tell the user when there are several and notice edits made in the app. */
-function about(f: Loaded, result: unknown): unknown {
-  const note = f.chosenBy === "app" ? `${f.id} (the one open in the app)` : f.id;
-  return Array.isArray(result) ? { profile: note, changedAt: f.changedAt, result } : { ...(result as Record<string, unknown>), profile: note, changedAt: f.changedAt };
-}
 
 const json = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 1) }] });
 const fail = (e: unknown) => ({ content: [{ type: "text" as const, text: `Error: ${(e as Error).message ?? String(e)}` }], isError: true });
@@ -109,6 +104,13 @@ const toEvents = (list: z.infer<typeof eventInput>[]): EventInput[] => list.map(
 export function createServer(opts: { clientLabel?: string; store?: Store } = {}): McpServer {
   const store = opts.store ?? rootStore;
   const { listProfiles, currentProfileId, load, write, createProfile } = ops(store);
+  /** Every result says which profile it is about and when the file last changed (read after any write in the same call), so the agent can tell the user when there are several and notice edits made in the app. */
+  const about = (f: Loaded, result: unknown): unknown => {
+    const note = f.chosenBy === "app" ? `${f.id} (the one open in the app)` : f.id;
+    let changedAt = f.changedAt;
+    try { changedAt = new Date(statSync(store.fileFor(f.id)).mtimeMs).toISOString(); } catch {}
+    return Array.isArray(result) ? { profile: note, changedAt, result } : { ...(result as Record<string, unknown>), profile: note, changedAt };
+  };
   // Who this server is talking to, for the history log; learned from the client's first call.
   let actor = opts.clientLabel ?? "your agent";
   const server = new McpServer(
@@ -249,7 +251,7 @@ server.registerTool("facts", {
   // Written as pending, then accepted in the same save: one logged change, the same sources as an accepted proposal.
   const staged = parseProfile(editProfileText(f.text, proposed.edits));
   write(f.id, actor, [...removal, ...proposed.edits, ...tools.resolvePending(staged, proposed.rows.map((r) => r.id), true)]);
-  return about(f, { applied: proposed.rows, ...(remove?.length ? { removed: remove } : {}), effect: proposed.delta });
+  return about(f, { applied: proposed.rows, ...(remove?.length ? { removed: remove } : {}), delta: proposed.delta });
 }));
 
 server.registerTool("intake", {
@@ -281,7 +283,7 @@ server.registerTool("intake", {
   if (r.problems.length) return about(f, { problems: r.problems, warnings: r.warnings, note: "fix the document and submit again" });
   if (r.edits.length) write(f.id, actor, r.edits);
   const after = r.edits.length ? parseProfile(migrateProfileText(readFileSync(store.fileFor(f.id), "utf8"))) : f.profile;
-  return about(f, { applied: r.applied, questions: r.questions, warnings: r.warnings, effect: r.edits.length ? tools.effect(f.profile, after) : null });
+  return about(f, { applied: r.applied, questions: r.questions, warnings: r.warnings, delta: r.edits.length ? tools.effect(f.profile, after) : null });
 }));
 
   return server;

@@ -85,7 +85,9 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   );
   const saltDeduction = L.put(
     "saltDeduction", "State and local tax deduction", Math.min(saltPaid, saltCap),
-    saltPaid > saltCap ? `You paid ${usd(saltPaid)} in property and state income tax, limited to the ${usd(saltCap)} cap.` : `Property tax + state income tax paid (${usd(saltPaid)}), under the ${usd(saltCap)} cap.`,
+    saltPaid > saltCap
+      ? `You paid ${usd(saltPaid)} in property and state income tax; the deduction is capped at ${usd(saltCap)} this year${saltExcess > 0 ? ` (the ${usd(p.salt.cap[fs])} cap shrinks by 30% of AGI over ${usd(p.salt.phaseoutStart[fs])}, never below ${usd(p.salt.floor[fs])})` : ""}.`
+      : `Property tax + state income tax paid (${usd(saltPaid)}), under this year's ${usd(saltCap)} cap.`,
     ["saltCap"],
   );
   L.put("mortgageInterestPaid", "Mortgage interest paid", inputs.mortgageInterestPaid, inputs.mortgageInterestPaid > 0 ? "Interest for the year from the loan's amortization, or the figure in the profile." : "No mortgage interest.");
@@ -118,6 +120,18 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     "SALT (capped) + mortgage interest + charitable + medical.", ["saltDeduction", "mortgageInterest", "charitableDeduction", "medicalDeduction"],
   );
   const standard = L.put("standardDeduction", "Standard deduction", p.standardDeduction[fs], `${p.year} standard deduction for ${statusName(fs)} filers${p.published ? "" : " (projected)"}.`);
+  // From 2026, filers in the 37% bracket lose 2/37 of the lesser of their itemized deductions or their income over
+  // the bracket's start (IRC §68 as rewritten in 2025). AMT ignores the limit, so the cut is an addback there.
+  const topStart = p.brackets[fs][p.brackets[fs].length - 2]?.upTo ?? Infinity;
+  const overTop = Math.max(0, agi - topStart);
+  const haircut = p.year >= 2026 && itemized > 0 ? (2 / 37) * Math.min(itemized, overTop) : 0;
+  const itemizedAllowed = L.put(
+    "itemizedAllowed", "Itemized deductions allowed", itemized - haircut,
+    haircut > 0
+      ? `Income is ${usd(overTop)} over the start of the 37% bracket (${usd(topStart)}), so itemized deductions are cut by 2/37 of the lesser of the deductions or that excess: ${usd(haircut)} less.`
+      : p.year >= 2026 ? "Below the start of the 37% bracket, so the top-bracket limit on itemized deductions does not apply." : "No limit on itemized deductions this year.",
+    ["itemizedDeductions", "agi"],
+  );
 
   // Which deduction to take is decided on regular tax plus AMT together: the standard deduction is
   // disallowed under AMT, so a smaller itemized total can still leave less tax to pay overall.
@@ -143,21 +157,21 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
     const { tmt } = minimumTax(taxable, addback, inputs.isoBargainElement, inputs.amtCapitalAdjustment);
     return regular + Math.max(0, tmt - regular);
   };
-  const withItemized = taxUnder(itemized, saltDeduction);
+  const withItemized = taxUnder(itemizedAllowed, saltDeduction + haircut);
   const withStandard = taxUnder(standard, standard);
-  const usesItemized = itemized > standard ? withItemized <= withStandard : withItemized < withStandard;
+  const usesItemized = itemizedAllowed > standard ? withItemized <= withStandard : withItemized < withStandard;
   L.put(
     "usesItemized", "Itemizing?", usesItemized ? 1 : 0,
     usesItemized
-      ? itemized > standard
-        ? `Itemized (${usd(itemized)}) beats standard (${usd(standard)}).`
-        : `Itemized (${usd(itemized)}) is smaller than standard (${usd(standard)}), but the standard deduction is disallowed under AMT, so itemizing leaves ${usd(withStandard - withItemized)} less tax overall.`
-      : itemized > standard
-        ? `Itemized (${usd(itemized)}) is larger, but taking it would raise regular tax plus AMT by ${usd(withItemized - withStandard)}; standard wins.`
-        : `Standard (${usd(standard)}) beats itemized (${usd(itemized)}).`,
-    ["itemizedDeductions", "standardDeduction"], "flag",
+      ? itemizedAllowed > standard
+        ? `Itemized (${usd(itemizedAllowed)}) beats standard (${usd(standard)}).`
+        : `Itemized (${usd(itemizedAllowed)}) is smaller than standard (${usd(standard)}), but the standard deduction is disallowed under AMT, so itemizing leaves ${usd(withStandard - withItemized)} less tax overall.`
+      : itemizedAllowed > standard
+        ? `Itemized (${usd(itemizedAllowed)}) is larger, but taking it would raise regular tax plus AMT by ${usd(withItemized - withStandard)}; standard wins.`
+        : `Standard (${usd(standard)}) beats itemized (${usd(itemizedAllowed)}).`,
+    ["itemizedAllowed", "standardDeduction"], "flag",
   );
-  const deduction = L.put("deduction", "Deduction taken", usesItemized ? itemized : standard, usesItemized ? "Itemized deductions." : "The standard deduction.", ["usesItemized"]);
+  const deduction = L.put("deduction", "Deduction taken", usesItemized ? itemizedAllowed : standard, usesItemized ? (haircut > 0 ? "Itemized deductions, after the top-bracket limit." : "Itemized deductions.") : "The standard deduction.", ["usesItemized"]);
 
   const taxableIncome = L.put("taxableIncome", "Taxable income", Math.max(0, agi - deduction), "AGI minus the deduction taken.", ["agi", "deduction"]);
   const preferential = Math.min(taxableIncome, preferentialGross);
@@ -185,8 +199,8 @@ export function computeFederal(inputs: YearInputs, p: FederalParams, ledger: Led
   const regularTax = L.put("regularTax", "Regular income tax", ordinaryTax + capGainsTaxAmt, "Tax on ordinary income + tax on capital gains, before AMT and credits.", ["ordinaryTax", "capGainsTax"]);
 
   // AMT -----------------------------------------------------------------------
-  const addback = usesItemized ? saltDeduction : standard;
-  L.put("amtAddbacks", "AMT addbacks", addback, usesItemized ? "The SALT deduction is not allowed under AMT, so it is added back. Mortgage interest and charitable gifts stay deductible." : "The standard deduction is not allowed under AMT, so it is added back.", ["usesItemized"]);
+  const addback = usesItemized ? saltDeduction + haircut : standard;
+  L.put("amtAddbacks", "AMT addbacks", addback, usesItemized ? (haircut > 0 ? `The SALT deduction is not allowed under AMT, so it is added back, and so is the ${usd(haircut)} top-bracket cut, which AMT ignores. ` : "") + "The SALT deduction is not allowed under AMT, so it is added back. Mortgage interest and charitable gifts stay deductible." : "The standard deduction is not allowed under AMT, so it is added back.", ["usesItemized"]);
   L.put("isoSharesExercised", "ISO shares exercised", inputs.isoSharesExercised, "Vested ISO shares exercised this year, taken from ISO grants in profile order.", [], "shares");
   L.put(
     "isoBargainElement", "ISO bargain element", inputs.isoBargainElement,

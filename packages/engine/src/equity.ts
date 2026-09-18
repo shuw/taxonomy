@@ -130,11 +130,33 @@ function vestingOfPlain(profile: Profile, grant: EquityGrant): { vestedAtStart: 
   return { vestedAtStart: vestedToDate - exercised, byYear };
 }
 
-/** Shares of a grant vested (and, for options, unexercised before the plan) by the end of `year`. */
-export function vestedThrough(profile: Profile, grant: EquityGrant, year: number): number {
+/** The dated vests of a grant that fall inside `year`, in date order; year-keyed counts vest on January 1. */
+function vestsDuring(profile: Profile, grant: EquityGrant, year: number): { date: string; shares: number }[] {
+  const out: { date: string; shares: number }[] = [];
+  if (grant.vesting) {
+    for (const [k, n] of Object.entries(grant.vesting)) {
+      const isYear = /^\d{4}$/.test(k);
+      if ((isYear ? Number(k) : Number(k.slice(0, 4))) === year) out.push({ date: isYear ? `${k}-01-01` : k, shares: n });
+    }
+  } else if (grant.schedule) {
+    for (const { date, shares } of scheduleVests(grant.schedule, grant.granted)) if (date.getUTCFullYear() === year) out.push({ date: date.toISOString().slice(0, 10), shares });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Shares of a grant vested (and, for options, unexercised before the plan) by the end of `year`,
+ * or by `byDate` inside that year: an exercise in March cannot draw on shares that vest in June.
+ */
+export function vestedThrough(profile: Profile, grant: EquityGrant, year: number, byDate?: string): number {
   const v = vestingOf(profile, grant);
   let total = v.vestedAtStart;
-  for (const [y, n] of Object.entries(v.byYear)) if (Number(y) <= year) total += n;
+  for (const [y, n] of Object.entries(v.byYear)) if (Number(y) < year || (Number(y) === year && !byDate)) total += n;
+  if (byDate && v.byYear[year]) {
+    let inYear = 0;
+    for (const vest of vestsDuring(profile, grant, year)) if (vest.date <= byDate) inYear += vest.shares;
+    total += Math.min(inYear, v.byYear[year]);
+  }
   return Math.min(sharesOutstanding(grant), total);
 }
 
@@ -162,7 +184,8 @@ const companiesWith = (profile: Profile, type: GrantType): (string | undefined)[
 export function sharesExercisable(profile: Profile, levers: Levers, type: "iso" | "nso", year: number, company?: string): number {
   if (company === undefined) return companiesWith(profile, type).reduce((s, c) => s + sharesExercisable(profile, levers, type, year, c ?? "*"), 0);
   const c = resolveCompany(profile, company);
-  const vested = grantsOf(profile, type, c).reduce((s, g) => s + vestedThrough(profile, g, year), 0);
+  const byDate = levers.exerciseDates?.[type][year];
+  const vested = grantsOf(profile, type, c).reduce((s, g) => s + vestedThrough(profile, g, year, byDate), 0);
   return Math.max(0, vested - exercisedBefore(profile, levers, type, year, c));
 }
 
@@ -173,7 +196,7 @@ export function exerciseDraws(profile: Profile, levers: Levers, type: "iso" | "n
     let alreadyUsed = exercisedBefore(profile, levers, type, year, c);
     let remaining = Math.min(exercisedIn(profile, levers, type, year, c), sharesExercisable(profile, levers, type, year, c ?? "*"));
     for (const g of grantsOf(profile, type, c)) {
-      const vested = vestedThrough(profile, g, year);
+      const vested = vestedThrough(profile, g, year, levers.exerciseDates?.[type][year]);
       const skip = Math.min(vested, alreadyUsed);
       alreadyUsed -= skip;
       const take = Math.min(vested - skip, remaining);

@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { parseProfile } from "../src/profile.ts";
+import { parseProfile, editProfileText } from "../src/profile.ts";
+import * as tools from "../src/tools.ts";
 import { runPlan, resolveLevers } from "../src/plan.ts";
 import { exerciseSpread, sharesExercisable, rsuVesting, vestingOf } from "../src/equity.ts";
 import { amtCrossover, sweepIsoExercise } from "../src/thresholds.ts";
 import { calibrate } from "../src/calibration.ts";
 import { companyPrice, sharesOutstanding } from "../src/equity.ts";
-import { profileInYear } from "../src/timeline.ts";
+import { profileInYear, activeLevers } from "../src/timeline.ts";
 
 const profile = parseProfile(readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8"));
 
@@ -235,5 +236,29 @@ describe("plan totals", () => {
     expect(r.totals.netCash).toBeCloseTo(sum("netCash"), 6);
     expect(r.totals.rateWithSpread).toBeGreaterThan(0);
     expect(r.totals.rateWithSpread).toBeLessThan(r.totals.totalTax / sum("agi"));
+  });
+});
+
+describe("exercises draw only on shares vested by the exercise date", () => {
+  const text = readFileSync(new URL("../../../data/profile.example.yaml", import.meta.url), "utf8");
+  const withGrant = (events: object[]) => parseProfile(editProfileText(text, [
+    { path: ["equity", "grants"], value: [{ id: "g1", name: "dated", type: "iso", company: "c1", granted: 1500, vestedToDate: 0, exercisedToDate: 0, strike: 2, vesting: { "2026-02-01": 500, "2026-06-01": 500, "2026-10-01": 500 } }] },
+    { path: ["scenarios", "default", "events"], value: events },
+  ]));
+  const exercised = (p: ReturnType<typeof parseProfile>) => runPlan(p, activeLevers(p)).years[0]!.lines.isoSharesExercised!.value;
+  test("a March exercise gets February's vest only; a July one gets two; an undated one the year's", () => {
+    expect(exercised(withGrant([{ id: "e1", kind: "exercise", type: "iso", year: 2026, date: "2026-03-15", shares: 1500 }]))).toBe(500);
+    expect(exercised(withGrant([{ id: "e1", kind: "exercise", type: "iso", year: 2026, date: "2026-07-01", shares: 1500 }]))).toBe(1000);
+    expect(exercised(withGrant([{ id: "e1", kind: "exercise", type: "iso", year: 2026, shares: 1500 }]))).toBe(1500);
+  });
+  test("what_if says when it clamped, and when a removed id is unknown", () => {
+    const p = withGrant([]);
+    const r = tools.whatIf(p, [{ kind: "exercise", type: "iso", year: 2026, date: "2026-03-15", shares: 1500 }], ["e99"]);
+    expect(r.warnings).toEqual([
+      `no event "e99" in scenario "default"; nothing removed for it`,
+      "2026: asked to exercise 1,500 ISO shares, but only 500 were vested and unexercised by the exercise date; 500 ran",
+    ]);
+    expect(tools.whatIf(p, [{ kind: "exercise", type: "iso", year: 2026, date: "2026-11-01", shares: 1500 }]).warnings).toBeUndefined();
+    expect(tools.plan(p).years[0]!.lines).toHaveProperty("isoDisqualifyingIncome");
   });
 });

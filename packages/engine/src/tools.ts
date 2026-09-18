@@ -24,7 +24,7 @@ import { profileGaps } from "./gaps.ts";
 export const HEADLINE_LINES = [
   "agi", "taxableIncome", "regularTax", "amt", "amtCreditUsed", "amtCreditCarryforwardOut", "niit", "additionalMedicare", "stateTax", "totalTax", "effectiveRate", "effectiveRateWithSpread",
   "isoSharesExercised", "isoBargainElement", "nsoSharesExercised", "nsoIncome", "rsuSharesVested", "rsuIncome", "sharesSold", "saleProceeds", "netLongTermGain", "netShortTermGain",
-  "cashIn", "exerciseCost", "giving", "givingStock", "charitableDeduction", "charitableCarryOut", "netCash",
+  "cashIn", "exerciseCost", "giving", "givingStock", "charitableDeduction", "charitableCarryOut", "isoDisqualifyingIncome", "netCash",
 ] as const;
 
 export interface YearHeadline { year: number; lines: Record<string, number>; why?: Record<string, string>; events: ScenarioEvent[]; }
@@ -230,12 +230,31 @@ function deltas(base: PlanResult, next: PlanResult): { byYear: Delta[]; totalTax
  */
 export function whatIf(profile: Profile, add: EventInput[], remove: string[] = [], basedOn?: string) {
   const { name, scenario } = scenarioOf(profile, basedOn);
+  const warnings: string[] = [];
+  for (const id of remove) if (!scenario.events.some((e) => e.id === id)) warnings.push(`no event "${id}" in scenario "${name}"; nothing removed for it`);
   const kept = scenario.events.filter((e) => !remove.includes(e.id));
   const events = normalizeEvents(profile, add, kept, scenario.events.map((e) => e.id));
   const trial: Scenario = { events };
   const base = runPlan(withScenario(profile, name));
   const next = runPlan(withScenario(profile, "__whatif", trial));
-  return { basedOn: name, events, years: next.years.map((y) => headline(y, sortedEvents(events))), totals: next.totals, delta: deltas(base, next) };
+  warnings.push(...clampWarnings(events, next));
+  return { basedOn: name, events, years: next.years.map((y) => headline(y, sortedEvents(events))), totals: next.totals, delta: deltas(base, next), ...(warnings.length ? { warnings } : {}) };
+}
+
+/** An event asking for more shares than are exercisable or held runs with what there is; say so rather than let the echoed event mislead. */
+function clampWarnings(events: ScenarioEvent[], plan: PlanResult): string[] {
+  const out: string[] = [];
+  for (const y of plan.years) {
+    const asked = (kind: "exercise" | "sell", type?: "iso" | "nso") => events.filter((e) => e.year === y.year && e.kind === kind && (kind === "sell" || (e as { type: string }).type === type)).reduce((s, e) => s + (e as { shares: number }).shares, 0);
+    const ran = (line: string) => Math.round(y.lines[line]?.value ?? 0);
+    for (const [type, line] of [["iso", "isoSharesExercised"], ["nso", "nsoSharesExercised"]] as const) {
+      const want = asked("exercise", type);
+      if (want > ran(line)) out.push(`${y.year}: asked to exercise ${int(want)} ${type.toUpperCase()} shares, but only ${int(ran(line))} were vested and unexercised by the exercise date; ${int(ran(line))} ran`);
+    }
+    const sell = asked("sell");
+    if (sell > ran("sharesSold")) out.push(`${y.year}: asked to sell ${int(sell)} shares, but only ${int(ran("sharesSold"))} were held; ${int(ran("sharesSold"))} sold`);
+  }
+  return out;
 }
 
 /**
@@ -249,7 +268,7 @@ export function proposeScenario(profile: Profile, name: string, add: EventInput[
   const trial = whatIf(profile, add, opts.remove ?? [], opts.basedOn);
   const scenario: Scenario = { events: trial.events, note: opts.note ?? `proposed by your agent on ${new Date().toISOString().slice(0, 10)}, based on ${trial.basedOn}` };
   const edits: ProfileEdit[] = [{ path: ["scenarios", clean], value: scenario }];
-  return { name: clean, edits, years: trial.years, totals: trial.totals, delta: trial.delta };
+  return { name: clean, edits, years: trial.years, totals: trial.totals, delta: trial.delta, ...(trial.warnings ? { warnings: trial.warnings } : {}) };
 }
 
 export function setActiveScenario(profile: Profile, name: string): ProfileEdit[] {

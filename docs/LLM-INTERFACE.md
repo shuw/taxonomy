@@ -111,7 +111,9 @@ small without losing anything.
 
 **Try and decide**
 - `what_if(profile, events[])` → the active scenario plus the given events, run without saving:
-  the years, the totals, and the delta per year against the base. Events are exercise, sell,
+  the years, the totals, the delta per year against the base, and `warnings` when an event asked
+  for more shares than were vested or held (it runs with what there is) or named an event id that
+  does not exist. Events are exercise, sell,
   liquidity and give; zero-share and zero-amount events are refused.
 - `scenario(profile, action, ...)` with `action` `add` (writes the scenario and makes it active),
   `activate`, or `delete`.
@@ -123,9 +125,11 @@ small without losing anything.
   coerced, and written at once with its source; a one-year gift is a `give` event, not a fact.
 - `intake(profile, action, ...)` with `action` `request` (the same request the app hands an
   agent, for the sections asked), `submit` (the intake YAML: checked for shape, every value
-  written at once with its source, questions kept as follow-ups, the plan's effect returned),
+  written at once with its source, questions kept as follow-ups, the change in the plan returned as `delta`),
   or `attach` (a page image, PDF or text file kept beside the profile and linked from the
   values that cite it).
+
+**Every result carries `changedAt`**, the profile file's last save, read after any write the call made; when it moves between two calls, the app changed the profile and the agent should read it again.
 
 **Writes apply at once.** Nothing waits for review. Both servers log every save with the text
 before it, the app's Claude button counts what arrived, and History restores any entry. The
