@@ -5,7 +5,7 @@ import { ProfileIdContext } from "../persist.ts";
 import { ago } from "../hooks/useAgentStatus.ts";
 import { fmtDelta, pct, usd } from "../format.ts";
 import { usePersisted } from "../persist.ts";
-import { AgentSetup, clientName } from "./ConnectAgent.tsx";
+import { clientName } from "./ConnectAgent.tsx";
 import { PromptList } from "./ClaudePanel.tsx";
 import { useAgentStatus } from "../hooks/useAgentStatus.ts";
 import { parseIntake, reviewIntake } from "@taxonomy/engine";
@@ -67,16 +67,17 @@ export function ProposalBanner({ profile, edit, onCompare, onReviewIntake, onCop
         </section>
       )}
       {awaiting && docs.length === 0 && (
-        <section className="card proposal">
+        <section className="card proposal callout">
           <div className="proposal-text">
-            <div className="proposal-title">Connect Claude</div>
-            <AgentSetup status={agent} name={profile.name?.trim() || "Me"} create expect={{ profile: profileId, since: 0 }} />
+            <div className="proposal-title">Connect Claude to fill this in</div>
+            <div className="muted">It reads your documents and fills the profile in with you; every change is logged and can be undone.</div>
             <div className="proposal-links">
               <button type="button" className="link" onClick={onCopyRequest}>Copy a request instead</button>
               <button type="button" className="link" onClick={onEditFacts}>Fill it in by hand</button>
             </div>
           </div>
           <div className="proposal-actions">
+            <button type="button" className="btn primary big" onClick={onClaude}>Connect Claude</button>
             <button type="button" className="btn icon" title="Dismiss" aria-label="Dismiss" onClick={() => setAwaiting(false)}>✕</button>
           </div>
         </section>

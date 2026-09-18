@@ -11,10 +11,13 @@ interface Props {
   onDuplicate: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  /** Shown on a hosted server: opens the account dialog, or signs out at once. */
+  onAccount?: () => void;
+  onSignOut?: () => void;
 }
 
 /** Pick a profile; the same menu renames, duplicates, creates or deletes one. */
-export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, onNew, onDuplicate, onRename, onDelete }: Props) {
+export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, onNew, onDuplicate, onRename, onDelete, onAccount, onSignOut }: Props) {
   const [mode, setMode] = useState<"menu" | "rename" | "delete">("menu");
   const [draft, setDraft] = useState(currentName);
   const taken = profiles.some((p) => p.id !== currentId && p.name.trim().toLowerCase() === draft.trim().toLowerCase());
@@ -49,6 +52,8 @@ export function ProfileSwitcher({ profiles, currentId, currentName, onSwitch, on
           <button type="button" onClick={() => { close(); onDuplicate(); }}>Duplicate</button>
           <button type="button" onClick={() => { close(); onNew(); }}>New profile…</button>
           <button type="button" className="danger" onClick={() => setMode("delete")}>Delete…</button>
+          {onAccount && <><div className="menu-sep" /><button type="button" onClick={() => { close(); onAccount(); }}>Account…</button></>}
+          {onSignOut && <button type="button" onClick={() => { close(); onSignOut(); }}>Sign out</button>}
         </>
       )}
     />

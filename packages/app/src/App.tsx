@@ -30,6 +30,7 @@ import { HoldOrSellCard } from "./components/HoldOrSell.tsx";
 import { FollowUps } from "./components/FollowUps.tsx";
 import { ProposalBanner } from "./components/ProposalBanner.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { AccountModal } from "./components/AccountModal.tsx";
 import { setPersisted } from "./persist.ts";
 import { ShortcutsHelp } from "./components/ShortcutsHelp.tsx";
 import { ClaudePanel, ClaudeStatusButton } from "./components/ClaudePanel.tsx";
@@ -61,16 +62,17 @@ function remember(id: string) {
 
 /** With accounts on, nothing loads until someone is signed in; without them, straight to the profiles. */
 export function App() {
-  const { session, refresh, signOut } = useSession();
+  const { session, refresh, signOut, deleteAccount } = useSession();
   if (session === null) return <div className="empty">Loading…</div>;
   if (session.enabled && !session.user) return <Login signup={session.signup} onDone={() => void refresh()} />;
-  return <Signed account={session.user} signOut={signOut} />;
+  return <Signed account={session.user} signOut={signOut} deleteAccount={deleteAccount} />;
 }
 
-function Signed({ account, signOut }: { account: { email: string } | null; signOut: () => Promise<void> }) {
+function Signed({ account, signOut, deleteAccount }: { account: { email: string } | null; signOut: () => Promise<void>; deleteAccount: (password: string) => Promise<void> }) {
   const { list, refresh } = useProfileList();
   const [wantedId, setWantedId] = useState<string | null>(rememberedId);
   const [creating, setCreating] = useHashState((h) => h === "#new", (v) => (v ? "new" : null));
+  const [accountOpen, setAccountOpen] = useHashState((h) => h === "#account", (v) => (v ? "account" : null));
 
   const currentId = useMemo(() => {
     if (!list || list.length === 0) return null;
@@ -110,6 +112,8 @@ function Signed({ account, signOut }: { account: { email: string } | null; signO
       switchTo(created.id);
     },
     onRename: (name: string) => store.edit([{ path: ["name"], value: name }]),
+    onAccount: account ? () => setAccountOpen(true) : undefined,
+    onSignOut: account ? () => void signOut() : undefined,
     onDelete: async () => {
       await api.remove(file.id, true);
       const l = await refresh();
@@ -121,17 +125,18 @@ function Signed({ account, signOut }: { account: { email: string } | null; signO
   return (
     <ProfileIdContext.Provider value={file.id}>
       <ErrorBoundary where="the plan"><Workspace key={file.id} profile={file.profile} profileText={file.text} path={file.path} error={file.error} edit={store.edit} saving={store.saving}
-        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} account={account} signOut={signOut} /></ErrorBoundary>
+        switcher={<ProfileSwitcher profiles={list} currentId={file.id} currentName={currentName} {...actions} />} /></ErrorBoundary>
+      {accountOpen && account && <AccountModal email={account.email} signOut={signOut} deleteAccount={deleteAccount} onClose={() => setAccountOpen(false)} />}
     </ProfileIdContext.Provider>
   );
 }
 
-interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; account: { email: string } | null; signOut: () => Promise<void>; }
+interface WorkspaceProps { profile: Profile; profileText: string; path: string; error: string | null; edit: (edits: ProfileEdit[]) => void; saving: boolean; switcher: React.ReactNode; }
 
 type PlanView = "combined" | "tax" | "cash";
 const isPlanView = (v: unknown): v is PlanView => v === "combined" || v === "tax" || v === "cash";
 
-function Workspace({ profile, profileText, path, error, edit, saving, switcher, account, signOut }: WorkspaceProps) {
+function Workspace({ profile, profileText, path, error, edit, saving, switcher }: WorkspaceProps) {
   const years = planYears(profile);
   const yearsKey = years.join(",");
   const [focusYear, setFocusYear] = usePersisted<number>("focusYear", years[0]!, (v): v is number => typeof v === "number");
@@ -223,6 +228,9 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
       <header className="topbar">
         <div className="brand"><Mark size={24} /><Wordmark /></div>
         {switcher}
+        {pinned
+          ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
+          : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         {demo.on && <span className="chip demo" title="Amounts are shown in a made-up currency at a fixed scale; your file is unchanged">Demo · {demo.symbol}</span>}
         <ScenarioBar profile={profile} scenario={scenario} edit={edit} />
@@ -232,10 +240,6 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
         <button type="button" className="btn" title="History of changes (H)" onClick={() => setHistoryOpen(true)}>History</button>
         <button type="button" className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>?</button>
         <button type="button" className="btn edit-info" onClick={() => openFacts()}>Edit my information <kbd>E</kbd></button>
-        {account && <button type="button" className="btn" title={`Signed in as ${account.email}`} onClick={() => void signOut()}>Sign out</button>}
-        {pinned
-          ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
-          : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
       </header>
 
       <aside className="sidebar">

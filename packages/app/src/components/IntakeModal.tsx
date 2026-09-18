@@ -86,7 +86,9 @@ function untouched(p: Profile): boolean {
  */
 function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<CreateProps, "mode">) {
   const scope = "new";
-  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: "Me" }));
+  // On a hosted server the account's email suggests the name: "shu.wu@…" starts as "Shu".
+  const suggested = account?.email ? (account.email.split("@")[0]!.split(/[._+-]/)[0] || "Me") : "Me";
+  const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: suggested.charAt(0).toUpperCase() + suggested.slice(1) }));
   useEffect(() => { saveDraft(`${scope}.basics`, basics); }, [basics]);
   const [draftId, setDraftIdState] = useState<string | null>(() => loadDraft(`${scope}.draft`, { id: null as string | null }).id);
   // Written at once, not in an effect: closing the wizard unmounts it before an effect would run.

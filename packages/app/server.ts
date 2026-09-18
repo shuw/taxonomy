@@ -1,17 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { relative, resolve, sep } from "node:path";
 import { homedir, platform } from "node:os";
 import { parse } from "yaml";
 import { editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
 // Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
 import { ID, dataDir, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
-import { AuthError, HOST, authEnabled, changePassword, clientKey, login, logout, register, sessionCookie, sessionIdOf, signupOpen, userFor, type User } from "./auth.ts";
+import { AuthError, HOST, authEnabled, changePassword, clientKey, deleteAccount, login, logout, loopback, register, sessionCookie, sessionIdOf, signupOpen, userFor, type User } from "./auth.ts";
 import { existsSync as exists, readdirSync } from "node:fs";
 const { answeredFollowUps } = tools;
 import index from "./index.html";
 
-/** With accounts, a hosted deployment's public host name, for the connector address it shows. */
-const publicHost = process.env.TAXONOMY_PUBLIC_HOST?.trim() || null;
+/** With accounts, a hosted deployment's public host name, for the connector address it shows; when unset, the tunnel address saved in local mode (an ngrok host on a laptop) serves. */
+const publicHost = process.env.TAXONOMY_PUBLIC_HOST?.trim() || (authEnabled ? rootStore.remoteConfigIfAny()?.tunnelHost ?? null : null);
 
 if (!authEnabled) {
   mkdirSync(rootStore.profilesDir, { recursive: true, mode: 0o700 });
@@ -266,7 +266,8 @@ const port = Number(process.env.PORT ?? 5180);
 const server = Bun.serve({
   port,
   hostname: HOST,
-  development: !authEnabled,
+  // Rebuild the page as files change while developing on this machine; a hosted server builds once.
+  development: loopback,
   routes: {
     "/": index,
     // ---- accounts ----
@@ -308,6 +309,19 @@ const server = Bun.serve({
       if (!authEnabled) return bad("accounts are off on this server", 404);
       const body = (await req.json()) as { current?: unknown; next?: unknown };
       try { await changePassword(userOf(req), body.current, body.next, sessionIdOf(req) ?? ""); return Response.json({ ok: true }); } catch (e) { return authFailed(e); }
+    }) },
+    // The account and everything under it: profiles, history, attachments, the connector secret. The password is asked once more.
+    "/api/auth/delete": { POST: guard(async (req) => {
+      const refused = sameOrigin(req);
+      if (refused) return refused;
+      if (!authEnabled) return bad("accounts are off on this server", 404);
+      const body = (await req.json()) as { password?: unknown };
+      const user = userOf(req);
+      try { await deleteAccount(user, body.password); } catch (e) { return authFailed(e); }
+      const dir = storeOf(req).dir;
+      if (dir.startsWith(usersDir + sep) && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+      console.log(`deleted account ${user.email} and ${relative(root, dir)}`);
+      return Response.json({ ok: true }, { headers: { "set-cookie": sessionCookie(null, req) } });
     }) },
     // ---- hosted: the connector address for claude.ai goes through this server to the MCP child ----
     "/:token/mcp": async (req: Request & { params: { token: string } }) => {

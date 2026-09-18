@@ -48,6 +48,7 @@ export const api = {
   register: (email: string, password: string) => call<{ user: Session["user"] }>("/api/auth/register", json("POST", { email, password })),
   logout: () => call<{ ok: true }>("/api/auth/logout", json("POST", {})),
   changePassword: (current: string, next: string) => call<{ ok: true }>("/api/auth/password", json("POST", { current, next })),
+  deleteAccount: (password: string) => call<{ ok: true }>("/api/auth/delete", json("POST", { password })),
   history: (id: string) => call<HistoryRow[]>(`/api/profiles/${id}/history`),
   attachments: (id: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`),
   attach: (id: string, name: string, base64: string) => call<Attachment[]>(`/api/profiles/${id}/attachments`, json("POST", { name, base64 })),

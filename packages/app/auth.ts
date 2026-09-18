@@ -16,7 +16,8 @@ import { dataDir } from "../mcp/store.ts";
 export interface User { id: string; email: string; createdAt: string; }
 
 export const HOST = process.env.HOST ?? "127.0.0.1";
-const loopback = /^(127\.\d+\.\d+\.\d+|localhost|::1)$/.test(HOST);
+/** Bound to this machine only. Accounts default off here, and the page is served in development mode (rebuilt as files change). */
+export const loopback = /^(127\.\d+\.\d+\.\d+|localhost|::1)$/.test(HOST);
 export const authEnabled = process.env.TAXONOMY_AUTH === "1" || !loopback;
 /** Set to make session cookies Secure even when the server itself sees plain http (behind a TLS proxy). */
 const secureCookies = process.env.TAXONOMY_SECURE_COOKIES === "1";
@@ -137,6 +138,15 @@ export async function changePassword(user: User, current: unknown, next: unknown
   const d = open();
   d.query("UPDATE users SET password_hash = ? WHERE id = ?").run(await Bun.password.hash(next, { algorithm: "argon2id" }), user.id);
   d.query("DELETE FROM sessions WHERE user_id = ? AND id_hash <> ?").run(user.id, hashOf(keepSessionId));
+}
+
+/** Remove the account and every session it has; the caller removes its files. The password is checked once more first. */
+export async function deleteAccount(user: User, password: unknown): Promise<void> {
+  const d = open();
+  const row = d.query("SELECT password_hash FROM users WHERE id = ?").get(user.id) as { password_hash: string } | null;
+  if (!row || !(await Bun.password.verify(typeof password === "string" ? password : "", row.password_hash))) throw new AuthError("the password is wrong", 401);
+  d.query("DELETE FROM sessions WHERE user_id = ?").run(user.id);
+  d.query("DELETE FROM users WHERE id = ?").run(user.id);
 }
 
 /** The session id from the request's cookies, if any. */
