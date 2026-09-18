@@ -92,7 +92,8 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, serie
   const totals = years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0));
   const pinnedTotals = pinned ? pinned.years.map((y) => series.reduce((s, sr) => s + sr.value(y), 0)) : null;
   const { band, ticks, plotH, yOf, baseY } = columnLayout(width, height, years.length, Math.max(...totals, ...(pinnedTotals ?? [])), m, MAX_BAND);
-  const BAR = barWidth(band);
+  // Two bars share a column while a scenario is pinned; both narrow so the pair stays inside the band.
+  const BAR = pinnedTotals ? Math.min(barWidth(band), Math.floor((band - 14) / 2) - 2) : barWidth(band);
 
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>

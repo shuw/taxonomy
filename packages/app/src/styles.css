@@ -156,6 +156,10 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 .theme-toggle { font-size: var(--text-md); padding: 5px 10px; }
 .topbar .btn, .topbar .chip { white-space: nowrap; }
 @media (max-width: 1500px) { .topbar .chip.ghost { display: none; } }
+/* Under a laptop width the filing-status chip and the key hints go, so the bar stays one row longer. */
+@media (max-width: 1200px) { .topbar .chip.filer { display: none; } .topbar kbd { display: none; } }
+/* Narrower still, the two long buttons shorten before anything wraps. */
+@media (max-width: 1100px) { .topbar .edit-info .label, .topbar .claude-status .label { display: none; } .topbar .edit-info .label-short, .topbar .claude-status .label-short { display: inline; } }
 .chip { font-size: var(--text-md); font-weight: 500; color: var(--ink-2); background: var(--surface-2); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .chip.ghost { background: transparent; border: 1px dashed var(--axis); color: var(--muted); }
 .spacer { flex: 1; }
@@ -830,3 +834,24 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .brand .word.flipped .rest { color: var(--series-amt); }
 .chart .boomerang { fill: none; stroke: var(--series-amt); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1200; stroke-dashoffset: 1200; animation: boomerang-fly 2.4s ease-in-out forwards; }
 @keyframes boomerang-fly { 0% { stroke-dashoffset: 1200; opacity: 1; } 55% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+
+/* Phone width: the top bar in two rows. Long labels give way to short ones or icons; the key hints go. */
+.topbar .label-short { display: none; }
+.btn.with-icon { display: inline-flex; align-items: center; gap: 7px; }
+.btn.with-icon svg { display: block; flex: none; }
+@media (max-width: 760px) {
+  .topbar { gap: 6px; padding: 8px 10px; }
+  .topbar .btn, .topbar .chip { padding: 6px 11px; font-size: var(--text-sm); }
+  .topbar kbd { display: none; }
+  .topbar .label { display: none; }
+  .topbar .label-short { display: inline-flex; }
+  .brand .word { display: none; }
+}
+/* From a small tablet down, the theme and history buttons are icons: round, 36px, the icon at 20px so it reads at a glance. */
+@media (max-width: 1000px) {
+  .topbar .theme-toggle .label, .topbar .history-btn .label { display: none; }
+  .topbar .history-btn .label-short { display: inline-flex; }
+  .topbar .btn.with-icon, .topbar .btn.icon { width: 36px; height: 36px; padding: 0; justify-content: center; display: inline-flex; align-items: center; gap: 0; }
+  .topbar .btn.with-icon svg { width: 20px; height: 20px; }
+  .topbar .btn.icon { font-size: var(--text-lg); }
+}

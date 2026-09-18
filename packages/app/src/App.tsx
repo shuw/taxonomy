@@ -9,6 +9,7 @@ import { usePlanAnalyses } from "./hooks/usePlanAnalyses.ts";
 import { useDebounced } from "./hooks/useDebounced.ts";
 import { useNarrow } from "./hooks/useNarrow.ts";
 import { Disclaimer } from "./components/Disclaimer.tsx";
+import { Icon } from "./components/Icons.tsx";
 import { useTimelineActions } from "./hooks/useTimelineActions.ts";
 import { Segmented } from "./components/fields.tsx";
 import { Info } from "./components/Info.tsx";
@@ -244,15 +245,15 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
         {pinned
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
           : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
-        <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
+        <span className="chip filer">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
         {demo.on && <span className="chip demo" title={`Prices in ${demo.currency}. Your file is unchanged.`}>Demo · {demo.symbol}</span>}
         <ScenarioBar profile={profile} scenario={scenario} edit={edit} />
         <span className="spacer" />
         <ThemeToggle />
         <ClaudeStatusButton status={agent} news={claudeNews.news.length} onClick={() => setClaudeOpen(true)} />
-        <button type="button" className="btn" title="History of changes (H)" onClick={() => setHistoryOpen(true)}>History</button>
+        <button type="button" className="btn history-btn with-icon" title="History of changes (H)" aria-label="History of changes" onClick={() => setHistoryOpen(true)}><span className="label">History</span><span className="label-short"><Icon name="history" /></span></button>
         <button type="button" className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={() => setHelpOpen(true)}>?</button>
-        <button type="button" className="btn edit-info" onClick={() => openFacts()}>Edit my information <kbd>E</kbd></button>
+        <button type="button" className="btn edit-info" onClick={() => openFacts()}><span className="label">Edit my information</span><span className="label-short">Edit</span> <kbd>E</kbd></button>
       </header>
 
       <aside className="sidebar">

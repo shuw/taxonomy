@@ -46,7 +46,7 @@ export function ClaudeStatusButton({ status, news, onClick }: { status: AgentSta
   return (
     <button type="button" className={"btn claude-status" + (on ? " on" : "") + (news ? " has-news" : "")} onClick={onClick} title={news ? `${news} new change${news === 1 ? "" : "s"} from Claude` : on ? `Connected · last used ${ago(status.lastSeen!)}` : "Connect Claude"}>
       <span className="dot" />
-      {on ? clientName(status.conn?.client) : "Connect Claude"}
+      <span className="label">{on ? clientName(status.conn?.client) : "Connect Claude"}</span><span className="label-short">Claude</span>
       {news > 0 && <span className="badge-new">{news}</span>}
     </button>
   );
