@@ -12,7 +12,7 @@ import { Segmented } from "./fields.tsx";
 import { useAgentStatus } from "../hooks/useAgentStatus.ts";
 
 interface FillProps { mode: "fill"; profile: Profile; /** The agent's document being reviewed, if any. */ doc?: PendingIntake; onApply: (edits: ProfileEdit[]) => void; onClose: () => void; /** Open History, where Claude's writes can be undone. */ onHistory?: () => void; }
-interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; /** On a hosted server: who is signed in, and a way out from the first screen. */ account?: { email: string } | null; signOut?: () => Promise<void>; }
+interface CreateProps { mode: "create"; onDone: (id: string, awaitAgent: boolean) => Promise<void>; /** Switch to an existing profile instead. */ onOpen?: (id: string) => void; onClose?: () => void; /** On a hosted server: who is signed in, and a way out from the first screen. */ account?: { email: string; guest?: boolean } | null; signOut?: () => Promise<void>; }
 type Props = FillProps | CreateProps;
 
 interface Basics { name: string }
@@ -87,7 +87,7 @@ function untouched(p: Profile): boolean {
 function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<CreateProps, "mode">) {
   const scope = "new";
   // On a hosted server the account's email suggests the name: "sam.lee@…" starts as "Sam".
-  const suggested = account?.email ? (account.email.split("@")[0]!.split(/[._+-]/)[0] || "Me") : "Me";
+  const suggested = account?.email && !account.guest ? (account.email.split("@")[0]!.split(/[._+-]/)[0] || "Me") : "Me";
   const [basics, setBasics] = useState<Basics>(() => loadDraft(`${scope}.basics`, { name: suggested.charAt(0).toUpperCase() + suggested.slice(1) }));
   useEffect(() => { saveDraft(`${scope}.basics`, basics); }, [basics]);
   const [draftId, setDraftIdState] = useState<string | null>(() => loadDraft(`${scope}.draft`, { id: null as string | null }).id);
@@ -160,7 +160,7 @@ function NewProfileWizard({ onDone, onOpen, onClose, account, signOut }: Omit<Cr
         <header className="modal-head">
           <div>
             <h3>New profile <span className="muted step-count">step {step} of 2</span></h3>
-            {account && signOut && <div className="muted small" style={{ margin: 0 }}>Signed in as {account.email} · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></div>}
+            {account && signOut && <div className="muted small" style={{ margin: 0 }}>{account.guest ? "Trying the demo" : `Signed in as ${account.email}`} · <button type="button" className="link" onClick={() => void signOut()}>{account.guest ? "Create your own account" : "Sign out"}</button></div>}
             {step === 2 && <div className="muted small" style={{ margin: 0 }}>Connect Claude; it fills the profile in with you.</div>}
           </div>
           {!onClose && <ThemeToggle />}

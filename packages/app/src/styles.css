@@ -309,7 +309,7 @@ code { font-size: var(--text-md); background: var(--surface-2); padding: 1px 5px
 /* Profile switcher ------------------------------------------------------------- */
 .switcher { position: relative; display: flex; align-items: center; gap: 4px; }
 .btn.icon { padding: 5px 10px; line-height: 1; font-weight: 700; letter-spacing: .05em; }
-.menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; z-index: 10; display: flex; flex-direction: column; }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 220px; width: max-content; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; z-index: 10; display: flex; flex-direction: column; }
 .menu > button { text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-weight: 500; }
 .menu > button:hover { background: var(--surface-2); }
 .menu > button:disabled { color: var(--muted); cursor: default; background: none; }

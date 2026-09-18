@@ -114,6 +114,7 @@ function Signed({ account, signOut, deleteAccount }: { account: { email: string;
     onRename: (name: string) => store.edit([{ path: ["name"], value: name }]),
     onAccount: account ? () => setAccountOpen(true) : undefined,
     onSignOut: account ? () => void signOut() : undefined,
+    guest: account?.guest,
     onDelete: async () => {
       await api.remove(file.id, true);
       const l = await refresh();
