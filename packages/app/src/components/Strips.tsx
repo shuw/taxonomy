@@ -32,6 +32,8 @@ const CREDIT_SERIES: Series[] = [
 
 interface StripProps {
   plan: PlanResult; pinned: PlanResult | null; focusYear: number;
+  /** Non-zero for a moment after the credit tile is clicked three times: the boomerang flies. */
+  boomerang?: number;
   /** Hovering a year focuses it. */
   onFocus: (y: number) => void;
   /** Clicking a year is a firmer choice: the app also drops a selection that belongs to another year. */
@@ -81,7 +83,7 @@ function FocusBand({ x, y, w, h }: { x: number; y: number; w: number; h: number 
   return <rect className="focus-band" x={x + 2} y={y} width={Math.max(0, w - 4)} height={h} rx={10} />;
 }
 
-function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, series, height, totalLabel = "Total", capLabel, capLines, marker }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; capLines?: (y: PlanResult["years"][number]) => { text: string; className: string }[]; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null}) {
+function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, series, height, totalLabel = "Total", capLabel, capLines, marker, boomerang }: StripProps & { series: Series[]; height: number; totalLabel?: string; capLabel?: (y: PlanResult["years"][number]) => string; capLines?: (y: PlanResult["years"][number]) => { text: string; className: string }[]; marker?: (y: PlanResult["years"][number]) => { value: number; label: string } | null}) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, width] = useWidth<HTMLDivElement>();
   const years = plan.years;
@@ -136,6 +138,15 @@ function ColumnStrip({ plan, pinned, focusYear, onFocus, onPick = onFocus, serie
           );
         })}
         <line className="baseline" x1={m.left} x2={width - m.right} y1={baseY} y2={baseY} />
+        {boomerang ? (() => {
+          const from = years.findIndex((y) => (y.lines.amt?.value ?? 0) > 0);
+          const to = from < 0 ? -1 : years.findIndex((y, i) => i > from && (y.lines.amtCreditUsed?.value ?? 0) > 0);
+          if (from < 0 || to < 0) return null;
+          const x0 = m.left + band * from + band / 2, x1 = m.left + band * to + band / 2;
+          const y0 = yOf(totals[from]!) - 10, y1 = yOf(totals[to]!) - 10;
+          const lift = Math.min(m.top + plotH, Math.abs(x1 - x0)) * 0.45;
+          return <path key={boomerang} className="boomerang" d={`M${x0} ${y0} Q${(x0 + x1) / 2} ${Math.min(y0, y1) - lift} ${x1} ${y1}`} />;
+        })() : null}
       </svg>
       {hover !== null && (
         <ChartTooltip index={hover} width={width} band={band} left={m.left} height={height}>

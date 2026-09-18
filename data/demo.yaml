@@ -104,9 +104,12 @@ scenarios:
       - { id: e5, kind: sell, year: 2029, shares: 15000 }
 activeScenario: default
 
+# Where each number came from; the notes are Ada's own asides.
 sources:
-  people.self.salary: "offer letter, January 2026"
-  grants.iso2022: "Carta grant detail, 2026-03-01"
-  grants.nso2024: "Carta grant detail, 2026-03-01"
-  grants.rsu2025: "Carta grant detail, 2026-03-01"
-  companies.lumen: "409A valuation notice, 2026-02-15"
+  people.self.salary: { doc: "offer letter, January 2026", note: "Negotiated up once. Should have asked twice." }
+  people.self.bonus: { doc: "offer letter, January 2026", note: "Paid in March, spent by April." }
+  grants.iso2022: { doc: "Carta grant detail", asOf: 2026-03-01, note: "The one I nearly didn't sign for. Sixty thousand shares sounded like a typo." }
+  grants.nso2024: { doc: "Carta grant detail", asOf: 2026-03-01, note: "The refresh. Strike went up five times; so did the coffee." }
+  grants.rsu2025: { doc: "Carta grant detail", asOf: 2026-03-01, note: "Units, not shares. I still don't know why that matters." }
+  companies.lumen.sharePrice: { doc: "409A valuation notice", asOf: 2026-02-15, note: "Fourteen fifty. The all-hands said 'north of thirty' with a straight face." }
+  holdings: { doc: "Form 3921 for 2024", note: "Exercised the day the 409A dropped. Felt clever for a month." }

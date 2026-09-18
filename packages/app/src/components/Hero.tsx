@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Disclaimer } from "./Disclaimer.tsx";
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, pct, usd, usdCompact, usdHeadline } from "../format.ts";
@@ -11,7 +12,10 @@ function Delta({ value, lowerIsGood = true, unit = "usd" }: { value: number; low
 }
 
 /** The plan's two answers, tax and what is kept, then what the tax was made of. */
-export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanResult | null; years: number[] }) {
+export function Hero({ plan, pinned, years, onBoomerang }: { plan: PlanResult; pinned: PlanResult | null; years: number[]; onBoomerang?: () => void }) {
+  // Three quick clicks on the credit tile throw the boomerang.
+  const clicks = useRef<number[]>([]);
+  const creditClick = () => { const t = Date.now(); clicks.current = [...clicks.current.filter((c) => t - c < 1500), t]; if (clicks.current.length >= 3) { clicks.current = []; onBoomerang?.(); } };
   const t = plan.totals;
   const p = pinned?.totals;
   const total = useAnimatedNumber(t.totalTax);
@@ -33,7 +37,7 @@ export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanRe
       <div className="tiles">
         <Tile label="Federal" value={t.federalTotal} pinned={p?.federalTotal} color="var(--series-regular)" />
         <Tile label="AMT paid" value={t.amt} pinned={p?.amt} color="var(--series-amt)" />
-        <Tile label="AMT credit left" value={t.amtCreditCarryforwardEnd} pinned={p?.amtCreditCarryforwardEnd} color="var(--series-amt)" />
+        <Tile label="AMT credit left" value={t.amtCreditCarryforwardEnd} pinned={p?.amtCreditCarryforwardEnd} color="var(--series-amt)" onClick={creditClick} />
         {showState && <Tile label="State" value={t.stateTax} pinned={p?.stateTax} color="var(--series-state)" />}
         <Tile label="Tax rate" hint="Tax as a share of income, counting the ISO spread as income" value={t.rateWithSpread} pinned={p?.rateWithSpread} color="var(--series-violet)" unit="rate" />
       </div>
@@ -42,10 +46,10 @@ export function Hero({ plan, pinned, years }: { plan: PlanResult; pinned: PlanRe
   );
 }
 
-function Tile({ label, hint, value, pinned, color, lowerIsGood = true, unit = "usd" }: { label: string; hint?: string; value: number; pinned?: number; color: string; lowerIsGood?: boolean; unit?: "usd" | "rate" }) {
+function Tile({ label, hint, value, pinned, color, lowerIsGood = true, unit = "usd", onClick }: { label: string; hint?: string; value: number; pinned?: number; color: string; lowerIsGood?: boolean; unit?: "usd" | "rate"; onClick?: () => void }) {
   const shown = useAnimatedNumber(value);
   return (
-    <div className="tile" style={{ "--tile": color } as React.CSSProperties} title={hint}>
+    <div className="tile" style={{ "--tile": color } as React.CSSProperties} title={hint} onClick={onClick}>
       <div className="label">{label}</div>
       <div className="value" title={unit === "rate" ? undefined : usd(value)}>{unit === "rate" ? pct(shown) : usdHeadline(shown)}</div>
       {pinned !== undefined && <Delta value={value - pinned} lowerIsGood={lowerIsGood} unit={unit} />}

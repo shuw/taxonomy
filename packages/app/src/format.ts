@@ -1,3 +1,4 @@
+import { demoCurrency, nextDemoCurrency } from "./whimsy.ts";
 export { pct } from "@taxonomy/engine";
 import type { Line } from "@taxonomy/engine";
 import { usd as realUsd, int, pct } from "@taxonomy/engine";
@@ -9,12 +10,15 @@ import { usd as realUsd, int, pct } from "@taxonomy/engine";
  */
 export const demo = {
   on: (() => { try { return new URLSearchParams(location.search).get("demo") === "1" || localStorage.getItem("taxonomy.demo") === "on"; } catch { return false; } })(),
-  symbol: "Ⓣ",
+  symbol: demoCurrency().symbol,
+  /** What the made-up currency is, for the chip's tooltip: "Prices in rubber ducks." */
+  currency: demoCurrency().name,
   // A fresh rate every load, so no two screenshots can be lined up to recover the real figures.
   scale: Math.round((0.3 + Math.random() * 0.6) * 1000) / 1000,
 };
 export function setDemo(on: boolean): void {
   try { localStorage.setItem("taxonomy.demo", on ? "on" : "off"); } catch {}
+  if (on) nextDemoCurrency();
   const url = new URL(location.href); url.searchParams.delete("demo"); history.replaceState(null, "", url);
   location.reload();
 }

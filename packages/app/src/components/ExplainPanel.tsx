@@ -1,4 +1,5 @@
 import { demoText } from "../format.ts";
+import { zeroAside } from "../whimsy.ts";
 import type { PlanResult } from "@taxonomy/engine";
 import { fmtDelta, fmtLine } from "../format.ts";
 import type { Selection } from "../App.tsx";
@@ -20,7 +21,7 @@ export function ExplainPanel({ plan, pinned, selection, onSelect, onClose }: Pro
       <h3>{line.label}</h3>
       <div className="value">{fmtLine(line)}</div>
       {pinnedLine && <div className="pinned">Pinned scenario: {fmtLine(pinnedLine)} ({fmtDelta(line.value - pinnedLine.value, line.unit) || "same"})</div>}
-      <div className="why">{demoText(line.why)}</div>
+      <div className="why">{demoText(line.why)}{(() => { const a = zeroAside(line.id, selection.year, line.value); return a ? <span className="aside"> {a}</span> : null; })()}</div>
       {deps.length > 0 && (
         <>
           <h4>Computed from</h4>

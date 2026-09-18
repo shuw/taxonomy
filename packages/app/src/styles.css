@@ -815,3 +815,20 @@ kbd { display: inline-block; font: 600 var(--text-xs)/1 ui-monospace, SFMono-Reg
 .login .field { display: grid; gap: 6px; }
 .login .modal-actions { margin-top: 4px; }
 .login-fine { width: min(420px, 100%); }
+
+/* The small jokes. */
+.why .aside { font-style: italic; color: var(--muted); }
+.trivia { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); line-height: 1.45; }
+.trivia .source { display: block; font-size: var(--text-xs); opacity: 0.8; margin-top: 2px; }
+.footnote { margin: 4px 0 0; }
+.brand .mark .coin { transform-box: fill-box; transform-origin: center; }
+.brand:hover .mark .coin { animation: coin-breathe 1.6s ease-in-out infinite; }
+.brand:hover .mark .coin:nth-of-type(2) { animation-delay: 0.15s; }
+.brand:hover .mark .coin:nth-of-type(3) { animation-delay: 0.3s; }
+.brand:hover .mark .coin.tip { animation: coin-tip 1.6s ease-in-out infinite; animation-delay: 0.45s; }
+@keyframes coin-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+@keyframes coin-tip { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-3px) rotate(-6deg); } }
+.brand .word { user-select: none; -webkit-user-select: none; }
+.brand .word.flipped .rest { color: var(--series-amt); }
+.chart .boomerang { fill: none; stroke: var(--series-amt); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1200; stroke-dashoffset: 1200; animation: boomerang-fly 2.4s ease-in-out forwards; }
+@keyframes boomerang-fly { 0% { stroke-dashoffset: 1200; opacity: 1; } 55% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }

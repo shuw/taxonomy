@@ -1,7 +1,10 @@
+import { useState } from "react";
+import { nextTrivia } from "../whimsy.ts";
 import { keyLabel, type Shortcut } from "../hooks/useShortcuts.ts";
 
 /** The list behind "?": every shortcut with its keys. */
 export function ShortcutsHelp({ shortcuts, onClose }: { shortcuts: Shortcut[]; onClose: () => void }) {
+  const [fact] = useState(nextTrivia);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal narrow" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
@@ -20,6 +23,7 @@ export function ShortcutsHelp({ shortcuts, onClose }: { shortcuts: Shortcut[]; o
               ))}
             </tbody>
           </table>
+          <p className="trivia muted small">{fact.text} <span className="source">{fact.source}</span></p>
         </div>
       </div>
     </div>

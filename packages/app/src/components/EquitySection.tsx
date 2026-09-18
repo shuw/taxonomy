@@ -1,3 +1,4 @@
+import { emptyGrantsLine } from "../whimsy.ts";
 import { kindStyle } from "../series.ts";
 import { companyOf, grantFmv, grantsMissingVesting, newId, sharesGranted, sharesOutstanding, vestedThrough, vestingOf, type Company, type EquityGrant, type GrantType, type Levers, type Profile, type ProfileEdit } from "@taxonomy/engine";
 import { pct, shares, usd } from "../format.ts";
@@ -56,7 +57,7 @@ export function EquityKnobs({ profile, levers, edit, onOpenFacts }: KnobsProps) 
           {(() => { const l = levers.liquidity?.[c.id] ?? levers.liquidity?.["*"]; const y = l?.year ?? c.liquidityYear; return y ? <div className="company-sub muted">liquidity event {y}{l ? " (from the timeline)" : ""}</div> : null; })()}
         </div>
       ))}
-      {grants.length === 0 && <p className="muted small">No grants yet. Add them under Edit my information, or fill from documents.</p>}
+      {grants.length === 0 && <p className="muted small">{emptyGrantsLine("No grants yet. Add them under Edit my information, or fill from documents.")}</p>}
       {missing.length > 0 && (
         <div className="notice">
           {missing.length === 1 ? "One grant has" : `${missing.length} grants have`} no vesting schedule, so the unvested shares never vest here. <button type="button" className="link" onClick={onOpenFacts}>Set the schedule</button>

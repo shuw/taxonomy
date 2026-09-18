@@ -215,10 +215,13 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
     : [s]), [shortcuts]);
   useShortcuts(keyed);
 
+  // Three clicks on the AMT credit tile throw the boomerang: an arc from the AMT year to the year the credit comes back.
+  const [boomerang, setBoomerang] = useState(0);
+  const throwBoomerang = () => { setBoomerang(Date.now()); setTimeout(() => setBoomerang(0), 2600); };
   const strip = planView === "combined"
-    ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />
+    ? <CombinedStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
     : planView === "tax"
-      ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />
+      ? <TaxStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} boomerang={boomerang} />
       : <CashStrip plan={plan} pinned={pinned?.plan ?? null} focusYear={focusYear} onFocus={setFocusYear} onPick={pickYear} />;
   const stripCopy = planView === "combined"
     ? "Each bar is the year's cash in, split into tax, exercise cost, gifts and what is kept."
@@ -233,7 +236,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
           ? <button type="button" className="btn" onClick={() => setPinned(null)}>Unpin <kbd>P</kbd></button>
           : <button type="button" className="btn primary" title="Pin to compare" onClick={() => setPinned({ levers, plan })}>Pin <kbd>P</kbd></button>}
         <span className="chip">{statusName(profile.filer.filingStatus)} · {profile.filer.state}</span>
-        {demo.on && <span className="chip demo" title="Amounts are in a made-up currency; your file is unchanged">Demo · {demo.symbol}</span>}
+        {demo.on && <span className="chip demo" title={`Prices in ${demo.currency}. Your file is unchanged.`}>Demo · {demo.symbol}</span>}
         <ScenarioBar profile={profile} scenario={scenario} edit={edit} />
         <span className="spacer" />
         <ThemeToggle />
@@ -252,7 +255,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
         {error && <div className="error">{error}</div>}
         {notice}
         <ProposalBanner profile={profile} edit={edit} onCompare={() => setPinned({ levers, plan })} onReviewIntake={(d) => { setReviewDocId(d.id); setIntakeOpen(true); }} onCopyRequest={() => { setReviewDocId(null); setIntakeOpen(true); }} onEditFacts={() => openFacts("you")} onClaude={() => setClaudeOpen(true)} />
-        <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} />
+        <Hero plan={plan} pinned={pinned?.plan ?? null} years={years} onBoomerang={throwBoomerang} />
         <FollowUps profile={profile} edit={edit} onSecondLook={() => openFacts("history")} />
         <section className="card timeline-card">
           <div className="card-head">
@@ -263,6 +266,7 @@ function Workspace({ profile, profileText, path, error, edit, saving, switcher, 
             <div className="plan-years"><span className="muted small">Years</span><Segmented options={[...new Set([3, 5, 10, profile.plan.years])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: String(n) }))} value={String(profile.plan.years)} onChange={(v) => edit([{ path: ["plan", "years"], value: Number(v) }])} /></div>
           </div>
           {strip}
+          {years.includes(2038) && <p className="muted small footnote">2038: Unix time overflows on January 19. The tax code will probably still be here.</p>}
           <EventTimeline profile={profile} levers={levers} plan={plan} years={years} events={events} facts={facts} crossovers={crossovers} selectedId={selectedEvent} focusYear={focusYear}
             onSelect={actions.select} onAdd={actions.add} onChange={actions.change} onRemove={actions.remove} onSellToCover={actions.sellToCover}
             onAddFact={actions.addFact} onChangeFact={actions.changeFact} onRemoveFact={actions.removeFact} />
