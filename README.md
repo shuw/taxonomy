@@ -91,7 +91,7 @@ Without accounts (`dev:solo`), everything lives directly in the data directory.
 | `TAXONOMY_MAX_USERS` | Seats before sign-up says the server is full (1000). |
 | `TAXONOMY_SIGNUP=closed` | Only the first account can be made. Set it when hosting for one household. |
 | `TAXONOMY_SECURE_COOKIES=1` | Behind a TLS proxy: mark the session cookie Secure. |
-| `TAXONOMY_TRUST_PROXY=1` | Behind a proxy only: throttle sign-ins by `X-Forwarded-For`. |
+| `TAXONOMY_TRUST_PROXY=1` | Behind a proxy only: throttle sign-ins by the last `X-Forwarded-For` entry. `fly` also believes `Fly-Client-IP`; the shipped `fly.toml` sets it. |
 
 Sign-up is open by default. Passwords are argon2id hashes and sessions 30-day HttpOnly cookies,
 in `auth.sqlite` in the data directory. Connectors reach `https://<host>/<secret>/mcp`, so keep

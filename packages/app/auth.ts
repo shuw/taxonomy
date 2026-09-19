@@ -208,8 +208,13 @@ export function sessionCookie(sessionId: string | null, req: Request): string {
   return sessionId ? `${base}; Max-Age=${SESSION_DAYS * 86_400}` : `${base}; Max-Age=0`;
 }
 
-/** Set when a reverse proxy sits in front, so its X-Forwarded-For is believed; otherwise a client could forge it and dodge the throttle. */
-const trustProxy = process.env.TAXONOMY_TRUST_PROXY === "1";
+/**
+ * Set when a reverse proxy sits in front, so its X-Forwarded-For is believed; otherwise a client
+ * could forge it and dodge the throttle. "fly" also believes Fly's own client header, which only
+ * Fly's edge sets; behind any other proxy that header would be a client's to forge.
+ */
+const trustProxy = process.env.TAXONOMY_TRUST_PROXY === "1" || process.env.TAXONOMY_TRUST_PROXY === "fly";
+const onFly = process.env.TAXONOMY_TRUST_PROXY === "fly";
 
 /**
  * Who is asking, for the rate limits: the socket's address, or the proxy's client address when the
@@ -218,7 +223,7 @@ const trustProxy = process.env.TAXONOMY_TRUST_PROXY === "1";
  */
 export function clientKey(req: Request, remote: string | undefined): string {
   if (!trustProxy) return remote || "local";
-  const fly = (req.headers.get("fly-client-ip") ?? "").trim();
+  const fly = onFly ? (req.headers.get("fly-client-ip") ?? "").trim() : "";
   if (fly) return fly;
   const chain = (req.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return chain[chain.length - 1] || remote || "local";

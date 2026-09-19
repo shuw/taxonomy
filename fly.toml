@@ -7,6 +7,8 @@ primary_region = "sjc"
   dockerfile = "Dockerfile"
 
 [env]
+  # Fly's edge sets Fly-Client-IP; believe it for the sign-in and sign-up throttles.
+  TAXONOMY_TRUST_PROXY = "fly"
   # The public host claude.ai connectors are told to use: https://<this>/<secret>/mcp
   TAXONOMY_PUBLIC_HOST = "taxonomy.fly.dev"
   # Anyone with the address can make an account, up to this many; after that sign-up says the server is full.

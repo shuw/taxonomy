@@ -10,7 +10,7 @@ process.env.TAXONOMY_DATA ??= mkdtempSync(join(tmpdir(), "taxonomy-sec-unit-"));
 
 describe("who is asking", () => {
   test("behind a trusted proxy the real address is Fly's header or the last forwarded entry, never the first", async () => {
-    process.env.TAXONOMY_TRUST_PROXY = "1";
+    process.env.TAXONOMY_TRUST_PROXY = "fly";
     const { clientKey, limited } = await import("../auth.ts");
     const req = (h: Record<string, string>) => new Request("http://x/", { headers: h });
     expect(clientKey(req({ "x-forwarded-for": "6.6.6.6, 203.0.113.9" }), "10.0.0.1")).toBe("203.0.113.9");
