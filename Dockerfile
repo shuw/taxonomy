@@ -22,4 +22,5 @@ ENV HOST=0.0.0.0 \
 EXPOSE 8080
 VOLUME ["/data"]
 
-CMD ["bun", "packages/app/server.ts"]
+# The volume arrives owned by root; hand it to the unprivileged user, then run as that user.
+CMD ["sh", "-c", "chown -R bun:bun /data && exec runuser -u bun -- bun packages/app/server.ts"]

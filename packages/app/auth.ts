@@ -211,8 +211,36 @@ export function sessionCookie(sessionId: string | null, req: Request): string {
 /** Set when a reverse proxy sits in front, so its X-Forwarded-For is believed; otherwise a client could forge it and dodge the throttle. */
 const trustProxy = process.env.TAXONOMY_TRUST_PROXY === "1";
 
-/** Who is asking, for the rate limit: the socket's address, or the proxy's client address when the proxy is trusted. */
+/**
+ * Who is asking, for the rate limits: the socket's address, or the proxy's client address when the
+ * proxy is trusted. A proxy appends the real address to whatever X-Forwarded-For the client sent,
+ * so only the last entry is believed; Fly's own header is taken first when present.
+ */
 export function clientKey(req: Request, remote: string | undefined): string {
-  const forwarded = trustProxy ? (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() : "";
-  return forwarded || remote || "local";
+  if (!trustProxy) return remote || "local";
+  const fly = (req.headers.get("fly-client-ip") ?? "").trim();
+  if (fly) return fly;
+  const chain = (req.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return chain[chain.length - 1] || remote || "local";
 }
+
+// ---- Rate limits on the cheap-to-call, costly-to-serve routes: sign-up, the demo, the address lookup. ----
+const hits = new Map<string, { n: number; since: number }>();
+/** Counts a hit against `bucket|key`; returns the seconds to wait when over `max` in `windowMs`, else null. */
+export function limited(bucket: string, key: string, max: number, windowMs: number): number | null {
+  const k = `${bucket}|${key}`;
+  const h = hits.get(k);
+  const t = Date.now();
+  if (!h || t - h.since > windowMs) { hits.set(k, { n: 1, since: t }); return null; }
+  h.n++;
+  if (hits.size > 50_000) for (const [kk, v] of hits) if (t - v.since > windowMs) hits.delete(kk);
+  return h.n > max ? Math.ceil((h.since + windowMs - t) / 1000) : null;
+}
+export const LIMITS = {
+  /** New accounts per address per hour, and per server per day. */
+  register: { perAddress: 10, perDay: 300 },
+  /** Demo visits per address per hour. */
+  demo: 10,
+  /** Address lookups per address per hour. */
+  lookup: 60,
+};

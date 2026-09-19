@@ -47,6 +47,9 @@ interface RawProfile {
 }
 
 /** Parse a profile file of any version into the current shape; fail loudly on anything the engine cannot work with. */
+/** A plan is a few years of decisions, not a lifetime; the engine runs every year on every call. */
+export const MAX_PLAN_YEARS = 40;
+
 export function parseProfile(text: string): Profile {
   const raw = parse(text) as RawProfile | null;
   if (!raw || typeof raw !== "object") throw new Error("profile is empty");
@@ -56,6 +59,7 @@ export function parseProfile(text: string): Profile {
   if (!raw.filer?.state) problems.push("filer.state is required");
   for (const t of raw.timeline ?? []) if (t.until !== undefined && t.until < t.year) problems.push(`timeline entry for ${t.path} ends in ${t.until}, before it starts in ${t.year}`);
   if (!raw.plan || !Number.isInteger(raw.plan.startYear) || !Number.isInteger(raw.plan.years) || raw.plan.years < 1) problems.push("plan.startYear and plan.years are required");
+  else if (raw.plan.years > MAX_PLAN_YEARS) problems.push(`plan.years can be at most ${MAX_PLAN_YEARS}`);
   if (!raw.assumptions) problems.push("assumptions is required");
 
   const people = raw.people ?? (typeof raw.income?.wages === "number" ? { self: { salary: raw.income.wages } } : undefined);

@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
-import { homedir, platform } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import { parse } from "yaml";
 import { blankProfileText, editProfileText, migrateProfileText, parseProfile, tools } from "@taxonomy/engine";
 // Paths, ids, history, attachments and the remote secret are shared with the MCP server, so the two never drift.
 import { ID, dataDir, demoPath, examplePath, nameTaken as nameIsTaken, root, rootStore, userStore, usersDir, type Store } from "../mcp/store.ts";
-import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, expiredGuests, guestCount, hasAccount, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, startGuest, userFor, type User } from "./auth.ts";
+import { AuthError, HOST, MAX_USERS, userCount, authEnabled, changePassword, clientKey, deleteAccount, expiredGuests, guestCount, hasAccount, LIMITS, limited, login, logout, loopback, register, serverFull, sessionCookie, sessionIdOf, signupOpen, startGuest, userFor, type User } from "./auth.ts";
 import { existsSync as exists, readdirSync } from "node:fs";
 const { answeredFollowUps } = tools;
 import index from "./index.html";
@@ -124,6 +124,7 @@ function guard(handler: Handler): Handler {
     }
   };
 }
+const tooMany = (wait: number) => withHeaders(Response.json({ error: "too many requests; try again later" }, { status: 429, headers: { "retry-after": String(wait) } }));
 const authFailed = (e: unknown) => {
   if (e instanceof AuthError) return withHeaders(Response.json({ error: e.message }, { status: e.status, headers: e.retryAfter ? { "retry-after": String(e.retryAfter) } : {} }));
   throw e;
@@ -287,16 +288,55 @@ function sweepGuests(): void {
 sweepGuests();
 setInterval(sweepGuests, 3_600_000).unref();
 
+/**
+ * Hosted, the page is built once at start and served from a handler, so it can carry the headers
+ * a public site needs: a content-security policy, no framing. On a laptop Bun's own HTML
+ * route serves it, rebuilding as files change.
+ */
+const PAGE_HEADERS: Record<string, string> = {
+  "content-security-policy": [
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+    "img-src 'self' data: blob:", "connect-src 'self'", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "object-src 'none'",
+  ].join("; "),
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  // No HSTS here: the app sees plain http behind the TLS proxy and Bun drops the header on http responses. Fly's force_https covers the redirect.
+};
+async function buildPage(): Promise<{ html: string; dir: string } | null> {
+  const dir = resolve(tmpdir(), `taxonomy-page-${process.pid}`);
+  const r = await Bun.build({ entrypoints: [resolve(import.meta.dir, "index.html")], outdir: dir, target: "browser", minify: true, publicPath: "/", define: { "process.env.NODE_ENV": '"production"' } });
+  if (!r.success) { console.error("page build failed:", r.logs.map(String).join("\n")); return null; }
+  return { html: readFileSync(resolve(dir, "index.html"), "utf8"), dir };
+}
+const page = hosted ? await buildPage() : null;
+const servePage = () => new Response(page!.html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache", ...PAGE_HEADERS } });
+/** A built asset (chunk-*.js, chunk-*.css, favicon-*.svg) by its public path, or null. */
+function builtAsset(pathname: string): Response | null {
+  if (!page || !/^\/[a-z0-9-]+\.[a-z0-9.]+$/.test(pathname)) return null;
+  const file = resolve(page.dir, pathname.slice(1));
+  if (!file.startsWith(page.dir + sep) || !existsSync(file)) return null;
+  return new Response(Bun.file(file), { headers: { "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" } });
+}
+
 const port = Number(process.env.PORT ?? 5180);
 const server = Bun.serve({
   port,
   hostname: HOST,
   // Rebuild the page as files change while developing on this machine; a hosted server builds once.
   development: loopback,
+  // Enough for a 25 MB document in base64 and nothing like the default 128 MB.
+  maxRequestBodySize: 40 * 1_048_576,
+  error(e) {
+    if (e instanceof SyntaxError) return withHeaders(Response.json({ error: "the request body is not valid JSON" }, { status: 400 }));
+    console.error(e);
+    return withHeaders(Response.json({ error: "something went wrong" }, { status: 500 }));
+  },
   routes: {
-    "/": index,
+    "/": page ? servePage : index,
     // A profile's own address; the page reads the id from the path.
-    "/profiles/:id": index,
+    "/profiles/:id": page ? servePage : index,
     // ---- accounts ----
     "/api/auth/me": (req: Request) => {
       let user: User | null = null;
@@ -304,7 +344,7 @@ const server = Bun.serve({
       return withHeaders(Response.json({ enabled: authEnabled, user: user ? { id: user.id, email: user.email, ...(user.guest ? { guest: true } : {}) } : null, signup: authEnabled && !user && signupOpen(), full: authEnabled && !user && serverFull() }));
     },
     // ---- the demo: Ada's profile in a throwaway account (hosted) or in the local data directory ----
-    "/demo": async (req: Request) => {
+    "/demo": async (req: Request): Promise<Response> => {
       const headers = new Headers();
       let store: Store;
       if (!authEnabled) store = rootStore;
@@ -312,6 +352,8 @@ const server = Bun.serve({
         const user = userFor(sessionIdOf(req));
         if (user) store = userStore(user.id);
         else {
+          const wait: number | null = limited("demo", clientKey(req, server.requestIP(req)?.address), LIMITS.demo, 3_600_000);
+          if (wait !== null) return withHeaders(new Response("Too many demo visits from your address; try again in a while.", { status: 429, headers: { "retry-after": String(wait) } }));
           if (guestCount() >= MAX_GUESTS) return withHeaders(new Response("The demo is busy right now; try again in a while.", { status: 503 }));
           const guest = await startGuest();
           store = userStore(guest.user.id);
@@ -321,10 +363,12 @@ const server = Bun.serve({
       headers.set("location", `/profiles/${demoProfile(store)}`);
       return withHeaders(new Response(null, { status: 303, headers }));
     },
-    "/api/auth/register": { POST: async (req: Request) => {
+    "/api/auth/register": { POST: async (req: Request): Promise<Response> => {
       const refused = sameOrigin(req);
       if (refused) return refused;
       if (!authEnabled) return bad("accounts are off on this server", 404);
+      const wait: number | null = limited("register", clientKey(req, server.requestIP(req)?.address), LIMITS.register.perAddress, 3_600_000) ?? limited("register-all", "*", LIMITS.register.perDay, 86_400_000);
+      if (wait !== null) return tooMany(wait);
       const body = (await req.json()) as { email?: unknown; password?: unknown };
       try {
         const user = await register(body.email, body.password);
@@ -333,10 +377,12 @@ const server = Bun.serve({
       } catch (e) { return authFailed(e); }
     } },
     // Says whether an address has an account, so the card can offer the right button. Only while anyone may sign up; a closed server keeps its list to itself.
-    "/api/auth/lookup": { POST: async (req: Request) => {
+    "/api/auth/lookup": { POST: async (req: Request): Promise<Response> => {
       const refused = sameOrigin(req);
       if (refused) return refused;
       if (!authEnabled) return bad("accounts are off on this server", 404);
+      const wait: number | null = limited("lookup", clientKey(req, server.requestIP(req)?.address), LIMITS.lookup, 3_600_000);
+      if (wait !== null) return tooMany(wait);
       const body = (await req.json()) as { email?: unknown };
       return withHeaders(Response.json({ exists: signupOpen() ? hasAccount(body.email) : null }));
     } },
@@ -543,7 +589,7 @@ const server = Bun.serve({
       }),
     },
   },
-  fetch: () => new Response("Not found", { status: 404 }),
+  fetch: (req) => builtAsset(new URL(req.url).pathname) ?? new Response("Not found", { status: 404 }),
 });
 if (authEnabled) {
   console.log(`Taxonomy: http://${HOST}:${port}  accounts on; each user's data under ${relative(root, usersDir)}${signupOpen() ? `; sign-up open (${userCount()} of ${MAX_USERS} seats taken)` : serverFull() ? "; sign-up closed, the server is full" : "; sign-up closed"}`);
