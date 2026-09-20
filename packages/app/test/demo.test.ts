@@ -37,6 +37,9 @@ describe("/demo", () => {
     await fetch(base + "/demo", { redirect: "manual" });
     expect((await fetch(base + `/profiles/${list[0]!.id}`, { headers: { cookie } })).headers.get("content-type")).toContain("text/html");
     expect(readdirSync(join(dataDir, "users")).length).toBe(2);
+    // The lifetime count outlives the sweep that removes expired guests.
+    const { Database } = await import("bun:sqlite");
+    expect((new Database(join(dataDir, "auth.sqlite"), { readonly: true }).query("select n from counters where name = 'guests_ever'").get() as { n: number }).n).toBe(2);
   });
   test("nobody can register or sign in at the guest address", async () => {
     const H = { "content-type": "application/json", origin: base };
