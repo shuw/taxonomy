@@ -44,18 +44,13 @@ function open(): Database {
     CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (id_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_seen_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
-    CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, n INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS guest_visits (created_at TEXT NOT NULL);
   `);
-  // Guests are swept a day after they arrive; this keeps the count of every one that ever did. Seeded from those present the first time.
-  if (!db.query("SELECT 1 FROM counters WHERE name = 'guests_ever'").get()) {
-    const present = (db.query("SELECT COUNT(*) AS n FROM users WHERE email LIKE ?").get("%@" + GUEST_DOMAIN) as { n: number }).n;
-    db.query("INSERT INTO counters (name, n) VALUES ('guests_ever', ?)").run(present);
+  // Guests are swept a day after they arrive; this log keeps when every one of them came. Seeded from those present the first time.
+  if (!db.query("SELECT 1 FROM guest_visits LIMIT 1").get()) {
+    for (const r of db.query("SELECT created_at FROM users WHERE email LIKE ? ORDER BY created_at").all("%@" + GUEST_DOMAIN) as { created_at: string }[]) db.query("INSERT INTO guest_visits (created_at) VALUES (?)").run(r.created_at);
   }
   return db;
-}
-/** Demo visitors ever, including the ones swept since. */
-export function guestsEver(): number {
-  return (open().query("SELECT n FROM counters WHERE name = 'guests_ever'").get() as { n: number } | null)?.n ?? 0;
 }
 
 const now = () => new Date().toISOString();
@@ -140,7 +135,7 @@ export async function startGuest(): Promise<{ user: User; sessionId: string }> {
   const hash = await Bun.password.hash(randomBytes(32).toString("base64url"), { algorithm: "argon2id" });
   const d = open();
   d.query("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)").run(user.id, user.email, hash, user.createdAt);
-  d.query("UPDATE counters SET n = n + 1 WHERE name = 'guests_ever'").run();
+  d.query("INSERT INTO guest_visits (created_at) VALUES (?)").run(user.createdAt);
   return { user, sessionId: startSession(user.id, GUEST_HOURS * 3_600_000) };
 }
 /** Guests whose day is over: their rows go here, their directories are the caller's to remove. */

@@ -39,7 +39,9 @@ describe("/demo", () => {
     expect(readdirSync(join(dataDir, "users")).length).toBe(2);
     // The lifetime count outlives the sweep that removes expired guests.
     const { Database } = await import("bun:sqlite");
-    expect((new Database(join(dataDir, "auth.sqlite"), { readonly: true }).query("select n from counters where name = 'guests_ever'").get() as { n: number }).n).toBe(2);
+    const visits = new Database(join(dataDir, "auth.sqlite"), { readonly: true }).query("select created_at from guest_visits order by created_at").all() as { created_at: string }[];
+    expect(visits.length).toBe(2);
+    expect(visits[0]!.created_at.slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
   });
   test("nobody can register or sign in at the guest address", async () => {
     const H = { "content-type": "application/json", origin: base };
