@@ -17,7 +17,12 @@ const guests = (db.query("select count(*) as n from users where email like '%@de
 let byDay: { day: string; n: number }[] = [];
 try { byDay = db.query("select substr(created_at, 1, 10) as day, count(*) as n from guest_visits group by day order by day").all() as { day: string; n: number }[]; } catch { /* an older database has no visit log */ }
 const ever = Math.max(guests, byDay.reduce((s, d) => s + d.n, 0));
-const real = db.query("select email, created_at from users where email not like '%@demo.invalid' order by created_at").all() as { email: string; created_at: string }[];
+// A session's last_seen_at moves at most once an hour, so "last seen" is right to within the hour; no session means signed out everywhere.
+const real = db.query(`select u.email, u.created_at, max(s.last_seen_at) as last_seen, count(s.id_hash) as sessions
+  from users u left join sessions s on s.user_id = u.id and s.expires_at >= ?
+  where u.email not like '%@demo.invalid' group by u.id order by u.created_at`).all(new Date().toISOString()) as { email: string; created_at: string; last_seen: string | null; sessions: number }[];
 console.log(`${real.length} account${real.length === 1 ? "" : "s"}; demo guests: ${guests} now, ${ever} ever`);
 if (byDay.length) console.log("  demo visits by day (UTC): " + byDay.map((d) => `${d.day} ×${d.n}`).join(", "));
-for (const u of real) console.log(`  ${u.created_at.slice(0, 16).replace("T", " ")}  ${u.email}`);
+const stamp = (t: string | null) => (t ? t.slice(0, 16).replace("T", " ") : "signed out       ");
+console.log(`  ${"created".padEnd(16)}  ${"last seen".padEnd(16)}  account`);
+for (const u of real) console.log(`  ${stamp(u.created_at)}  ${stamp(u.last_seen)}  ${u.email}`);
