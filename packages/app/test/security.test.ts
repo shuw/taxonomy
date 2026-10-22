@@ -46,6 +46,7 @@ describe("a hosted server", () => {
       const r = await fetch(base + path);
       expect(r.status).toBe(200);
       expect(r.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      expect(r.headers.get("content-security-policy")).toContain("frame-src https://www.youtube-nocookie.com");
       expect(r.headers.get("x-frame-options")).toBe("DENY");
       expect(r.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
     }

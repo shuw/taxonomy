@@ -296,7 +296,7 @@ setInterval(sweepGuests, 3_600_000).unref();
 const PAGE_HEADERS: Record<string, string> = {
   "content-security-policy": [
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
-    "img-src 'self' data: blob:", "connect-src 'self'", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "object-src 'none'",
+    "img-src 'self' data: blob:", "connect-src 'self'", "frame-src https://www.youtube-nocookie.com", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "object-src 'none'",
   ].join("; "),
   "x-frame-options": "DENY",
   "x-content-type-options": "nosniff",
